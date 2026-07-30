@@ -1,0 +1,45 @@
+# FIXTURE SINTÉTICA — não é o dicionário Natura.
+# Reproduz o formato Hunspell com um punhado de regras reais do português,
+# escolhidas para exercitar: strip total (supletivas), classes de caracteres,
+# bandeiras de continuação e produto cruzado com prefixo.
+SET UTF-8
+TRY esaoirdntcumlpvghqbfzjxywkASOEIRDNTCUMLPVGHQBFZJXYWK
+
+NEEDAFFIX !
+
+# prefixo de repetição, com produto cruzado
+PFX R Y 1
+PFX R 0 re .
+
+# plural simples
+SFX S Y 2
+SFX S 0 s [aeiou]
+SFX S 0 es [^aeiouls]
+
+# plural de -l  (telemóvel -> telemóveis)
+SFX L Y 1
+SFX L l is l
+
+# género e número do adjetivo em -o (ensonado -> ensonada/os/as)
+SFX A Y 3
+SFX A 0 s o
+SFX A o a o
+SFX A o as o
+
+# caber: pretérito forte e presente
+SFX V Y 3
+SFX V aber ouberam caber
+SFX V aber oubesse caber
+SFX V er emos caber
+
+# pôr: supletivo, strip do lema inteiro
+SFX P Y 3
+SFX P pôr pusesse pôr
+SFX P pôr puseram pôr
+SFX P pôr ponho pôr
+
+# fazer: pretérito forte, cruzável com o prefixo re-
+SFX F Y 3
+SFX F azer izeram fazer
+SFX F azer izesse fazer
+SFX F azer aremos fazer

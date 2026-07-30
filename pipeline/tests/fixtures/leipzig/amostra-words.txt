@@ -1,0 +1,6 @@
+1	de	100000
+2	janela	4200
+3	silêncio	3100
+4	telemóvel	2900
+5	manga	1500
+6	alfarrábio	12

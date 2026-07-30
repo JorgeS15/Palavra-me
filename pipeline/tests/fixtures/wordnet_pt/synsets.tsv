@@ -1,0 +1,9 @@
+# synset_id<TAB>palavra   |   synset_id<TAB>relacao<TAB>synset_id
+s-00001	janela
+s-00001	postigo
+s-00002	silêncio
+s-00002	quietude
+s-00003	ruído
+s-00002	antonimo	s-00003
+s-00004	abertura
+s-00001	hiperonimo	s-00004

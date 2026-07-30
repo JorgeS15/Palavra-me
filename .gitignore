@@ -1,0 +1,27 @@
+# Ficheiros brutos descarregados. Não vão para o repositório: são grandes e
+# são reconstruíveis. O que garante a reprodutibilidade é o lockfile, esse sim
+# versionado (pipeline/cache/sources.lock.json).
+pipeline/cache/*
+!pipeline/cache/sources.lock.json
+
+# Intermediários e saída da build.
+pipeline/work/
+pipeline/out/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Android (F2 em diante)
+android/.gradle/
+android/build/
+android/local.properties
+*.apk
+*.aab
+
+# Sistema
+.DS_Store
