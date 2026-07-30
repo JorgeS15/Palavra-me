@@ -26,7 +26,7 @@ escrita.
 | Revisão humana em terminal | ✅ |
 | Relatório de build e folha de revisão da F0 | ✅ |
 | Lista dos 100 lemas da F0 | ✅ |
-| 116 testes, a correr offline | ✅ |
+| 123 testes, a correr offline | ✅ |
 | `docs/fontes.md` — **estrutura** criada, **conteúdo por verificar** | ⚠️ |
 
 ## Por fazer, e porquê
@@ -90,7 +90,7 @@ para tornar barata.
 ## O que os testes já provam
 
 Sem dados reais não se pode aferir qualidade, mas pode-se aferir correção. Os
-116 testes correm sobre fixtures sintéticas (`pipeline/tests/fixtures/`, todas
+123 testes correm sobre fixtures sintéticas (`pipeline/tests/fixtures/`, todas
 marcadas como tal) e cobrem:
 
 - **Os três casos de flexão que o plano nomeia**: `couberam` → `caber`,
@@ -106,6 +106,9 @@ marcadas como tal) e cobrem:
 - **O bloqueio de distribuição** com licenças por verificar.
 - **Que o pipeline inteiro corre offline** e que nenhum módulo fora de
   `sources/` importa rede.
+- **Que corre em Windows**, que é onde é desenvolvido: caminhos com espaços e
+  acentos, ficheiros com terminadores CRLF, e símbolos que a página de código
+  da consola não conhece.
 
 ## Riscos que se mantêm em aberto
 

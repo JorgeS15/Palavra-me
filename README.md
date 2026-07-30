@@ -42,13 +42,18 @@ de fontes abertas dispersas.
 
 ## Começar
 
-```bash
+```powershell
 cd pipeline
+py -3 -m venv .venv               # uma vez
+.venv\Scripts\Activate.ps1        # em cada consola nova
+
 python -m palavrame.cli fontes    # que fontes há e o que falta verificar
 python -m palavrame.cli fetch     # descarrega (precisa de rede)
 python -m palavrame.cli f0        # protótipo sobre 100 lemas
-python -m pytest                  # 116 testes, correm offline
+python -m pytest                  # 123 testes, correm offline
 ```
+
+Em Linux ou macOS é igual, com `source .venv/bin/activate`.
 
 Ver [`pipeline/README.md`](pipeline/README.md) para o resto.
 

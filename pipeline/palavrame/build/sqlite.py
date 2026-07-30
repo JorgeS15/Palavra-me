@@ -288,9 +288,21 @@ def _write_meta(conn: sqlite3.Connection, db_version: str, stats: dict, extra: d
     )
 
 
+def readonly_uri(path: Path) -> str:
+    """URI de só-leitura para um caminho do sistema de ficheiros.
+
+    Tem de passar por `as_uri()` e não por interpolação: o SQLite trata a
+    barra invertida como parte do nome do ficheiro, não como separador, por
+    isso `file:C:\\Users\\...\\d.db` nunca abre no Windows. O `as_uri()`
+    também trata dos espaços, que num caminho como `C:\\Users\\Jorge Silva`
+    quebrariam a query string.
+    """
+    return f"{path.resolve().as_uri()}?mode=ro"
+
+
 def open_readonly(path: Path) -> sqlite3.Connection:
     """Abre a DB como a app a abre: só leitura, sem escrita acidental."""
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    conn = sqlite3.connect(readonly_uri(path), uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 

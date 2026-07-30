@@ -12,34 +12,82 @@ podem fazer-se em paralelo — o 2 é ler sites, não é correr código.
 
 ## Passo 0 — Pôr o pipeline a andar (5 minutos)
 
-Precisas de Python 3.11 ou mais recente. Mais nada: o pipeline não tem
+> **Windows.** Os comandos deste guia estão em PowerShell, que é o que vais
+> usar. Onde vires `python`, é o do ambiente virtual do passo 0 — cria-o
+> primeiro e não tens de pensar mais nisto.
+
+Precisas de **Python 3.11 ou mais recente**. Mais nada: o pipeline não tem
 dependências.
 
-```bash
+Se ainda não tiveres Python, instala da Microsoft Store ou de python.org. Na
+dúvida, confirma:
+
+```powershell
+py -3 --version          # tem de dizer 3.11 ou superior
+```
+
+Se `py` não existir, o Python não está instalado ou não ficou no PATH.
+
+### Clonar e criar o ambiente
+
+```powershell
 git clone https://github.com/JorgeS15/Palavra-me.git
-cd Palavra-me/pipeline
-python3 --version          # tem de dizer 3.11 ou superior
+cd Palavra-me\pipeline
+
+py -3 -m venv .venv
+.venv\Scripts\Activate.ps1
 ```
 
-Confirma que está tudo de pé antes de tocar em dados reais:
+Se o PowerShell recusar o script com um erro de *execution policy*, é a
+proteção normal do Windows. Autoriza só para esta sessão:
 
-```bash
-python3 -m pytest
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.venv\Scripts\Activate.ps1
 ```
 
-Devem passar 116 testes, em poucos segundos e sem rede. Se passarem, o
-pipeline está sã; o que falhar a partir daqui é dado, não código.
+Deves passar a ver `(.venv)` no início da linha. **A partir daqui `python`
+refere-se sempre ao do ambiente virtual**, e os comandos deste guia funcionam
+tal e qual.
 
-E vê o mapa das fontes:
+De cada vez que abrires uma consola nova, repete o `Activate.ps1`.
 
-```bash
-python3 -m palavrame.cli fontes
+### Confirmar que está tudo de pé
+
+```powershell
+pip install pytest
+python -m pytest
 ```
 
-Isto lista as sete fontes, o que cada uma dá, e — em maiúsculas — quais têm
-licença por verificar. Neste momento são todas.
+Devem passar **123 testes**, em poucos segundos e sem rede. Se passarem, o
+código está são — o que falhar daqui para a frente é dado, não software. É um
+marco útil, porque separa os teus problemas dos meus.
 
----
+Oito desses testes são só de portabilidade Windows: caminhos com espaços e
+acentos, ficheiros com terminadores CRLF, e símbolos que a consola do Windows
+não sabe desenhar.
+
+### Ver o mapa das fontes
+
+```powershell
+python -m palavrame.cli fontes
+```
+
+Lista as sete fontes, o que cada uma dá, e — em maiúsculas — quais têm licença
+por verificar. Neste momento são todas.
+
+### Equivalências, se seguires documentação escrita para Linux
+
+| Linux / macOS | Windows (PowerShell) |
+|---|---|
+| `python3 -m ...` | `python -m ...` (dentro do venv) |
+| `source .venv/bin/activate` | `.venv\Scripts\Activate.ps1` |
+| `pipeline/cache/voc_cplp/` | `pipeline\cache\voc_cplp\` |
+| `ls out/` | `dir out\` ou `ls out\` |
+| `cat out/relatorio-f0.md` | `type out\relatorio-f0.md` |
+
+Nos ficheiros de configuração usa sempre **barras normais** (`/`), mesmo no
+Windows: o Python trata delas bem e evitas problemas de escape.
 
 ## Passo 1 — Obter os dados
 
@@ -48,10 +96,10 @@ primeiro, porque não publicam um download estável e documentado.
 
 ### 1a. As automáticas
 
-```bash
-python3 -m palavrame.cli fetch --source dicionario_aberto
-python3 -m palavrame.cli fetch --source tatoeba
-python3 -m palavrame.cli fetch --source wikcionario
+```powershell
+python -m palavrame.cli fetch --source dicionario_aberto
+python -m palavrame.cli fetch --source tatoeba
+python -m palavrame.cli fetch --source wikcionario
 ```
 
 O que esperar:
@@ -91,8 +139,8 @@ chega — as outras fontes preenchem a classe gramatical depois.
 
 4. Regista no lockfile:
 
-```bash
-python3 -m palavrame.cli fetch --source voc_cplp
+```powershell
+python -m palavrame.cli fetch --source voc_cplp
 ```
 
 **Se não conseguires exportar nada**, salta esta fonte. A F0 corre sem ela, em
@@ -108,7 +156,7 @@ leitura isto não é acessório, é metade do produto.
 2. Descarrega o pacote pt-PT. **Lê a licença enquanto lá estás** — precisas
    dela no passo 2.
 3. Extrai o `.aff` e o `.dic` para `pipeline/cache/hunspell_natura/`.
-4. `python3 -m palavrame.cli fetch --source hunspell_natura`
+4. `python -m palavrame.cli fetch --source hunspell_natura`
 
 Ficheiros postos à mão são aceites e registados no lockfile, tal como o VOC.
 
@@ -134,7 +182,7 @@ Duas coisas a saber:
 - **O nome da chave importa.** O pipeline lê a variante do nome do ficheiro:
   `por_pt` → pt-PT, `por_br` → pt-BR. Um nome sem marca dá `unknown`.
 
-Depois: `python3 -m palavrame.cli fetch --source leipzig`
+Depois: `python -m palavrame.cli fetch --source leipzig`
 
 **Esta é a fonte com maior probabilidade de más notícias na licença.** Se for
 não-comercial, as frases ficam fora de uma app publicada. Ver o passo 2.
@@ -212,8 +260,8 @@ Por ordem de risco:
 
 ## Passo 3 — Correr o protótipo
 
-```bash
-python3 -m palavrame.cli f0
+```powershell
+python -m palavrame.cli f0
 ```
 
 Faz tudo: lê as fontes, funde, escreve o SQLite, valida, gera os relatórios.
@@ -262,11 +310,11 @@ que queres saber é se as *definições* servem — que é a pergunta central.
 
 Se quiseres exemplos:
 
-```bash
+```powershell
 ollama pull hf.co/amalia-llm/AMALIA-9B-0626-DPO-GGUF:Q4_K_M
-python3 -m palavrame.cli gerar --backend ollama --limit 20
-python3 -m palavrame.cli rever
-python3 -m palavrame.cli f0        # volta a correr: agora inclui os aprovados
+python -m palavrame.cli gerar --backend ollama --limit 20
+python -m palavrame.cli rever
+python -m palavrame.cli f0        # volta a correr: agora inclui os aprovados
 ```
 
 Sobre a lentidão: é suposto ser lento e não é problema. Não estás a servir
@@ -325,22 +373,54 @@ vais querer saber porque decidiste o que decidiste.
 
 | Sintoma | Provável causa |
 |---|---|
-| `Nenhuma fonte produziu dados` | Nada em `pipeline/cache/`. Volta ao passo 1 |
+| `Nenhuma fonte produziu dados` | Nada em `pipeline\cache\`. Volta ao passo 1 |
 | `HTTP 404` num fetch | URL mudou. Corrige `endpoints` no módulo da fonte |
 | `pesquisa por flexão: 0/4` | Hunspell não entrou, ou o `.aff`/`.dic` está noutro sítio |
 | `autoridade de lemas: nenhuma` | O VOC não entrou. Corre-se na mesma, em modo permissivo |
 | Muitos `lemas sem aceção` | Wikcionário ou Dicionário Aberto não entraram |
 | `validar --distribuicao` reprova | Normal enquanto o passo 2 não estiver feito |
 
-Para ver o que cada fonte produziu isoladamente:
+### Específico do Windows
 
-```bash
-python3 -c "
+| Sintoma | O que é |
+|---|---|
+| `Activate.ps1 cannot be loaded` | Execution policy. Ver passo 0 |
+| `python` abre a Microsoft Store | O venv não está ativo. Repete o `Activate.ps1` |
+| `py` não é reconhecido | Python não está instalado, ou ficou fora do PATH |
+| Acentos aparecem como `Ã§` no ecrã | Cosmético, é a página de código da consola. Os ficheiros em `out\` estão bem — abre-os num editor |
+| Os emoji `🤖` saem como quadrados | Idem. O Windows Terminal desenha-os; o `cmd.exe` antigo não |
+
+Se quiseres a consola inteiramente em UTF-8:
+
+```powershell
+$env:PYTHONUTF8 = "1"
+```
+
+Não é preciso — o pipeline já força UTF-8 na saída — mas ajuda se correres
+outras ferramentas na mesma janela.
+
+### Ver o que uma fonte produziu isoladamente
+
+Cria um ficheiro `inspecionar.py` dentro de `pipeline\`:
+
+```python
 from palavrame.cache import Cache
 from palavrame.config import default_paths
 from palavrame.sources import build
-fonte = build('dicionario_aberto', Cache(default_paths(), offline=True))
-for e in list(fonte.parse(['janela']))[:3]:
-    print(e.lemma, e.pos, [s.definition for s in e.senses])
-"
+
+fonte = build("dicionario_aberto", Cache(default_paths(), offline=True))
+for e in list(fonte.parse(["janela"]))[:3]:
+    print(e.lemma, e.pos)
+    for s in e.senses:
+        print("   ", s.definition)
 ```
+
+E corre:
+
+```powershell
+python inspecionar.py
+```
+
+Troca `dicionario_aberto` pelo slug de qualquer outra fonte, e `janela` pela
+palavra que quiseres investigar. É a forma mais rápida de perceber se o
+problema está numa fonte específica ou na fusão.

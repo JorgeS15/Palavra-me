@@ -40,7 +40,29 @@ DEFAULT_PROBES = (
 )
 
 
+def _forcar_utf8_na_saida() -> None:
+    """Garante que a saída aguenta acentos e símbolos, também no Windows.
+
+    Em Windows a codificação por omissão de `stdout` é a do sistema (cp1252 em
+    Portugal) quando a saída é redirecionada para um ficheiro ou um pipe. Um
+    símbolo fora dessa página — o `∅` que aparece quando uma sonda de pesquisa
+    falha, por exemplo — rebentaria com `UnicodeEncodeError`, e o relatório
+    perder-se-ia por causa de um caractere.
+
+    `errors="replace"` em vez de `"strict"`: num terminal que não saiba
+    desenhar um símbolo, mais vale um `?` do que perder o relatório todo.
+    """
+    for fluxo in (sys.stdout, sys.stderr):
+        reconfigure = getattr(fluxo, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass          # fluxo já fechado ou substituído; segue na mesma
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _forcar_utf8_na_saida()
     parser = _build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):

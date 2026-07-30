@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from ..build.sqlite import readonly_uri
 from ..sources.base import SourceInfo
 from ..text import normalize
 
@@ -90,7 +91,7 @@ def validate_database(
         report.add("ficheiro", "erro", f"não existe: {path}")
         return report
 
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    conn = sqlite3.connect(readonly_uri(path), uri=True)
     conn.row_factory = sqlite3.Row
     try:
         _check_integrity(conn, report)

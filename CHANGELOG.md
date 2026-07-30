@@ -7,6 +7,34 @@ Todas as alterações relevantes ao projeto. Formato baseado em
 Nota: antes da 1.0.0, uma subida de MINOR pode trazer alterações
 incompatíveis — nomeadamente no esquema do `dicionario.db`.
 
+## [0.1.2] - 2026-07-30
+
+Portabilidade para Windows, que é onde o projeto é desenvolvido.
+
+### Fixed
+
+- **A base de dados não abria em Windows.** O URI de só-leitura era construído
+  por interpolação do caminho (`file:{path}?mode=ro`), e o SQLite trata a barra
+  invertida como parte do nome do ficheiro, não como separador — portanto
+  `file:C:\Users\...\dicionario.db` nunca abria. Passa por `Path.as_uri()`,
+  que também trata dos espaços num caminho como `C:\Users\Jorge Silva`.
+- Saída da consola forçada a UTF-8. Em Windows, `stdout` redirecionado usa a
+  página de código do sistema (cp1252), e um símbolo fora dela — o `∅` que
+  aparece quando uma sonda de pesquisa falha — rebentava com
+  `UnicodeEncodeError` e levava o relatório inteiro com ele.
+
+### Added
+
+- `tests/test_portabilidade.py` — caminhos com espaços e acentos, ficheiros com
+  terminadores CRLF, símbolos fora do cp1252, e uma verificação que percorre o
+  código a garantir que nenhuma leitura de ficheiro fica sem `encoding`
+  explícito (em Windows, o padrão seria cp1252 e estragaria todos os acentos).
+- `.gitattributes` — impede a conversão para CRLF ao clonar em Windows, que
+  alteraria os hashes do lockfile e quebraria a reprodutibilidade entre
+  máquinas.
+- Guia reescrito para PowerShell, com ambiente virtual, e uma secção de
+  diagnóstico específica do Windows.
+
 ## [0.1.1] - 2026-07-30
 
 ### Added
