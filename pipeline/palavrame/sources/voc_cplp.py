@@ -56,6 +56,7 @@ INFO = SourceInfo(
         ),
     ),
     provides=("lemmas",),
+    primary="voc.csv",
     endpoints={},   # sem dump automático confirmado
     manual=(
         "Obter a lista de lemas em https://voc.cplp.org/ e guardar como "

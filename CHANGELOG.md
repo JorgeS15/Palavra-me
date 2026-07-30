@@ -7,6 +7,27 @@ Todas as alterações relevantes ao projeto. Formato baseado em
 Nota: antes da 1.0.0, uma subida de MINOR pode trazer alterações
 incompatíveis — nomeadamente no esquema do `dicionario.db`.
 
+## [0.1.3] - 2026-07-30
+
+Primeira execução real do pipeline, em Windows. O que se aprendeu.
+
+### Added
+
+- `fetch --url` e `fetch --ficheiro` — alimentam uma fonte a partir de um URL
+  ou de um ficheiro descarregado à mão, sem editar código. Os URLs das fontes
+  mudam, e obrigar a mexer no código de cada vez seria uma forma tola de
+  bloquear quem está a correr o pipeline. O ficheiro entra no cache e no
+  lockfile como qualquer outro, portanto a build continua verificável.
+- `SourceInfo.primary` — nome canónico do ficheiro principal de cada fonte, o
+  que permite ao `--url` saber onde guardar o que descarrega.
+
+### Changed
+
+- O Wikcionário tenta três caminhos conhecidos do kaikki.org antes de desistir,
+  e quando desiste explica como obter o URL certo. O caminho que estava fixado
+  no código dava 404 — o kaikki reorganiza os dumps, e assumir um caminho
+  estável era erro meu.
+
 ## [0.1.2] - 2026-07-30
 
 Portabilidade para Windows, que é onde o projeto é desenvolvido.

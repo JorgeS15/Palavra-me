@@ -21,7 +21,7 @@ from typing import Iterable, Iterator
 
 from ..text import clean_definition
 from ..schema import Example, Form, Sense, SourceEntry, canonical_pos
-from .base import License, Source, SourceInfo
+from .base import License, Source, SourceInfo, SourceUnavailable
 
 INFO = SourceInfo(
     slug="wikcionario",
@@ -43,23 +43,48 @@ INFO = SourceInfo(
         ),
     ),
     provides=("lemmas", "senses", "forms", "examples"),
-    endpoints={
-        # URLs por confirmar em F0 — kaikki reorganiza os caminhos.
-        "kaikki_pt": (
-            "https://kaikki.org/ptwiktionary/"
-            "kaikki.org-dictionary-Portuguese.jsonl"
-        ),
-    },
+    primary="wikcionario.jsonl",
+    endpoints={},   # ver CANDIDATOS: o kaikki reorganiza os caminhos
+    manual=(
+        "O kaikki.org muda os caminhos dos dumps. Abre https://kaikki.org/, "
+        "escolhe a edição portuguesa do Wiktionary, copia o link do ficheiro "
+        ".jsonl e corre: "
+        "palavrame fetch --source wikcionario --url <URL>"
+    ),
 )
 
 CACHE_NAME = "wikcionario.jsonl"
+
+# Caminhos já usados pelo kaikki.org, por ordem de probabilidade. Nenhum está
+# confirmado — o projeto reorganizou-os mais do que uma vez, e um 404 aqui é
+# esperado, não é avaria. Quando um funcionar, fixa-o e apaga os outros.
+CANDIDATOS = (
+    "https://kaikki.org/dictionary/Portuguese/kaikki.org-dictionary-Portuguese.jsonl",
+    "https://kaikki.org/ptwiktionary/Portuguese/kaikki.org-dictionary-Portuguese.jsonl",
+    "https://kaikki.org/ptwiktionary/kaikki.org-dictionary-Portuguese.jsonl",
+)
 
 
 class Wikcionario(Source):
     info = INFO
 
     def fetch(self) -> None:
-        self.cache.fetch(self.info.endpoints["kaikki_pt"], self.slug, CACHE_NAME)
+        urls = list(self.info.endpoints.values()) or list(CANDIDATOS)
+        falhas = []
+        for url in urls:
+            try:
+                self.cache.fetch(url, self.slug, CACHE_NAME)
+                print(f"      encontrado em {url}")
+                return
+            except Exception as exc:
+                falhas.append(f"{url} -> {exc}")
+
+        raise SourceUnavailable(
+            "nenhum dos caminhos conhecidos do kaikki.org respondeu.\n      "
+            + "\n      ".join(falhas)
+            + "\n\n      "
+            + self.info.manual
+        )
 
     def parse(self, lemmas: Iterable[str] | None = None) -> Iterator[SourceEntry]:
         wanted = self._wanted(lemmas)

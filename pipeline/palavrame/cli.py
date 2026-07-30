@@ -99,6 +99,11 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="repetível; por omissão, todas")
     p.add_argument("--seeds", default=DEFAULT_SEEDS,
                    help="lista de lemas para as fontes que buscam à peça")
+    p.add_argument("--url",
+                   help="descarrega deste URL em vez do que está no código; "
+                        "exige --source. Serve para quando um URL muda")
+    p.add_argument("--ficheiro",
+                   help="usa um ficheiro já descarregado à mão; exige --source")
     p.set_defaults(func=cmd_fetch)
 
     p = sub.add_parser("f0", help="protótipo da F0 sobre a lista de lemas")
@@ -161,6 +166,14 @@ def cmd_fetch(args) -> int:
     cache = Cache(paths, offline=args.offline)
     slugs = args.sources or list(REGISTRY)
     lemmas = _read_seeds(paths, args.seeds)
+
+    override = getattr(args, "url", None) or getattr(args, "ficheiro", None)
+    if override:
+        if len(slugs) != 1 or not args.sources:
+            print("  --url e --ficheiro exigem exatamente um --source.",
+                  file=sys.stderr)
+            return 2
+        return _fetch_override(cache, slugs[0], args)
 
     failures = 0
     for slug in slugs:
@@ -320,6 +333,39 @@ def cmd_validar(args) -> int:
     print(report.render())
     print()
     return 0 if report.ok else 1
+
+
+def _fetch_override(cache, slug: str, args) -> int:
+    """Alimenta uma fonte a partir de um URL ou ficheiro dado à mão.
+
+    Existe porque os URLs das fontes mudam — o kaikki reorganiza caminhos, o
+    Leipzig renomeia corpora — e obrigar quem corre o pipeline a editar código
+    de cada vez seria uma forma tola de o bloquear. O ficheiro entra no cache
+    e no lockfile exatamente como se tivesse sido descarregado pelo caminho
+    normal, portanto a build continua verificável.
+    """
+    info = build_source(slug, cache).info
+
+    if args.ficheiro:
+        origem = Path(args.ficheiro)
+        if not origem.exists():
+            print(f"  Não existe: {origem}", file=sys.stderr)
+            return 2
+        # Mantém o nome original: para o Hunspell, o Leipzig e a wordnet é a
+        # extensão que escolhe o parser (.aff/.dic, .tar.gz, .nt/.tsv).
+        nome = info.primary if info.primary and origem.suffix == Path(info.primary).suffix \
+            else origem.name
+        guardado = cache.local(slug, nome, origem)
+        print(f"  {slug}: {origem.name} -> cache/{slug}/{nome}")
+    else:
+        nome = info.primary or args.url.rstrip("/").split("/")[-1] or "download"
+        guardado = cache.fetch(args.url, slug, nome)
+        print(f"  {slug}: descarregado para cache/{slug}/{nome}")
+
+    print(f"  {guardado.bytes / 1024:.0f} KiB, sha256 {guardado.sha256[:16]}…")
+    print(f"\n  Se este URL for o certo, fixa-o em sources/{slug}.py "
+          "para a próxima build não depender de o teres à mão.\n")
+    return 0
 
 
 # --- auxiliares ------------------------------------------------------------

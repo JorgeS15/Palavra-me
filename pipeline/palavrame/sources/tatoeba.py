@@ -42,6 +42,7 @@ INFO = SourceInfo(
         ),
     ),
     provides=("examples",),
+    primary="por_sentences.tsv.bz2",
     endpoints={
         "por_sentences": (
             "https://downloads.tatoeba.org/exports/per_language/por/"

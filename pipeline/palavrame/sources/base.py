@@ -50,6 +50,11 @@ class SourceInfo:
     endpoints: dict[str, str] = field(default_factory=dict)
     # Passos manuais quando a fonte não permite download automático.
     manual: str = ""
+    # Nome do ficheiro principal desta fonte no cache. Quando existe, permite
+    # a quem corre o pipeline apontar `fetch --url` ou `fetch --ficheiro` para
+    # a fonte sem ter de mexer em código — que é o que salva a situação
+    # quando um URL destes muda, coisa que acontece.
+    primary: str | None = None
 
 
 class Source:

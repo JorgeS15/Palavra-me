@@ -129,3 +129,38 @@ def test_hunspell_fetch_avisa_quando_nao_ha_nada(cache, paths):
     shutil.rmtree(paths.cache / "hunspell_natura")
     with pytest.raises(SourceUnavailable):
         build_source("hunspell_natura", cache).fetch()
+
+
+def test_fetch_com_url_alternativo(paths, tmp_path, monkeypatch):
+    """`fetch --url` alimenta uma fonte sem editar código.
+
+    É o que salva a situação quando um URL muda — e mudam. O ficheiro entra no
+    cache e no lockfile como qualquer outro, portanto a build continua a ser
+    verificável.
+    """
+    from palavrame.cli import main
+
+    origem = tmp_path / "descarregado-a-mao.jsonl"
+    origem.write_text(
+        '{"word":"bonança","lang_code":"pt","pos":"noun",'
+        '"senses":[{"glosses":["Calmaria depois da tempestade."]}]}\n',
+        encoding="utf-8",
+    )
+
+    assert main(["fetch", "--source", "wikcionario", "--ficheiro", str(origem)]) == 0
+
+    # Guardado com o nome canónico da fonte, não com o nome do ficheiro.
+    assert (paths.cache / "wikcionario" / "wikcionario.jsonl").exists()
+
+    cache_offline = __import__(
+        "palavrame.cache", fromlist=["Cache"]
+    ).Cache(paths, offline=True)
+    entradas = _by_lemma(build_source("wikcionario", cache_offline).parse())
+    assert "bonança" in entradas
+
+
+def test_url_sem_source_e_recusado(paths, capsys):
+    from palavrame.cli import main
+
+    assert main(["fetch", "--url", "https://exemplo.pt/x.jsonl"]) == 2
+    assert "exigem exatamente um --source" in capsys.readouterr().err

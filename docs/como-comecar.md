@@ -59,7 +59,7 @@ pip install pytest
 python -m pytest
 ```
 
-Devem passar **123 testes**, em poucos segundos e sem rede. Se passarem, o
+Devem passar **125 testes**, em poucos segundos e sem rede. Se passarem, o
 código está são — o que falhar daqui para a frente é dado, não software. É um
 marco útil, porque separa os teus problemas dos meus.
 
@@ -112,10 +112,29 @@ O que esperar:
   download mais demorado dos três.
 - **Wikcionário** — descarrega o dump do wiktextract em kaikki.org. É grande.
 
-**Se algum falhar com HTTP 404**, o URL mudou. Não é drama: abre o módulo da
-fonte em `palavrame/sources/`, corrige o `endpoints`, volta a correr. Os URLs
-estão marcados no código como hipóteses precisamente porque não os pude
-confirmar.
+**Se algum falhar com HTTP 404**, o URL mudou — acontece, e não é drama.
+Não precisas de editar código: descobre o URL certo no site da fonte e passa-o
+diretamente.
+
+```powershell
+python -m palavrame.cli fetch --source wikcionario --url https://.../ficheiro.jsonl
+```
+
+Ou, se já descarregaste o ficheiro pelo browser:
+
+```powershell
+python -m palavrame.cli fetch --source wikcionario --ficheiro C:\Users\JorgeS\Downloads\ficheiro.jsonl
+```
+
+Em qualquer dos casos o ficheiro entra no cache e no lockfile como se tivesse
+vindo pelo caminho normal, portanto a build continua verificável.
+
+**O Wikcionário é o mais provável de falhar**, porque o kaikki.org reorganiza
+os caminhos dos dumps. O `fetch` tenta três caminhos conhecidos antes de
+desistir. Se desistir: abre https://kaikki.org/, escolhe a edição portuguesa,
+copia o link do `.jsonl` e usa o `--url` acima. Quando encontrares o que
+funciona, fixa-o em `palavrame/sources/wikcionario.py` para a próxima build
+não depender de o teres à mão.
 
 ### 1b. VOC — a lista oficial de lemas
 
