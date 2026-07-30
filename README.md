@@ -47,7 +47,7 @@ cd pipeline
 python -m palavrame.cli fontes    # que fontes há e o que falta verificar
 python -m palavrame.cli fetch     # descarrega (precisa de rede)
 python -m palavrame.cli f0        # protótipo sobre 100 lemas
-python -m pytest                  # 114 testes, correm offline
+python -m pytest                  # 116 testes, correm offline
 ```
 
 Ver [`pipeline/README.md`](pipeline/README.md) para o resto.
@@ -75,3 +75,5 @@ A base de dados construída herda as licenças das fontes que a compõem —
 incluindo copyleft, se levar conteúdo do Wikcionário. Ver
 [`docs/fontes.md`](docs/fontes.md), que é um pré-requisito da F1 e não
 documentação para fazer no fim.
+
+Guia passo a passo para completar a F0: [`docs/como-comecar.md`](docs/como-comecar.md).

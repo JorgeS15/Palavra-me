@@ -26,7 +26,7 @@ escrita.
 | Revisão humana em terminal | ✅ |
 | Relatório de build e folha de revisão da F0 | ✅ |
 | Lista dos 100 lemas da F0 | ✅ |
-| 114 testes, a correr offline | ✅ |
+| 116 testes, a correr offline | ✅ |
 | `docs/fontes.md` — **estrutura** criada, **conteúdo por verificar** | ⚠️ |
 
 ## Por fazer, e porquê
@@ -90,7 +90,7 @@ para tornar barata.
 ## O que os testes já provam
 
 Sem dados reais não se pode aferir qualidade, mas pode-se aferir correção. Os
-114 testes correm sobre fixtures sintéticas (`pipeline/tests/fixtures/`, todas
+116 testes correm sobre fixtures sintéticas (`pipeline/tests/fixtures/`, todas
 marcadas como tal) e cobrem:
 
 - **Os três casos de flexão que o plano nomeia**: `couberam` → `caber`,

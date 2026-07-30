@@ -44,13 +44,17 @@ class HunspellNatura(Source):
     info = INFO
 
     def fetch(self) -> None:
-        if not self.info.endpoints:
-            raise SourceUnavailable(
-                "Coloca pt_PT.aff e pt_PT.dic em pipeline/cache/hunspell_natura/ "
-                "(ou preenche `endpoints` depois de confirmar o URL em F0)."
-            )
         for name, url in self.info.endpoints.items():
             self.cache.fetch(url, self.slug, name)
+        if self.info.endpoints:
+            return
+
+        # Sem URL confirmado, aceita os ficheiros postos à mão — e regista-os
+        # no lockfile, para que a build continue a ser verificável. É o mesmo
+        # que o VOC faz; um `fetch` não deve reclamar do que já lá está.
+        aff, dic = self._locate()
+        for path in (aff, dic):
+            self.cache.local(self.slug, path.name, path)
 
     def parse(self, lemmas: Iterable[str] | None = None) -> Iterator[SourceEntry]:
         wanted = self._wanted(lemmas)

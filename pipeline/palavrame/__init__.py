@@ -7,7 +7,7 @@ Regra estrutural: só os módulos em `palavrame.sources` tocam na rede. Todo o
 resto do pipeline lê do cache local. Ver `tests/test_no_network.py`.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Versão do esquema de `dicionario.db`. Incrementa quando o esquema muda de
 # forma que a app precise de saber. Vai para a tabela `meta`.

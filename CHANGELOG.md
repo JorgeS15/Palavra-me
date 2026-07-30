@@ -7,6 +7,19 @@ Todas as alterações relevantes ao projeto. Formato baseado em
 Nota: antes da 1.0.0, uma subida de MINOR pode trazer alterações
 incompatíveis — nomeadamente no esquema do `dicionario.db`.
 
+## [0.1.1] - 2026-07-30
+
+### Added
+
+- `docs/como-comecar.md` — guia passo a passo para completar a F0: obter cada
+  fonte, verificar as licenças, correr o protótipo e conduzir a revisão final.
+
+### Fixed
+
+- `fetch --source hunspell_natura` deixa de falhar quando os ficheiros
+  `.aff`/`.dic` foram colocados à mão. Passa a registá-los no lockfile, como o
+  VOC já fazia — um `fetch` não deve reclamar do que já está em cache.
+
 ## [0.1.0] - 2026-07-30
 
 Primeira versão do pipeline de construção do dicionário (plano, fase F0).

@@ -111,3 +111,21 @@ def test_wordnet_deriva_sinonimos_do_synset(cache):
 def test_wordnet_nao_se_liga_a_si_proprio(cache):
     for entry in build_source("wordnet_pt", cache).parse():
         assert all(r.target != entry.lemma for r in entry.relations)
+
+
+def test_hunspell_fetch_aceita_ficheiros_postos_a_mao(cache):
+    """Sem URL confirmado, os ficheiros manuais bastam — e ficam no lockfile."""
+    fonte = build_source("hunspell_natura", cache)
+    fonte.fetch()
+    registados = {k for k in cache.lock_entries() if k.startswith("hunspell_natura/")}
+    assert registados == {"hunspell_natura/pt_PT.aff", "hunspell_natura/pt_PT.dic"}
+
+
+def test_hunspell_fetch_avisa_quando_nao_ha_nada(cache, paths):
+    import shutil
+
+    from palavrame.sources.base import SourceUnavailable
+
+    shutil.rmtree(paths.cache / "hunspell_natura")
+    with pytest.raises(SourceUnavailable):
+        build_source("hunspell_natura", cache).fetch()
