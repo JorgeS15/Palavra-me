@@ -1,111 +1,101 @@
-# Pipeline
+# O pipeline
 
-Constrói o `dicionario.db` que a app embarca. Corre na máquina de quem
-desenvolve, nunca em produção.
+Este é o programa que **constrói o dicionário**. Junta oito fontes abertas —
+dispersas, em formatos diferentes, com licenças diferentes — numa única base
+de dados SQLite que a app depois carrega.
 
-> A peça central do projeto é este pipeline, não a app. A app é um leitor de
-> SQLite com boa UI; o trabalho difícil é construir uma base lexical decente a
-> partir de fontes abertas dispersas.
+Corre no computador de quem desenvolve, não no telemóvel de ninguém. O
+resultado, o `dicionario.db`, é que vai dentro da app.
+
+> É aqui que está o trabalho difícil do projeto. A app é um bom leitor de
+> SQLite; a base de dados que ela lê é que custou a fazer.
 
 ## Requisitos
 
-Python 3.11+. **Sem dependências** — o núcleo usa só a biblioteca padrão, de
-propósito: uma build que não resolve dependências é uma build que se reproduz
-daqui a dois anos.
+Python 3.9 ou superior, e **nenhuma dependência externa** — o núcleo usa só a
+biblioteca padrão. É de propósito: uma build que não precisa de resolver
+dependências é uma build que ainda funciona daqui a dois anos.
 
 ```bash
-pip install -e ".[dev]"     # só para correr os testes
+pip install -e ".[dev]"     # só é preciso para correr os testes
 ```
 
-## Uso
+## Construir o dicionário
 
 ```bash
-# 1. Estado das licenças. Começa sempre por aqui.
+# 1. Ver as fontes e o estado das suas licenças. Começa sempre por aqui.
 python -m palavrame.cli fontes
 
-# 2. Traz os ficheiros brutos para o cache. Único passo com rede.
-python -m palavrame.cli fetch
+# 2. Descarregar os dados brutos das oito fontes. O único passo que usa rede.
+python -m palavrame.cli fetch --completo
 
-# 3. Protótipo da F0 sobre os 100 lemas de seeds/lemas-f0.txt.
-python -m palavrame.cli f0
-
-# 4. Lê out/revisao-f0.md e decide se a qualidade chega.
+# 3. Construir o dicionário inteiro a partir do que está em cache.
+python -m palavrame.cli f1
 ```
 
-### Definições que faltam
+Depois do passo 2, tudo o resto corre offline. O dicionário sai para
+`out/dicionario-1.db`, com um relatório ao lado que diz quantas palavras
+ficaram, quantas sem definição, e que conflitos entre fontes houve.
 
-Há palavras que nenhuma fonte aberta define — `ensonado` é o caso típico:
-existe no vocabulário do Natura, o Leipzig tem frases reais com ela, e não
-está nem no Dicionário Aberto (1913) nem no Wikcionário. São cerca de 4 mil.
+Para o meter na app, empacota-se primeiro:
 
-Escrevem-se à mão em `seeds/curadoria.csv`, uma linha por aceção:
+```bash
+python -m palavrame.cli empacotar --db out/dicionario-1.db
+```
+
+## Definições escritas à mão
+
+Há cerca de quatro mil palavras que nenhuma fonte aberta define. Preenchem-se à
+mão em `seeds/curadoria.csv`, uma linha por significado:
 
 ```csv
 lema,classe,definicao,nota
 ensonado,adjetivo,"Que tem sono; sonolento.",
 ```
 
-Basta gravar o ficheiro e correr o `f1`; não é preciso `fetch`. A definição
-entra na base identificada como "Palavra-me" e **em último lugar**:
-se a palavra já tiver definição de uma fonte publicada, é essa que aparece
-primeiro, e o `validar` avisa que a linha pode sair.
+Basta gravar e voltar a construir — não é preciso descarregar nada de novo. A
+definição entra na base **em último lugar**: se a palavra já tiver significado
+de uma fonte publicada, é essa que aparece primeiro, e a validação avisa que a
+linha pode sair.
 
-Depois de um `fetch`, tudo o resto corre com `--offline`.
+(É a mesma coisa que o [`CONTRIBUTING.md`](../CONTRIBUTING.md) convida qualquer
+pessoa a fazer.)
 
-### AMALIA
-
-Só depois de haver aceções na DB e de se ver quais ficaram sem exemplo:
-
-```bash
-ollama pull hf.co/amalia-llm/AMALIA-9B-0626-DPO-GGUF:Q4_K_M
-python -m palavrame.cli gerar --backend ollama
-python -m palavrame.cli rever         # revisão humana, obrigatória
-```
-
-Isto demora horas ou dias, e é suposto demorar. Não se está a servir nada —
-está-se a gerar um dataset, uma vez. A 2 tokens/segundo continua a ser
-perfeitamente viável.
-
-### Antes de publicar
+## Antes de publicar uma base
 
 ```bash
-python -m palavrame.cli validar --db out/dicionario-v1.db --distribuicao
+python -m palavrame.cli validar --db out/dicionario-1.db --distribuicao
 ```
 
-O modo `--distribuicao` **reprova** a base de dados se alguma fonte tiver
-licença por verificar. É deliberado.
+O modo `--distribuicao` **reprova** a base se alguma fonte tiver a licença por
+confirmar. É deliberado: é a rede de segurança que impede publicar dados que
+não se podem redistribuir.
 
-## Estrutura
+## Como está organizado
 
 ```
 palavrame/
-├── cache.py          rede + lockfile por hash. Um dos dois sítios com sockets.
-├── text.py           normalização. Define a chave de pesquisa de todo o projeto.
-├── schema.py         esquema canónico intermédio (não é o SQL)
-├── affix.py          expansão Hunspell: lema -> formas flexionadas
-├── sources/          uma fonte por módulo, isoladas umas das outras
-├── normalize/        vocabulário canónico partilhado
-├── merge/            resolução de conflitos entre fontes
-├── generate/         AMALIA: prompts, validação, batch
-├── build/            escrita do SQLite + FTS5
-├── validate/         verificações antes de publicar
-├── report.py         relatório de build e folha de revisão da F0
-├── review.py         revisão humana do que o LLM gerou
+├── cache.py       download + registo por hash (um dos poucos sítios com rede)
+├── text.py        normalização — define a chave de pesquisa de todo o projeto
+├── schema.py      o formato intermédio, comum a todas as fontes
+├── affix.py       expansão morfológica: de um lema para as suas formas
+├── sources/       uma fonte por ficheiro, isoladas umas das outras
+├── merge/         resolução de conflitos quando as fontes discordam
+├── build/         escrita do SQLite com índice de pesquisa
+├── validate/      as verificações que decidem se a base pode sair
 └── cli.py
 ```
 
-## Regras que os testes impõem
+## Regras que os testes garantem
 
-Não são convenções — há testes que falham se forem violadas.
+Não são recomendações — há testes que falham se forem quebradas.
 
-1. **A rede vive só em `sources/`** (e em `cache.py`, que descarrega, e em
-   `generate/runner.py`, que fala com o modelo em localhost).
-   `tests/test_no_network.py` percorre a árvore de imports de cada módulo.
-2. **As fontes são independentes.** Nenhuma importa de outra; só de `base`.
-3. **Nada entra na DB sem fonte declarada.** O `validate` falha se houver.
-4. **Toda a saída de LLM é marcada** como gerada, na DB e na UI. Sem exceções.
-5. **`dicionario.db` e `utilizador.db` nunca se tocam.** O pipeline não sabe
-   sequer que a segunda existe.
+1. **A rede vive só onde tem de viver.** Um teste percorre os *imports* de cada
+   módulo para o garantir.
+2. **Cada fonte é independente.** Nenhuma conhece as outras.
+3. **Nada entra na base sem fonte declarada.** Sem proveniência, a build falha.
+4. **O dicionário e a coleção do utilizador nunca se tocam.** O pipeline nem
+   sabe que a segunda existe.
 
 ```bash
 python -m pytest
@@ -113,12 +103,11 @@ python -m pytest
 
 ## Acrescentar uma fonte
 
-1. Um módulo em `sources/`, com um `SourceInfo` que declara a licença
-   honestamente (`verified=False` até alguém ter lido os termos).
-2. `fetch()` traz para o cache; `parse()` lê do cache e devolve `SourceEntry`.
-   Nada mais.
+1. Um ficheiro novo em `sources/`, com a licença declarada honestamente
+   (`verified=False` até alguém ter mesmo lido os termos).
+2. Duas funções e nada mais: `fetch()` traz os dados para o cache, `parse()`
+   lê-os e devolve entradas no formato comum.
 3. Registá-la em `sources/__init__.py`.
-4. Uma fixture em `tests/fixtures/<slug>/` e testes do parser.
-5. O texto de atribuição e a nota de **como** a licença foi verificada, dentro
-   do próprio `SourceInfo`. É de lá que sai o ecrã "Fontes e licenças" da app,
-   e é o único registo que existe — confirma com `palavrame fontes`.
+4. Uma amostra de teste em `tests/fixtures/` e os testes do *parser*.
+5. O texto de atribuição e a nota de **como** a licença foi confirmada, dentro
+   do próprio ficheiro. É de lá que sai o ecrã "Fontes e licenças" da app.

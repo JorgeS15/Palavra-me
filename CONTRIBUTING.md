@@ -1,99 +1,91 @@
 # Contribuir
 
-Obrigado pelo interesse. Este documento diz o que é útil, por ordem de
-utilidade — e a primeira coisa da lista não precisa de saber programar.
+Que bom que apareceste. Há várias formas de ajudar o Palavra-me, e **a mais
+valiosa de todas não precisa de saber programar** — precisa só de gostar de
+palavras.
 
-## 1. Escrever definições que faltam
+## Escrever definições que faltam
 
-**É a contribuição mais valiosa que existe neste projeto.**
+Há cerca de **quatro mil palavras portuguesas** que a app conhece mas não sabe
+definir. Não é descuido: um dicionário livre de direitos de autor é, por
+definição, antigo — o nosso mais antigo é de 1913 — e faltam-lhe todas as
+palavras que entraram na língua desde então, além de muitas que simplesmente
+nunca lá estiveram.
 
-Há cerca de quatro mil palavras portuguesas correntes que **nenhuma fonte
-aberta define**. Não é por procurarmos mal: os direitos de autor duram a vida
-do autor mais setenta anos, portanto qualquer dicionário em domínio público é
-antigo. O nosso esqueleto é o de Cândido de Figueiredo, de 1913.
+A palavra que deu origem a este projeto é *ensonado*. Nenhum dicionário aberto
+a define. Ou alguém a escreve, ou fica vazia para sempre.
 
-A palavra que deu origem a isto é `ensonado`. Não está no Dicionário Aberto,
-não está nas 624 mil entradas do Wikcionário, e o Leipzig tem frases reais com
-ela. Ou alguém a escreve, ou fica vazia para sempre.
-
-Escrevem-se em [`pipeline/seeds/curadoria.csv`](pipeline/seeds/curadoria.csv),
-uma linha por aceção:
+Se deres por uma palavra sem significado na app, podes escrever-lho. É uma
+linha num ficheiro de texto — [`pipeline/seeds/curadoria.csv`](pipeline/seeds/curadoria.csv):
 
 ```csv
 lema,classe,definicao,nota
 ensonado,adjetivo,"Que tem sono; sonolento.",
 ```
 
-Regras:
+Umas dicas para a definição ficar bem:
 
-- **Só o que não existe em fonte aberta.** Se a palavra já tem definição, a
-  curada entra a seguir e o `validar` avisa que a linha pode sair. Confirma na
-  app antes de escrever.
-- **Português europeu.** É a variante da app inteira.
-- **Uma definição, não uma enciclopédia.** Uma ou duas linhas.
-- Começa por maiúscula e acaba em ponto — há um teste que o verifica.
+- **Só palavras que a app não define.** Se ela já mostra um significado, não é
+  preciso — confirma primeiro.
+- **Português europeu**, que é a língua da app toda.
+- **Curta.** Uma linha ou duas, não uma enciclopédia.
+- Começa por maiúscula e acaba em ponto.
 
-Não é preciso preencher as quatro mil. Uma palavra que te tropeçou a ler é uma
-contribuição perfeitamente boa.
+Não tens de preencher as quatro mil. Uma palavra que te tropeçou a ler já é uma
+óptima contribuição.
 
-### Ainda melhor: contribui para o Wikcionário
+**Melhor ainda:** escreve a definição no [Wikcionário](https://pt.wiktionary.org).
+Aí fica livre para toda a gente — para esta app, para as próximas, para quem
+vier a seguir — e o teu trabalho rende juros em vez de ficar num ficheiro só.
 
-Se escreveres a definição no [Wikcionário](https://pt.wiktionary.org), ela fica
-CC BY-SA para toda a gente — para esta app, para as próximas, para quem vier a
-seguir. É o único caminho em que o trabalho rende juros em vez de ficar preso
-a um ficheiro.
+## Dizer-nos que palavras falham
 
-## 2. Reportar palavras que falham
+Encontraste uma palavra que a app não mostra, ou mostra mal? **Abre um
+[issue](../../issues)** com a palavra e o que esperavas ver.
 
-Abre um *issue* com a palavra e o que esperavas ver. Parece pouco e não é: os
-defeitos mais graves deste projeto foram todos encontrados assim.
+Parece pouco, e é o contrário: os defeitos mais sérios do projeto foram todos
+apanhados assim. Uma palavra que não aparecia revelou que o pipeline andava a
+comer definições inteiras; uma pergunta do jogo que trocava o significado
+revelou outra falha. Cada palavra que reportas torna a app melhor para toda a
+gente.
 
-O `macilento` que não aparecia levou à descoberta de que a heurística de
-domínios comia definições inteiras. O `deferente`, que no jogo perguntava
-anatomia em vez de cortesia, levou a rever a escolha da definição. E jogar uma
-ronda com 24 palavras reais destapou seis defeitos numa hora.
+## Mexer no código
 
-## 3. Código
+Se és programador/a e queres pôr as mãos na massa, muito bem-vindo/a. Umas
+coisas que convém saber antes:
 
-- **Testes primeiro contra os dados reais.** O pipeline tem quase duzentos
-  testes e nenhum deles é decorativo. Três vezes escrevemos um leitor a partir
-  da documentação de um formato e três vezes estava errado — o dump do
-  Dicionário Aberto usa `INSERT  IGNORE INTO`, o `.dic` do Natura não é uma
-  lista de lemas, e o Onto.PT é Turtle e não o esquema que anuncia. Abre o
-  ficheiro antes de escrever o parser.
-- **Versão e CHANGELOG a cada alteração.** Convenção do projeto: alterações
-  pequenas sobem o número menor.
-- **Comentários explicam o *porquê*, não o *quê*.** Se uma decisão custou uma
-  tarde a descobrir, essa tarde tem de ficar escrita ao lado do código.
-- **A separação `dicionario.db` / `utilizador.db` é inviolável.** Nenhuma
-  migração pode tocar em dados de quem usa a app.
-- **A app não tem permissão de rede.** É a garantia central do projeto e não se
-  negoceia. Qualquer proposta que a exija — contas, anúncios, sincronização —
-  já foi discutida e recusada.
+- **Testes primeiro, e contra os dados reais.** O pipeline tem quase duzentos
+  testes, e por boa razão: por três vezes escrevemos um leitor a partir da
+  documentação de um formato e por três vezes estava errada. Abre o ficheiro
+  verdadeiro antes de escrever o *parser*.
+- **A app não fala com a internet, e nunca falará.** É a garantia central do
+  projeto. Qualquer proposta que a quebre — contas, anúncios, sincronização na
+  nuvem — já foi ponderada e recusada.
+- **A coleção de quem usa a app é sagrada.** O dicionário é substituído por
+  inteiro a cada atualização; as palavras que a pessoa registou nunca são
+  tocadas. Nada no código pode confundir as duas coisas.
+- **Os comentários explicam o *porquê*.** Se uma decisão custou uma tarde a
+  descobrir, essa tarde fica escrita ao lado do código.
 
-## 4. Fontes de dados
+Uma alteração ao código traz sempre um teste, uma subida de versão e uma linha
+no [`CHANGELOG.md`](CHANGELOG.md). O resto está em
+[`pipeline/README.md`](pipeline/README.md).
 
-A pergunta que importa não é "os dados são bons" — é **"podem ser
-redistribuídos dentro de uma app publicada"**. *Grátis para usar* não é
-*redistribuível*, e essa distinção já excluiu o CETEMPúblico, que seria a
-melhor fonte de frases em português europeu que existe.
+### Propor uma fonte de dados nova
 
-Uma fonte só entra com a licença lida, confirmada e registada. Cada módulo em
-`pipeline/palavrame/sources/` declara a sua no `SourceInfo`, incluindo o texto
-de atribuição exigido e **como** a licença foi verificada — é aí que essa
-informação vive, e é de lá que sai o ecrã "Fontes e licenças" da app.
-
-O `palavrame fontes` mostra o estado de todas.
+A pergunta que decide tudo não é "os dados são bons" — é **"podem ser
+redistribuídos numa app publicada?"**. *Grátis para consultar* não é o mesmo
+que *livre para redistribuir*, e essa diferença já deixou de fora fontes
+excelentes. Uma fonte só entra com a licença lida, confirmada, e registada no
+próprio código.
 
 ## Licenças
 
-- **O código é Apache 2.0.** Ver [`LICENSE`](LICENSE) e [`NOTICE`](NOTICE).
-  As contribuições de código entram sob a mesma licença, como a secção 5 da
-  Apache 2.0 estabelece — não é preciso assinar nada.
-- **Os dados não.** A base construída herda as licenças das fontes, incluindo
-  copyleft: leva conteúdo CC BY-SA do Dicionário Aberto e do Wikcionário, e
-  por isso é distribuída sob **CC BY-SA**.
-- **O que escreveres no `curadoria.csv`** é publicado sob CC BY-SA 4.0, como o
+- **O código** é [Apache 2.0](LICENSE). O que contribuíres entra sob a mesma
+  licença, automaticamente — não há nada a assinar.
+- **Os dados** herdam as licenças das fontes, várias delas *copyleft*, e por
+  isso a base é distribuída sob **CC BY-SA**.
+- **As definições que escreveres** são publicadas sob CC BY-SA 4.0, como o
   resto da base.
 
-Ao contribuires, aceitas estes termos.
+Ao contribuíres, aceitas estes termos. Obrigado — a sério.
