@@ -2,6 +2,9 @@
 
 **Um dicionário de português que se lembra das palavras que aprendeste.**
 
+<img width="550" height="1024" alt="image" src="https://github.com/user-attachments/assets/c4e037d3-dffc-44a8-a0a2-37bc742190f8" />
+
+
 Estás a ler um livro, encontras uma palavra que não conheces, e procura-la.
 Vês o significado, os sinónimos, frases onde ela aparece — e ela fica guardada
 na tua coleção, com o livro e a frase onde a encontraste. Da próxima vez que
