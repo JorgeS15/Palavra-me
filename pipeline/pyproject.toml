@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "palavrame-pipeline"
+version = "0.25.2"
+description = "Pipeline de construção do dicionário offline da app Palavra-me"
+readme = "README.md"
+# 3.9 suportado de propósito: é o Python de sistema na máquina onde a F0
+# corre (ver CHANGELOG 0.2.1). Não usar sintaxe que exija mais sem subir isto.
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Jorge" }]
+
+# O núcleo do pipeline usa APENAS a biblioteca padrão.
+# Isto é deliberado: builds reprodutíveis, sem resolução de dependências a
+# variar entre máquinas, e sem risco de uma dependência transitiva introduzir
+# rede fora de `sources/`.
+dependencies = []
+
+[project.optional-dependencies]
+# Só necessário para caminhos alternativos de aquisição de dados.
+wiktextract = ["wiktextract>=1.99"]
+# Validação morfológica opcional na revisão de exemplos gerados.
+spacy = ["spacy>=3.7"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+palavrame = "palavrame.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["palavrame*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

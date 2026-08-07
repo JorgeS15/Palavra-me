@@ -1,0 +1,19 @@
+# O desenvolvimento faz-se em Windows, mas há ficheiros que não podem ser
+# convertidos para CRLF ao clonar — ou os hashes do lockfile deixam de bater
+# certo entre máquinas e uma build deixa de ser reprodutível.
+
+* text=auto eol=lf
+
+# Fixtures: representam o formato exato de cada fonte. Convertê-las mudaria o
+# que os testes estão a testar.
+pipeline/tests/fixtures/** -text
+
+# Binários.
+*.db binary
+*.png binary
+*.jpg binary
+*.bz2 binary
+*.gz binary
+*.tar binary
+*.apk binary
+*.aab binary

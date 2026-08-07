@@ -1,0 +1,18 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+
+# O dicionário empacotado (~60 MB) não é versionado: reconstrói-se com
+#   cd pipeline && python -m palavrame.cli f1
+#   python -m palavrame.cli empacotar --db out/dicionario-1.db
+app/src/main/assets/dicionario.db.gz
+# A marca de versão vai junto: sozinha faria a app julgar que traz um
+# dicionário que na verdade não está lá.
+app/src/main/assets/dicionario.versao
+
+# A chave de assinatura e as palavras-passe nunca sao versionadas.
+keystore.properties
+*.jks
+*.keystore

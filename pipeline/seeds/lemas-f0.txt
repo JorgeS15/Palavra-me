@@ -1,0 +1,131 @@
+# F0 — 100 lemas de teste (plano, secção 7)
+#
+# Escolhidos a dedo para stressar o pipeline em cinco eixos. Não é uma amostra
+# aleatória: é uma amostra adversarial. Se o dicionário for bom nestes 100,
+# é razoável esperar que sirva; se falhar aqui, falha em tudo.
+#
+#  1. comuns          — o caso fácil. Se falhar aqui, algo está muito mal.
+#  2. arcaicas        — onde o Dicionário Aberto (1913) deve brilhar.
+#  3. verbos irreg.   — testam a tabela `forms`, não as definições.
+#  4. modernas        — devem faltar ao de 1913; medem o Wikcionário.
+#  5. polissémicas    — testam a fusão e a separação de aceções.
+#
+# Uma linha por lema. `#` comenta.
+
+# --- 1. comuns na leitura corrente (20) ------------------------------------
+casa
+tempo
+palavra
+olhar
+silêncio
+janela
+memória
+caminho
+noite
+mão
+livro
+água
+luz
+sombra
+coração
+gente
+lugar
+ideia
+corpo
+voz
+
+# --- 2. arcaicas ou literárias (20) ----------------------------------------
+# O tipo de palavra que aparece em Eça, Camilo, Aquilino — e que manda o
+# leitor ao dicionário. É o caso de uso central da app.
+sesmaria
+alcouce
+enxovia
+lampeiro
+mesquinhez
+alfarrábio
+soalheiro
+casquilho
+peralvilho
+madraço
+lorpa
+chalaça
+patacoada
+tunante
+alparcata
+ensonado
+fidalgote
+bacoco
+lazarento
+janota
+
+# --- 3. verbos irregulares (20) --------------------------------------------
+# Estes não testam definições: testam a expansão de afixos. "couberam" tem de
+# chegar a "caber". Se a tabela `forms` estiver mal, é aqui que se vê.
+ser
+estar
+ir
+pôr
+caber
+saber
+trazer
+fazer
+dizer
+haver
+querer
+poder
+ver
+vir
+dar
+ouvir
+pedir
+perder
+valer
+requerer
+
+# --- 4. modernas, provavelmente ausentes do dicionário de 1913 (20) --------
+# Servem para medir o buraco de cobertura descrito na secção 4.4 do plano.
+# É esperado que várias não tenham definição nenhuma. Isso É o resultado.
+telemóvel
+computador
+internet
+televisão
+autocarro
+frigorífico
+comboio
+avião
+software
+plástico
+antibiótico
+reciclagem
+pandemia
+teletrabalho
+podcast
+ecrã
+ficheiro
+criptomoeda
+biodiversidade
+sustentabilidade
+
+# --- 5. polissémicas e ambíguas (20) ---------------------------------------
+# Várias aceções, várias classes gramaticais, ou formas que colidem com
+# flexões de outras palavras ("cantada", "manga", "vela").
+manga
+banco
+vela
+canto
+letra
+grão
+pena
+razão
+regra
+solta
+cantada
+serra
+planta
+folha
+massa
+conta
+cabo
+ponto
+peça
+rede

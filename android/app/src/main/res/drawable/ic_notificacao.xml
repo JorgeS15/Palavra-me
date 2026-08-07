@@ -1,0 +1,20 @@
+<!--
+  Ícone da notificação.
+
+  O Android desenha estes ícones como silhueta: só o alfa conta, a cor é
+  ignorada e substituída pela do sistema. Por isso é branco sólido sobre
+  transparente, sem detalhe fino — qualquer gradiente ou traço estreito
+  desaparece na conversão.
+
+  A forma é um livro aberto com uma marca: é o gesto que a app nomeia.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,6.5C10.3,5.3 8.2,4.7 6,4.7C4.9,4.7 3.9,4.9 3,5.2V19.2C3.9,18.9 4.9,18.7 6,18.7C8.2,18.7 10.3,19.3 12,20.5C13.7,19.3 15.8,18.7 18,18.7C19.1,18.7 20.1,18.9 21,19.2V5.2C20.1,4.9 19.1,4.7 18,4.7C15.8,4.7 13.7,5.3 12,6.5ZM11,18.1C9.5,17.4 7.8,17 6,17C5.7,17 5.3,17 5,17.1V6.7C5.3,6.7 5.7,6.7 6,6.7C7.8,6.7 9.5,7.1 11,7.8V18.1Z" />
+</vector>

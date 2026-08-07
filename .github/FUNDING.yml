@@ -1,0 +1,16 @@
+# Botão "Sponsor" no topo do repositório.
+#
+# Ko-fi e não GitHub Sponsors, por duas razões: o Ko-fi aceita PayPal como
+# processador — e quem já tem PayPal já fez a verificação de identidade há
+# anos — e não cobra comissão sobre gorjetas. Fica só a taxa do PayPal, que
+# nenhuma plataforma evita.
+#
+# O botão aparece na mesma. Não depende de estar inscrito no programa do
+# GitHub; o FUNDING.yml aceita várias plataformas, e podem coexistir se um dia
+# fizer sentido acrescentar `github: JorgeS15`.
+#
+# Os pedidos de apoio ficam aqui, no repositório, e nunca dentro da app. A
+# Play tem regras sobre donativos, e há projetos open source que foram
+# sinalizados só por ligarem à página do projeto quando ela os mencionava.
+
+ko_fi: jorges15

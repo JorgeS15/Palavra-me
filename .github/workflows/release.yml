@@ -1,0 +1,56 @@
+# Cria a release quando se empurra uma etiqueta vXY, com as notas do
+# CHANGELOG.
+#
+# O que este workflow NÃO faz, e não pode fazer: anexar o APK. Um workflow
+# corre nos servidores do GitHub e não tem acesso ao computador de quem
+# compila — o APK que está em `android/app/release/` na máquina do Jorge não
+# existe aqui. E compilá-lo aqui também não é possível: exigiria o dicionário
+# de 60 MB (não versionado) e a chave de assinatura (que nunca deve estar num
+# repositório).
+#
+# Duas formas de o anexar, portanto:
+#   - `python scripts/publicar.py --a-serio`, que faz tudo num comando;
+#   - ou arrastar o APK para a release que este workflow criou.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  criar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extrair as notas do CHANGELOG
+        id: notas
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, re, pathlib
+          versao = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          texto = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          corpo = "Ver o CHANGELOG.md."
+          for seccao in re.split(r"\n(?=## )", texto):
+              cabecalho = seccao.splitlines()[0]
+              if cabecalho.startswith("## ") and f"app v{versao}" in cabecalho:
+                  corpo = seccao.split("\n", 1)[1].strip()
+                  break
+          print("corpo<<FIM")
+          print(corpo)
+          print("FIM")
+          PY
+
+      - name: Criar a release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Palavra-me ${{ github.ref_name }}
+          body: |
+            ${{ steps.notas.outputs.corpo }}
+
+            ---
+            O APK é anexado a partir da máquina onde a app é compilada
+            (`python scripts/publicar.py --a-serio`).

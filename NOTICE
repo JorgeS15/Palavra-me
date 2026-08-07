@@ -1,0 +1,56 @@
+Palavra-me
+Copyright 2026 Jorge
+
+Este produto inclui software desenvolvido para o projeto Palavra-me,
+distribuído sob a Apache License 2.0 (ver LICENSE).
+
+--------------------------------------------------------------------------
+DADOS — NÃO ESTÃO SOB A APACHE 2.0
+--------------------------------------------------------------------------
+
+O código é Apache 2.0. A **base de dados** que o pipeline constrói, não.
+
+A `dicionario.db` deriva de fontes com licenças próprias, algumas delas
+copyleft, e é por isso distribuída sob CC BY-SA. Quem a redistribuir — dentro
+de uma aplicação ou não — fica sujeito a essas condições, e não às deste
+ficheiro.
+
+Fontes e respetivas licenças:
+
+  Dicionário Aberto                          CC BY-SA 2.5 PT
+  https://dicionario-aberto.net/
+  Cândido de Figueiredo, Novo Dicionário da Língua Portuguesa (1913)
+
+  Wikcionário em português                   CC BY-SA 4.0
+  https://pt.wiktionary.org/
+
+  Onto.PT — Universidade de Coimbra          CC BY 3.0 Unported
+  https://ontopt.dei.uc.pt/
+
+  PULO — Universidade do Minho               CC BY-SA 2.5 PT
+  http://wordnet.pt/
+
+  PAPEL — Linguateca / Porto Editora         público e gratuito
+  https://www.linguateca.pt/PAPEL/
+  Extraído do Dicionário da Língua Portuguesa da Porto Editora.
+
+  Dicionário Hunspell pt-PT — projeto Natura, Universidade do Minho
+  https://natura.di.uminho.pt/wiki/doku.php?id=dicionarios:main
+  GPL/LGPL/MPL (tri-licença; usado ao abrigo da MPL)
+
+  Tatoeba                                    CC BY 2.0 FR
+  https://tatoeba.org/
+  Atribuição exigida por frase.
+
+  Leipzig Corpora Collection (português)     CC BY
+  https://wortschatz.uni-leipzig.de/
+
+  Curadoria Palavra-me                       CC BY-SA 4.0
+  pipeline/seeds/curadoria.csv
+  Definições escritas à mão para este projeto, onde nenhuma fonte aberta
+  define a palavra.
+
+Cada aceção e cada frase guarda a sua proveniência na própria base de dados,
+na tabela `sources`. A aplicação mostra esta lista no ecrã "Fontes e
+licenças", e o comando `python -m palavrame.cli fontes` mostra o estado de
+todas com a indicação de como cada licença foi verificada.

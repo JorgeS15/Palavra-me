@@ -1,0 +1,662 @@
+{
+  "dicionario_aberto/da-dump.sql.xz": {
+    "bytes": 15196280,
+    "fetched_at": "2026-08-01T17:59:39Z",
+    "sha256": "a48a2f36d59815c44adf531b6453f7cc63998e2dfa48d25452d0be33affb6fa9",
+    "url": "https://github.com/ambs/Dicionario-Aberto/raw/master/SQL/data-20151213.sql.xz"
+  },
+  "dicionario_aberto/word/agua.json": {
+    "bytes": 1306,
+    "fetched_at": "2026-07-30T13:42:09Z",
+    "sha256": "06c6221a92f4c38f576c2ab240b7a74fccf6fa33a817071fa0c179ef7be1f5be",
+    "url": "https://api.dicionario-aberto.net/word/%C3%A1gua"
+  },
+  "dicionario_aberto/word/alcouce.json": {
+    "bytes": 443,
+    "fetched_at": "2026-07-30T13:42:12Z",
+    "sha256": "d8e68da7bcd00a3f2a7ebcd27b6f17e6fbf9681edde148ab305cccc849b7b427",
+    "url": "https://api.dicionario-aberto.net/word/alcouce"
+  },
+  "dicionario_aberto/word/alfarrabio.json": {
+    "bytes": 441,
+    "fetched_at": "2026-07-30T13:42:13Z",
+    "sha256": "7a0e7522e76af8ccbaaac2158f1bcf684e9903500fb38629ca7ee351f790d50c",
+    "url": "https://api.dicionario-aberto.net/word/alfarr%C3%A1bio"
+  },
+  "dicionario_aberto/word/alparcata.json": {
+    "bytes": 400,
+    "fetched_at": "2026-07-30T13:42:15Z",
+    "sha256": "789d8512848503d43af7b5ce862b021a3ac3af07633deda49d7a77788162b17e",
+    "url": "https://api.dicionario-aberto.net/word/alparcata"
+  },
+  "dicionario_aberto/word/antibiotico.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:26Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/antibi%C3%B3tico"
+  },
+  "dicionario_aberto/word/autocarro.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:24Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/autocarro"
+  },
+  "dicionario_aberto/word/aviao.json": {
+    "bytes": 461,
+    "fetched_at": "2026-07-30T13:42:25Z",
+    "sha256": "8d6faa7e761d10f2a69b17b2b1a6800db35ce999e9568f710d06e5ac63754209",
+    "url": "https://api.dicionario-aberto.net/word/avi%C3%A3o"
+  },
+  "dicionario_aberto/word/bacoco.json": {
+    "bytes": 483,
+    "fetched_at": "2026-07-30T13:42:16Z",
+    "sha256": "75ef34fd9fcc0dc7749f51a53a7198054aefc62f34556309cf35d4cc1bb37138",
+    "url": "https://api.dicionario-aberto.net/word/bacoco"
+  },
+  "dicionario_aberto/word/banco.json": {
+    "bytes": 1018,
+    "fetched_at": "2026-07-30T13:42:29Z",
+    "sha256": "eb1744a4d70880d5965e642f64d55f0f360fab0ec439b6f6a5e3a71422f87ad6",
+    "url": "https://api.dicionario-aberto.net/word/banco"
+  },
+  "dicionario_aberto/word/biodiversidade.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:28Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/biodiversidade"
+  },
+  "dicionario_aberto/word/caber.json": {
+    "bytes": 906,
+    "fetched_at": "2026-07-30T13:42:18Z",
+    "sha256": "bfc951a13fd23b3545947c62554827c63b652fbef7999b146e51e30b934b5c87",
+    "url": "https://api.dicionario-aberto.net/word/caber"
+  },
+  "dicionario_aberto/word/cabo.json": {
+    "bytes": 2023,
+    "fetched_at": "2026-07-30T13:42:33Z",
+    "sha256": "84f535d69e5756525c7656416bae537c3cb2455b6deddd150bc7fbb626e9563a",
+    "url": "https://api.dicionario-aberto.net/word/cabo"
+  },
+  "dicionario_aberto/word/caminho.json": {
+    "bytes": 1022,
+    "fetched_at": "2026-07-30T13:42:07Z",
+    "sha256": "22b8cd55dbfcedcd926545e24c6908eedac56ee6d4637342f71f901fea7bd17b",
+    "url": "https://api.dicionario-aberto.net/word/caminho"
+  },
+  "dicionario_aberto/word/cantada.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:32Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/cantada"
+  },
+  "dicionario_aberto/word/canto.json": {
+    "bytes": 1518,
+    "fetched_at": "2026-07-30T13:42:30Z",
+    "sha256": "2ec6904867cc9e21baa9f4ac4e9d9f003de83cc37604e854061cfa0069701e6f",
+    "url": "https://api.dicionario-aberto.net/word/canto"
+  },
+  "dicionario_aberto/word/casa.json": {
+    "bytes": 1265,
+    "fetched_at": "2026-07-30T13:42:05Z",
+    "sha256": "35f4e2fd3d28c293b971c1035987d4a237919bdad46d70ae0d1a22d25971641a",
+    "url": "https://api.dicionario-aberto.net/word/casa"
+  },
+  "dicionario_aberto/word/casquilho.json": {
+    "bytes": 734,
+    "fetched_at": "2026-07-30T13:42:13Z",
+    "sha256": "721e9a791d3c05be0e370808a0d06491892617f17a81ff985e29c302b6c291af",
+    "url": "https://api.dicionario-aberto.net/word/casquilho"
+  },
+  "dicionario_aberto/word/chalaca.json": {
+    "bytes": 469,
+    "fetched_at": "2026-07-30T13:42:15Z",
+    "sha256": "e8dbacde6348feccd0de995a834e2800ba7fc94e8cb486cd3c2aff04df1085ba",
+    "url": "https://api.dicionario-aberto.net/word/chala%C3%A7a"
+  },
+  "dicionario_aberto/word/comboio.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:25Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/comboio"
+  },
+  "dicionario_aberto/word/computador.json": {
+    "bytes": 461,
+    "fetched_at": "2026-07-30T13:42:23Z",
+    "sha256": "8de12ad412d47dcb492f128751208b720697ea160bb17c467bb52f0d733e1b73",
+    "url": "https://api.dicionario-aberto.net/word/computador"
+  },
+  "dicionario_aberto/word/conta.json": {
+    "bytes": 1702,
+    "fetched_at": "2026-07-30T13:42:33Z",
+    "sha256": "072892d5200ad3a822fa124c7250c388b86f051acbe36a6982461e0c660bf1bf",
+    "url": "https://api.dicionario-aberto.net/word/conta"
+  },
+  "dicionario_aberto/word/coracao.json": {
+    "bytes": 2128,
+    "fetched_at": "2026-07-30T13:42:10Z",
+    "sha256": "0b23f9645907fef1331f3bf437d116e21d2839ef9402cea2abc35d75b18701a4",
+    "url": "https://api.dicionario-aberto.net/word/cora%C3%A7%C3%A3o"
+  },
+  "dicionario_aberto/word/corpo.json": {
+    "bytes": 1576,
+    "fetched_at": "2026-07-30T13:42:11Z",
+    "sha256": "c9647c253cf5edd7fc101f72ea99c34aac7786d1216252f4b6d9ea0dca5fc125",
+    "url": "https://api.dicionario-aberto.net/word/corpo"
+  },
+  "dicionario_aberto/word/criptomoeda.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:28Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/criptomoeda"
+  },
+  "dicionario_aberto/word/dar.json": {
+    "bytes": 2700,
+    "fetched_at": "2026-07-30T13:42:21Z",
+    "sha256": "bc45ebe180bcfc954a4a69e5d5e8d58774d34ae5807d8d43537ed875e50790e6",
+    "url": "https://api.dicionario-aberto.net/word/dar"
+  },
+  "dicionario_aberto/word/dizer.json": {
+    "bytes": 1471,
+    "fetched_at": "2026-07-30T13:42:20Z",
+    "sha256": "b07ca32f6c9db851a9788944557bf115014cb62d2d029db0d403fafc48f536f9",
+    "url": "https://api.dicionario-aberto.net/word/dizer"
+  },
+  "dicionario_aberto/word/ecra.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:27Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/ecr%C3%A3"
+  },
+  "dicionario_aberto/word/ensonado.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:16Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/ensonado"
+  },
+  "dicionario_aberto/word/enxovia.json": {
+    "bytes": 408,
+    "fetched_at": "2026-07-30T13:42:12Z",
+    "sha256": "0bc58c0f4a9c0bdc305b6e125ee7e736a62fe6e1d965cb7fdc30735600d8b83f",
+    "url": "https://api.dicionario-aberto.net/word/enxovia"
+  },
+  "dicionario_aberto/word/estar.json": {
+    "bytes": 1860,
+    "fetched_at": "2026-07-30T13:42:17Z",
+    "sha256": "36d9713737a7077a2e6747412dd08d1696a68c9fb54b656fc5977cc01b5578d3",
+    "url": "https://api.dicionario-aberto.net/word/estar"
+  },
+  "dicionario_aberto/word/fazer.json": {
+    "bytes": 2184,
+    "fetched_at": "2026-07-30T13:42:19Z",
+    "sha256": "ef867be03895395d1161de4b85abd37e46b88f14fef77da794e74afc57cabbd6",
+    "url": "https://api.dicionario-aberto.net/word/fazer"
+  },
+  "dicionario_aberto/word/ficheiro.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:28Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/ficheiro"
+  },
+  "dicionario_aberto/word/fidalgote.json": {
+    "bytes": 486,
+    "fetched_at": "2026-07-30T13:42:16Z",
+    "sha256": "c8116880d42d373671c0c5023a1b7cadfbf12d8a33acb06816add3137ec100f4",
+    "url": "https://api.dicionario-aberto.net/word/fidalgote"
+  },
+  "dicionario_aberto/word/folha.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:33Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/folha"
+  },
+  "dicionario_aberto/word/frigorifico.json": {
+    "bytes": 796,
+    "fetched_at": "2026-07-30T13:42:25Z",
+    "sha256": "8f6a577cb8f062cde949c3aaf0584df4b2091983d4ce9014374f24305fe025cd",
+    "url": "https://api.dicionario-aberto.net/word/frigor%C3%ADfico"
+  },
+  "dicionario_aberto/word/gente.json": {
+    "bytes": 894,
+    "fetched_at": "2026-07-30T13:42:10Z",
+    "sha256": "13b3c8b46363208474dc3656dd31eb0b0f9c01dfbcf7e1481cacc2e08644d9d3",
+    "url": "https://api.dicionario-aberto.net/word/gente"
+  },
+  "dicionario_aberto/word/grao.json": {
+    "bytes": 1364,
+    "fetched_at": "2026-07-30T13:42:30Z",
+    "sha256": "3c8cc9b704391058541befb20cf2659b88681bf22e3cb24b10be154231fe2259",
+    "url": "https://api.dicionario-aberto.net/word/gr%C3%A3o"
+  },
+  "dicionario_aberto/word/haver.json": {
+    "bytes": 1002,
+    "fetched_at": "2026-07-30T13:42:20Z",
+    "sha256": "e96a17f8d1135259a52d85e6968e2e4ce7bfb793014ee1fe24359f7eb67c7536",
+    "url": "https://api.dicionario-aberto.net/word/haver"
+  },
+  "dicionario_aberto/word/ideia.json": {
+    "bytes": 770,
+    "fetched_at": "2026-07-30T13:42:10Z",
+    "sha256": "d887b8833d3fcc88f0a147221a1b4ac76eda565759fe99f1c784f1283cd957ea",
+    "url": "https://api.dicionario-aberto.net/word/ideia"
+  },
+  "dicionario_aberto/word/internet.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:24Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/internet"
+  },
+  "dicionario_aberto/word/ir.json": {
+    "bytes": 1508,
+    "fetched_at": "2026-07-30T13:42:18Z",
+    "sha256": "71a1ab99d390de450946829c621f983a97820e8a4ef6a73f48a86992006806a7",
+    "url": "https://api.dicionario-aberto.net/word/ir"
+  },
+  "dicionario_aberto/word/janela.json": {
+    "bytes": 810,
+    "fetched_at": "2026-07-30T13:42:07Z",
+    "sha256": "dee006648a8cd9783d817c807d9901a5ded81bd9808fc8e6d74c0898568f48a4",
+    "url": "https://api.dicionario-aberto.net/word/janela"
+  },
+  "dicionario_aberto/word/janota.json": {
+    "bytes": 690,
+    "fetched_at": "2026-07-30T13:42:17Z",
+    "sha256": "0a3becd36a8df2be28d78dc3fcb558edb9e774f4edf84cdbba4d0486a26348d4",
+    "url": "https://api.dicionario-aberto.net/word/janota"
+  },
+  "dicionario_aberto/word/lampeiro.json": {
+    "bytes": 548,
+    "fetched_at": "2026-07-30T13:42:12Z",
+    "sha256": "cab9ffed982db9931c9cdb485f5e223eecbd00327884eba17ee8e8dc71910297",
+    "url": "https://api.dicionario-aberto.net/word/lampeiro"
+  },
+  "dicionario_aberto/word/lazarento.json": {
+    "bytes": 930,
+    "fetched_at": "2026-07-30T13:42:17Z",
+    "sha256": "73075f9a8667fcd63e3ae42185dccfcd4966d6eab53ac6e4587afa2b9879210f",
+    "url": "https://api.dicionario-aberto.net/word/lazarento"
+  },
+  "dicionario_aberto/word/letra.json": {
+    "bytes": 1399,
+    "fetched_at": "2026-07-30T13:42:30Z",
+    "sha256": "fc25455168e02123775616fb218be3aaa0a1ef60dbf8e195c53168a10330b1f7",
+    "url": "https://api.dicionario-aberto.net/word/letra"
+  },
+  "dicionario_aberto/word/livro.json": {
+    "bytes": 898,
+    "fetched_at": "2026-07-30T13:42:08Z",
+    "sha256": "096b07073c3934c1f38cca7cd5aa07af76ba21e9adcdf5506ea3398ba94f6dea",
+    "url": "https://api.dicionario-aberto.net/word/livro"
+  },
+  "dicionario_aberto/word/lorpa.json": {
+    "bytes": 419,
+    "fetched_at": "2026-07-30T13:42:14Z",
+    "sha256": "a3e28905076f83eeef22ee6121dfecc01483afa98d63e530ebaecf7f8effbaad",
+    "url": "https://api.dicionario-aberto.net/word/lorpa"
+  },
+  "dicionario_aberto/word/lugar.json": {
+    "bytes": 1402,
+    "fetched_at": "2026-07-30T13:42:10Z",
+    "sha256": "71fa2690d8c41d563bd152c928357f14ff9adcfa7df7abf1bffbd53006960c3a",
+    "url": "https://api.dicionario-aberto.net/word/lugar"
+  },
+  "dicionario_aberto/word/luz.json": {
+    "bytes": 1164,
+    "fetched_at": "2026-07-30T13:42:09Z",
+    "sha256": "745e4a1f15ee3cf514c551fdfb7d1e448e18b86bb4aedd0563bda19dd4206cb8",
+    "url": "https://api.dicionario-aberto.net/word/luz"
+  },
+  "dicionario_aberto/word/madraco.json": {
+    "bytes": 436,
+    "fetched_at": "2026-07-30T13:42:14Z",
+    "sha256": "52f78f37fac588ea677d03795b00b0ea64b176fe46fe0735a81e4e1db8d4874e",
+    "url": "https://api.dicionario-aberto.net/word/madra%C3%A7o"
+  },
+  "dicionario_aberto/word/manga.json": {
+    "bytes": 3269,
+    "fetched_at": "2026-07-30T13:42:29Z",
+    "sha256": "ac545d804f27d3f3cf3a2a43ad9d824e85b0ee067f256ff4a156a326f107831f",
+    "url": "https://api.dicionario-aberto.net/word/manga"
+  },
+  "dicionario_aberto/word/mao.json": {
+    "bytes": 6744,
+    "fetched_at": "2026-07-30T13:42:08Z",
+    "sha256": "2178327c04921080cda215f4ccf997ce9c10e7ae2b8124104f78e7743685c90b",
+    "url": "https://api.dicionario-aberto.net/word/m%C3%A3o"
+  },
+  "dicionario_aberto/word/massa.json": {
+    "bytes": 2005,
+    "fetched_at": "2026-07-30T13:42:33Z",
+    "sha256": "435d9bd069d55181bdd21d3cb7db2686bdb2cae8c1c3a7388eb30a8b6ca1a827",
+    "url": "https://api.dicionario-aberto.net/word/massa"
+  },
+  "dicionario_aberto/word/memoria.json": {
+    "bytes": 925,
+    "fetched_at": "2026-07-30T13:42:07Z",
+    "sha256": "8d69f616f85966fcfa14afb73e286bae000306bf226c1262945d0f1a1037a49e",
+    "url": "https://api.dicionario-aberto.net/word/mem%C3%B3ria"
+  },
+  "dicionario_aberto/word/mesquinhez.json": {
+    "bytes": 432,
+    "fetched_at": "2026-07-30T13:42:13Z",
+    "sha256": "a7ad26397eec441e47ec5623092d8d7e58a2bb177a34b59c7304340804e84c25",
+    "url": "https://api.dicionario-aberto.net/word/mesquinhez"
+  },
+  "dicionario_aberto/word/noite.json": {
+    "bytes": 636,
+    "fetched_at": "2026-07-30T13:42:08Z",
+    "sha256": "270873b1bf9dcb40bbc474e737feaabd1adc84a05a545410b5058fb2ec0be342",
+    "url": "https://api.dicionario-aberto.net/word/noite"
+  },
+  "dicionario_aberto/word/olhar.json": {
+    "bytes": 1065,
+    "fetched_at": "2026-07-30T13:42:06Z",
+    "sha256": "1d37019c7171db368728a47720face08fc10d2794d12ac9952b8829a8477de9a",
+    "url": "https://api.dicionario-aberto.net/word/olhar"
+  },
+  "dicionario_aberto/word/ouvir.json": {
+    "bytes": 503,
+    "fetched_at": "2026-07-30T13:42:22Z",
+    "sha256": "2ffed581d127049526b3b59e871bbc1acdd3c1279e609f95e10409d19ba67c8f",
+    "url": "https://api.dicionario-aberto.net/word/ouvir"
+  },
+  "dicionario_aberto/word/palavra.json": {
+    "bytes": 1345,
+    "fetched_at": "2026-07-30T13:42:06Z",
+    "sha256": "5ac1aa8a001c9be6f6d5309412e10e9af6d5ff637841ee1db64d5383ed8a82c7",
+    "url": "https://api.dicionario-aberto.net/word/palavra"
+  },
+  "dicionario_aberto/word/pandemia.json": {
+    "bytes": 490,
+    "fetched_at": "2026-07-30T13:42:27Z",
+    "sha256": "5ff368af13401dc4b38e2f91bc92837178e9822397e31f948beb2618f3967d7b",
+    "url": "https://api.dicionario-aberto.net/word/pandemia"
+  },
+  "dicionario_aberto/word/patacoada.json": {
+    "bytes": 437,
+    "fetched_at": "2026-07-30T13:42:15Z",
+    "sha256": "848d0790ade36308981a6a004e85dfa084275b6bdc9e194f140d263eb83b1671",
+    "url": "https://api.dicionario-aberto.net/word/patacoada"
+  },
+  "dicionario_aberto/word/peca.json": {
+    "bytes": 1425,
+    "fetched_at": "2026-07-30T13:42:34Z",
+    "sha256": "1dc78d8cb60207a5660febac64ff4baf67fc85816fadab9e678fe2cc8fd94586",
+    "url": "https://api.dicionario-aberto.net/word/pe%C3%A7a"
+  },
+  "dicionario_aberto/word/pedir.json": {
+    "bytes": 702,
+    "fetched_at": "2026-07-30T13:42:22Z",
+    "sha256": "ed05e116b8715033550066ad49bd3b32d4d53ef1628a5902529adb088c38bfca",
+    "url": "https://api.dicionario-aberto.net/word/pedir"
+  },
+  "dicionario_aberto/word/pena.json": {
+    "bytes": 2226,
+    "fetched_at": "2026-07-30T13:42:31Z",
+    "sha256": "217a3e38a9400ea5ce31b0b2075f3deaee07cf53111bc2e7a7085db914727d87",
+    "url": "https://api.dicionario-aberto.net/word/pena"
+  },
+  "dicionario_aberto/word/peralvilho.json": {
+    "bytes": 391,
+    "fetched_at": "2026-07-30T13:42:14Z",
+    "sha256": "829045781bcb3d32097635916b7182dba0ebe7d339e3d0a1a9e300e65561ddf5",
+    "url": "https://api.dicionario-aberto.net/word/peralvilho"
+  },
+  "dicionario_aberto/word/perder.json": {
+    "bytes": 1530,
+    "fetched_at": "2026-07-30T13:42:22Z",
+    "sha256": "dc5088b977a432953328db13421a42974a2bcd25a8f3ebaba76462830dd9a024",
+    "url": "https://api.dicionario-aberto.net/word/perder"
+  },
+  "dicionario_aberto/word/planta.json": {
+    "bytes": 929,
+    "fetched_at": "2026-07-30T13:42:32Z",
+    "sha256": "2371161fc7363db3bfc6d139211821e83783697be871773f82555611259fd496",
+    "url": "https://api.dicionario-aberto.net/word/planta"
+  },
+  "dicionario_aberto/word/plastico.json": {
+    "bytes": 596,
+    "fetched_at": "2026-07-30T13:42:26Z",
+    "sha256": "2c1891dba0e0339e0be18b638f3adcac33a5d456d2b8ad5fc9bd15d23703caf7",
+    "url": "https://api.dicionario-aberto.net/word/pl%C3%A1stico"
+  },
+  "dicionario_aberto/word/podcast.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:27Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/podcast"
+  },
+  "dicionario_aberto/word/poder.json": {
+    "bytes": 1240,
+    "fetched_at": "2026-07-30T13:42:20Z",
+    "sha256": "d42bcd781823fc15fb43d3ca956b575b04dc5cd082ff83134eda9082838f635b",
+    "url": "https://api.dicionario-aberto.net/word/poder"
+  },
+  "dicionario_aberto/word/ponto.json": {
+    "bytes": 5045,
+    "fetched_at": "2026-07-30T13:42:34Z",
+    "sha256": "56f2233a985608ba22f3c6691cbf72c37f63c4ebc574fffac49bf6631c82cdc0",
+    "url": "https://api.dicionario-aberto.net/word/ponto"
+  },
+  "dicionario_aberto/word/por.json": {
+    "bytes": 1944,
+    "fetched_at": "2026-07-30T13:42:18Z",
+    "sha256": "695776b6742fcac9c367046890180adb145d69fcdc89888b82232e26fbeca92f",
+    "url": "https://api.dicionario-aberto.net/word/p%C3%B4r"
+  },
+  "dicionario_aberto/word/querer.json": {
+    "bytes": 1116,
+    "fetched_at": "2026-07-30T13:42:20Z",
+    "sha256": "4d7b54d6046f21476efba8b40946343038cbe9224f2736d999ea7af62bf47ba6",
+    "url": "https://api.dicionario-aberto.net/word/querer"
+  },
+  "dicionario_aberto/word/razao.json": {
+    "bytes": 1090,
+    "fetched_at": "2026-07-30T13:42:31Z",
+    "sha256": "02000928aa3ae21050730387c26c14495dc072f3a41561c6fa79dce17327f06e",
+    "url": "https://api.dicionario-aberto.net/word/raz%C3%A3o"
+  },
+  "dicionario_aberto/word/reciclagem.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:26Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/reciclagem"
+  },
+  "dicionario_aberto/word/rede.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:34Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/rede"
+  },
+  "dicionario_aberto/word/regra.json": {
+    "bytes": 900,
+    "fetched_at": "2026-07-30T13:42:31Z",
+    "sha256": "a948095cc2bf490047f41379bceed2e0c8f7dc54fd62973695b07a51306663de",
+    "url": "https://api.dicionario-aberto.net/word/regra"
+  },
+  "dicionario_aberto/word/requerer.json": {
+    "bytes": 912,
+    "fetched_at": "2026-07-30T13:42:23Z",
+    "sha256": "1cca86b8a99c41ce1c653f63b3e144048217e477e361c77b0b821f35708c69a1",
+    "url": "https://api.dicionario-aberto.net/word/requerer"
+  },
+  "dicionario_aberto/word/saber.json": {
+    "bytes": 1739,
+    "fetched_at": "2026-07-30T13:42:19Z",
+    "sha256": "018df1eda334ffaf1bad641f69ed821f0b7e6d7a18e5103bbc5ca63225d40167",
+    "url": "https://api.dicionario-aberto.net/word/saber"
+  },
+  "dicionario_aberto/word/ser.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:17Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/ser"
+  },
+  "dicionario_aberto/word/serra.json": {
+    "bytes": 1150,
+    "fetched_at": "2026-07-30T13:42:32Z",
+    "sha256": "32292ead54833625f64162653a50de6bd8801d1c73d0b5ce414ebe3bab6aba5c",
+    "url": "https://api.dicionario-aberto.net/word/serra"
+  },
+  "dicionario_aberto/word/sesmaria.json": {
+    "bytes": 429,
+    "fetched_at": "2026-07-30T13:42:11Z",
+    "sha256": "b5f491e689fc3746ed9b5c42f29e9d7d412d983c1c9df7d4792fdbc528e03f13",
+    "url": "https://api.dicionario-aberto.net/word/sesmaria"
+  },
+  "dicionario_aberto/word/silencio.json": {
+    "bytes": 785,
+    "fetched_at": "2026-07-30T13:42:06Z",
+    "sha256": "5de98c75230ce935f979374cbc3c738ffafaffa414fcc1284fe7e979e9fea28b",
+    "url": "https://api.dicionario-aberto.net/word/sil%C3%AAncio"
+  },
+  "dicionario_aberto/word/soalheiro.json": {
+    "bytes": 661,
+    "fetched_at": "2026-07-30T13:42:13Z",
+    "sha256": "37d9d7c46396fc8e562a68058622ae847086b5286d679628fbfca8b56d8e7df1",
+    "url": "https://api.dicionario-aberto.net/word/soalheiro"
+  },
+  "dicionario_aberto/word/software.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:25Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/software"
+  },
+  "dicionario_aberto/word/solta.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:31Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/solta"
+  },
+  "dicionario_aberto/word/sombra.json": {
+    "bytes": 1579,
+    "fetched_at": "2026-07-30T13:42:09Z",
+    "sha256": "f6ea7ddb2bd148daefbb2e2a25390e7fbf1fb30eced4eede4adeac97e4571d1f",
+    "url": "https://api.dicionario-aberto.net/word/sombra"
+  },
+  "dicionario_aberto/word/sustentabilidade.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:28Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/sustentabilidade"
+  },
+  "dicionario_aberto/word/telemovel.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:23Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/telem%C3%B3vel"
+  },
+  "dicionario_aberto/word/teletrabalho.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:27Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/teletrabalho"
+  },
+  "dicionario_aberto/word/televisao.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:24Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/televis%C3%A3o"
+  },
+  "dicionario_aberto/word/tempo.json": {
+    "bytes": 1440,
+    "fetched_at": "2026-07-30T13:42:05Z",
+    "sha256": "8b6cb8e7d9dbbc9869ffb2737492017b8972d9f979d9e97ab16bbe2fb85d1e49",
+    "url": "https://api.dicionario-aberto.net/word/tempo"
+  },
+  "dicionario_aberto/word/trazer.json": {
+    "bytes": 960,
+    "fetched_at": "2026-07-30T13:42:19Z",
+    "sha256": "fd586c07120ac2eeb5ffffa3b24155840257eaf6fe3b9f2d9a8512bf32844d93",
+    "url": "https://api.dicionario-aberto.net/word/trazer"
+  },
+  "dicionario_aberto/word/tunante.json": {
+    "bytes": 647,
+    "fetched_at": "2026-07-30T13:42:15Z",
+    "sha256": "5d333e8d9a82715d7a121e13871ccc78a96187c7e7fc11cd0ba43164a2000fe8",
+    "url": "https://api.dicionario-aberto.net/word/tunante"
+  },
+  "dicionario_aberto/word/valer.json": {
+    "bytes": 794,
+    "fetched_at": "2026-07-30T13:42:23Z",
+    "sha256": "c503c3d183d7b0e8625e074a67f82b1aeb5afddc558a4209aa97c6e2c3a650fa",
+    "url": "https://api.dicionario-aberto.net/word/valer"
+  },
+  "dicionario_aberto/word/vela.json": {
+    "bytes": 2003,
+    "fetched_at": "2026-07-30T13:42:29Z",
+    "sha256": "00d0c876d94c12152aae3c4db292f6052a421f1ab70430c1807aeeff911de387",
+    "url": "https://api.dicionario-aberto.net/word/vela"
+  },
+  "dicionario_aberto/word/ver.json": {
+    "bytes": 2,
+    "fetched_at": "2026-07-30T13:42:21Z",
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "url": "https://api.dicionario-aberto.net/word/ver"
+  },
+  "dicionario_aberto/word/vir.json": {
+    "bytes": 1154,
+    "fetched_at": "2026-07-30T13:42:21Z",
+    "sha256": "812473346d353bc4375815c3f83b58b04120ceefd0f1a83a416435d289d4f814",
+    "url": "https://api.dicionario-aberto.net/word/vir"
+  },
+  "dicionario_aberto/word/voz.json": {
+    "bytes": 1028,
+    "fetched_at": "2026-07-30T13:42:11Z",
+    "sha256": "49ac3303ffb26247e7f33220e981c38cf4c056a3eb516384629fde6a647be980",
+    "url": "https://api.dicionario-aberto.net/word/voz"
+  },
+  "hunspell_natura/hunspell-pt_PT.tar.gz": {
+    "bytes": 258745,
+    "fetched_at": "2026-07-30T13:42:41Z",
+    "sha256": "2066157087e83264484a6d564e1d85258fe2c5eddb9713a42d6f6cf06b0a2ed9",
+    "url": "https://natura.di.uminho.pt/download/sources/Dictionaries/hunspell/hunspell-pt_PT-20251001.tar.gz"
+  },
+  "hunspell_natura/pt_PT.aff": {
+    "bytes": 95089,
+    "fetched_at": "2026-08-01T17:59:39Z",
+    "sha256": "975a209fcc892cb382fa5f34a28c391a39668661ce373ae071287809c5fcae24",
+    "url": "file://C:\\Users\\User\\ownCloud\\Projetos\\Palavra-me\\pipeline\\cache\\hunspell_natura\\pt_PT.aff"
+  },
+  "hunspell_natura/pt_PT.dic": {
+    "bytes": 1485977,
+    "fetched_at": "2026-08-01T17:59:39Z",
+    "sha256": "e29ba2d7aa8a2ad43e9cb46ac6473064b661545c87002aea90e18899d98d3cc9",
+    "url": "file://C:\\Users\\User\\ownCloud\\Projetos\\Palavra-me\\pipeline\\cache\\hunspell_natura\\pt_PT.dic"
+  },
+  "leipzig/por-pt_web_2015_1M.tar.gz": {
+    "bytes": 265546940,
+    "fetched_at": "2026-08-01T18:00:06Z",
+    "sha256": "362960b9176f6a1185aa86d5ee642b3e644c05df5181c810754be50af70d504a",
+    "url": "https://downloads.wortschatz-leipzig.de/corpora/por-pt_web_2015_1M.tar.gz"
+  },
+  "ontopt/OntoPTv0.6_n3.zip": {
+    "bytes": 5380964,
+    "fetched_at": "2026-08-06T16:06:32Z",
+    "sha256": "f89e7486b883c1a95166bb24874b18a581efc1c0187e88619659f4ff6b61f5a3",
+    "url": "https://ontopt.dei.uc.pt/recursos/OntoPTv0.6_n3.zip"
+  },
+  "papel/PAPEL.v.3.5_utf8.zip": {
+    "bytes": 3736344,
+    "fetched_at": "2026-08-06T16:06:25Z",
+    "sha256": "1bd483db5d49c1f6fc2f0f78ecf25d6145b5b344e9abe51c3bc356fae8a1d94e",
+    "url": "https://www.linguateca.pt/PAPEL/PAPEL.v.3.5_utf8.zip"
+  },
+  "tatoeba/por_sentences.tsv.bz2": {
+    "bytes": 6347362,
+    "fetched_at": "2026-07-30T13:42:42Z",
+    "sha256": "d18e6b7fde74cc1930084016c34d2a8c0eed58eeef0813f5a980fcb45b0f1dff",
+    "url": "https://downloads.tatoeba.org/exports/per_language/por/por_sentences.tsv.bz2"
+  },
+  "wikcionario/wikcionario.jsonl": {
+    "bytes": 35224029,
+    "fetched_at": "2026-07-30T13:42:39Z",
+    "sha256": "8254e1423cfa552d908b0b9fed6a3fda6167cb5d7b8ab96bb9642a0eab00ca51",
+    "url": "https://kaikki.org/dictionary/downloads/pt/pt-extract.jsonl.gz"
+  },
+  "wordnet_pt/pulo.sql.xz": {
+    "bytes": 5555724,
+    "fetched_at": "2026-08-03T21:04:30Z",
+    "sha256": "96749de782283a2948dc909df91c5b35180d0c789a9b4493aca5d1f02d940812",
+    "url": "http://wordnet.pt/sql/pulo.20160508.sql.xz"
+  }
+}

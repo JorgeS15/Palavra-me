@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Só a base do utilizador entra na cópia de segurança.
+
+  Basta incluí-la: o que não está incluído fica automaticamente de fora,
+  e por isso não há (nem pode haver) uma linha a excluir o dicionário —
+  o lint rejeita excluir o que nunca esteve incluído.
+
+  O dicionário tem 200 MB, é público e reconstrói-se do APK; copiá-lo
+  seria desperdício. As palavras registadas, essas, não se recuperam de
+  mais lado nenhum.
+-->
+<full-backup-content>
+    <include domain="database" path="utilizador.db" />
+</full-backup-content>

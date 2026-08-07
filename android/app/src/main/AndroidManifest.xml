@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Não há <uses-permission android:name="android.permission.INTERNET" />
+      e é de propósito (plano, F2): sem permissão de rede, é impossível
+      haver uma dependência escondida de um servidor. Tudo o que a app
+      mostra vem do dicionario.db que está no dispositivo.
+
+      Continua a ser verdade com o modo jogo: o lembrete diário decide-se
+      todo dentro do telemóvel, a partir da utilizador.db.
+    -->
+
+    <!--
+      Só para o lembrete diário do modo jogo, e pedida no momento em que
+      esse modo é ligado nas Definições — não ao arrancar. Quem nunca ligar
+      o jogo nunca vê este pedido.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".PalavrameApp"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Palavrame">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              A funcionalidade mais valiosa do projeto (plano F4, antecipada
+              para a F2): selecionar uma palavra em qualquer app — incluindo
+              o leitor de e-books — e enviá-la direto para aqui.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

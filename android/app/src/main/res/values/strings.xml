@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Palavra-me</string>
+
+    <string name="procurar">Procurar uma palavra</string>
+    <string name="registar">Registar</string>
+    <string name="registada">Registada</string>
+    <string name="as_minhas_palavras">As minhas palavras</string>
+    <string name="sem_palavras">Ainda não registaste nenhuma palavra.\n\nProcura uma que tenhas encontrado a ler e toca em Registar.</string>
+    <string name="sem_resultados">Não encontrei essa palavra.</string>
+    <string name="sem_definicao">Sem definição em nenhuma fonte.</string>
+    <string name="exemplo_gerado">exemplo gerado</string>
+    <string name="fonte_livro">Livro (opcional)</string>
+    <string name="fonte_autor">Autor (opcional)</string>
+    <string name="fonte_pagina">Página</string>
+    <string name="fonte_frase">A frase onde a encontraste</string>
+    <string name="nota">Nota</string>
+    <string name="guardar">Guardar</string>
+    <string name="cancelar">Cancelar</string>
+    <string name="fontes_e_licencas">Fontes e licenças</string>
+
+    <string name="dicionario_em_falta">Falta instalar o dicionário.</string>
+    <string name="dicionario_em_falta_como">Copia o ficheiro dicionario-1.db para o dispositivo — por cabo, Drive ou ownCloud — e escolhe-o aqui.</string>
+    <string name="escolher_ficheiro">Escolher o ficheiro</string>
+    <string name="a_copiar">A copiar. São 200 MB, demora alguns segundos.</string>
+</resources>
