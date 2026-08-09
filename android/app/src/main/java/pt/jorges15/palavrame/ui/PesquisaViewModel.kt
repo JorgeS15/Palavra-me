@@ -24,6 +24,9 @@ data class EstadoPesquisa(
     val procurou: Boolean = false,
 )
 
+/** Um livro já na coleção, com o autor que lhe ficou associado (se algum). */
+data class Livro(val titulo: String, val autor: String?)
+
 class PesquisaViewModel(
     private val dicionario: Dicionario?,
     private val utilizador: UtilizadorDb,
@@ -38,12 +41,21 @@ class PesquisaViewModel(
     val progresso = utilizador.progresso().observar()
 
     /**
-     * Livros já usados, o mais recente primeiro — alimenta a caixa de
-     * seleção do diálogo de registo. Sai das palavras guardadas em vez de
-     * uma consulta própria: são poucas e assim segue sempre o que está lá.
+     * Livros já usados, o mais recente primeiro, cada um com o autor que lhe
+     * ficou associado — alimenta a caixa de seleção do diálogo de registo.
+     *
+     * Sai das palavras guardadas em vez de uma consulta própria: são poucas e
+     * assim segue sempre o que lá está. Para cada título fica o **autor mais
+     * recente** que foi escrito para ele: se o corrigiste na última palavra
+     * que registaste desse livro, é essa correção que passa a preencher-se.
      */
-    val livrosUsados: Flow<List<String>> = palavrasGuardadas.map { lista ->
-        lista.mapNotNull { it.livro }.distinct()
+    val livrosUsados: Flow<List<Livro>> = palavrasGuardadas.map { lista ->
+        // A lista vem por data decrescente (ver o DAO), portanto o primeiro
+        // registo de cada título é o mais recente. `associateBy` mantém o
+        // primeiro que vê para cada chave, que é exatamente o que se quer.
+        lista.filter { !it.livro.isNullOrBlank() }
+            .associate { it.livro!! to it.autor }
+            .map { (titulo, autor) -> Livro(titulo, autor) }
     }
 
     fun escrever(texto: String) {

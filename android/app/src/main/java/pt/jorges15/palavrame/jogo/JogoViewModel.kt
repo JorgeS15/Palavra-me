@@ -43,6 +43,8 @@ sealed interface EstadoJogo {
         val livro: String? = null,
         val frase: String? = null,
         val ganho: Int = 0,
+        /** A parte do ganho que veio do bónus de sequência (0 se não houve). */
+        val bonus: Int = 0,
         val total: Int = 0,
         val sequencia: Int = 0,
         /** Não havia nada vencido: joga-se, mas o calendário não mexe. */
@@ -219,25 +221,24 @@ class JogoViewModel(
                     contaParaOCalendario = !semCalendario,
                 )
                 gravar(guardada, avanco)
-                Triple(
-                    dicionario?.entradaPorLema(lemma),
-                    avanco.ganho(anterior),
-                    avanco.pontuacao,
-                )
+                Resultado(dicionario?.entradaPorLema(lemma), avanco, avanco.ganho(anterior))
             }
-            val (entrada, ganho, pontuacao) = resultado
 
             _estado.value = atual.copy(
                 respondida = opcao,
-                entrada = entrada,
+                entrada = resultado.entrada,
                 livro = todas[lemma]?.livro,
                 frase = todas[lemma]?.frase,
-                ganho = ganho,
-                total = pontuacao.pontos,
-                sequencia = pontuacao.sequencia,
+                ganho = resultado.ganho,
+                bonus = resultado.avanco.bonus,
+                total = resultado.avanco.pontuacao.pontos,
+                sequencia = resultado.avanco.pontuacao.sequencia,
             )
         }
     }
+
+    /** O que a resposta produziu, passado do fio de fundo para o estado. */
+    private data class Resultado(val entrada: Entrada?, val avanco: Avanco, val ganho: Int)
 
     private suspend fun pontuacaoAtual(): Pontuacao {
         val p = utilizador.progresso().atual() ?: Progresso()

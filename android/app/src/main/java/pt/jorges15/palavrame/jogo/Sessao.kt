@@ -71,36 +71,46 @@ data class Pontuacao(
     }
 
     /**
-     * Regista uma resposta e devolve a pontuação nova.
+     * A sequência e o bónus que ela vale, para uma resposta dada hoje.
      *
-     * O bónus de sequência é atribuído **uma vez por dia**, na primeira
-     * resposta — senão bastava responder muitas vezes no mesmo dia para o
-     * acumular, e o que se quer premiar é voltar amanhã, não jogar mais hoje.
+     * Isolado porque tanto a pontuação como o ecrã precisam do bónus: o ecrã
+     * para o mostrar em separado (*+10 · +8 sequência*), o cálculo para o
+     * somar. Com dois sítios a computá-lo, mais dia menos dia divergiam.
+     *
+     * O bónus é uma vez por dia, na primeira resposta — senão bastava
+     * responder muitas vezes no mesmo dia para o acumular, e o que se premeia
+     * é voltar amanhã, não jogar mais hoje.
      */
-    fun responder(acertou: Boolean, hoje: LocalDate): Pontuacao {
-        val dia = hoje.toString()
-        val primeiraDoDia = ultimoDia != dia
-
-        val novaSequencia = when {
+    fun sequenciaEm(hoje: LocalDate): Sequencia {
+        val primeiraDoDia = ultimoDia != hoje.toString()
+        val nova = when {
             !primeiraDoDia -> sequencia
             ultimoDia == hoje.minusDays(1).toString() -> sequencia + 1
             else -> 1                     // faltou um dia: recomeça
         }
         val bonus = if (primeiraDoDia) {
-            (novaSequencia * BONUS_POR_DIA).coerceAtMost(BONUS_MAXIMO)
+            (nova * BONUS_POR_DIA).coerceAtMost(BONUS_MAXIMO)
         } else 0
+        return Sequencia(nova, bonus)
+    }
 
+    /** Regista uma resposta e devolve a pontuação nova. */
+    fun responder(acertou: Boolean, hoje: LocalDate): Pontuacao {
+        val (novaSequencia, bonus) = sequenciaEm(hoje)
         val delta = if (acertou) POR_ACERTO else -POR_ERRO
         return copy(
             // O piso é zero. Uma falha reinicia a sequência, nunca os pontos.
             pontos = (pontos + delta + bonus).coerceAtLeast(0),
             sequencia = novaSequencia,
-            ultimoDia = dia,
+            ultimoDia = hoje.toString(),
             acertos = acertos + if (acertou) 1 else 0,
             erros = erros + if (acertou) 0 else 1,
         )
     }
 }
+
+/** A sequência nova e o bónus que ela vale a esta resposta. */
+data class Sequencia(val dias: Int, val bonus: Int)
 
 /**
  * O resultado de responder a uma pergunta: o que muda na palavra e no total.
@@ -109,6 +119,8 @@ data class Avanco(
     val caixa: Int,
     val proximaRevisao: Long?,
     val pontuacao: Pontuacao,
+    /** O bónus de sequência que esta resposta valeu, já incluído no total. */
+    val bonus: Int = 0,
 ) {
     /** Quanto o total subiu ou desceu — é isto que o ecrã mostra. */
     fun ganho(anterior: Pontuacao): Int = pontuacao.pontos - anterior.pontos
@@ -131,12 +143,15 @@ fun aplicarResposta(
     zona: ZoneId = ZoneId.systemDefault(),
 ): Avanco {
     val hoje = Instant.ofEpochMilli(agora).atZone(zona).toLocalDate()
+    // O bónus lê-se do estado ANTES de responder — depois de `responder`, o
+    // `ultimoDia` já é hoje e a primeira-do-dia deixaria de o ser.
+    val bonus = pontuacaoAtual.sequenciaEm(hoje).bonus
     val pontuacao = pontuacaoAtual.responder(acertou, hoje)
     if (!contaParaOCalendario) {
-        return Avanco(caixaAtual, null, pontuacao)
+        return Avanco(caixaAtual, null, pontuacao, bonus)
     }
     val caixa = Leitner.proximaCaixa(caixaAtual, acertou)
-    return Avanco(caixa, Leitner.proximaRevisao(caixa, agora), pontuacao)
+    return Avanco(caixa, Leitner.proximaRevisao(caixa, agora), pontuacao, bonus)
 }
 
 /**

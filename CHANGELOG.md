@@ -12,6 +12,40 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [0.25.5] - 2026-08-07 — app v1.8.4
+
+### Changed
+
+- **O jogo mostra de onde vêm os pontos.** Uma resposta certa ao quarto dia
+  seguido dava "+18" sem explicação, e parecia que acertar valia 18 — quando
+  são 10 do acerto mais 8 do bónus de sequência (2 por dia). Agora o número
+  grande é só a base (+10 ou −5) e o bónus tem uma linha própria: *"4 dias
+  seguidos · +8"*. Fica claro de onde vem cada ponto, e o bónus ganha o
+  destaque que merece — é ele que puxa a pessoa a voltar amanhã.
+
+  Por dentro: o `Avanco` passa a expor o bónus, e o cálculo da sequência e do
+  seu bónus vive num sítio só (`sequenciaEm`), usado pela pontuação e pelo
+  ecrã — sem duas cópias a poder divergir. Dois testes novos.
+
+## [0.25.4] - 2026-08-07 — app v1.8.3
+
+### Added
+
+- **O autor preenche-se sozinho.** Ao registar uma palavra de um livro que já
+  está na coleção, o campo do autor vem preenchido com o que ficou associado a
+  esse livro. Quem regista dez palavras de *Os Maias* a ler já não escreve
+  "Eça de Queirós" dez vezes.
+
+  Só preenche quando o campo está vazio — se corrigires o autor à mão, escolher
+  o título não te apaga a correção. E usa o autor **mais recente** de cada
+  livro, portanto uma correção propaga-se para os registos seguintes.
+
+### Decidido não fazer
+
+- **Campo de ISBN.** Numa app sem rede, um ISBN não pode buscar capa nem
+  metadados — seria um número de treze dígitos escrito à mão para não servir
+  de nada, contra o princípio de captura rápida que rege o diálogo de registo.
+
 ## [0.25.3] - 2026-08-07
 
 ### Changed

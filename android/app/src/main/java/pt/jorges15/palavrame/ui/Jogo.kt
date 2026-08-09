@@ -143,18 +143,35 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
+                // Só a parte base — o acerto ou o erro. O bónus tem uma linha
+                // só dele, para o número grande não juntar duas coisas.
+                val base = e.ganho - e.bonus
                 Text(
-                    if (e.ganho >= 0) "+${e.ganho}" else "${e.ganho}",
+                    if (base >= 0) "+$base" else "$base",
                     style = MaterialTheme.typography.titleMedium,
                     color = if (e.acertou == true) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline,
                 )
             }
+            // O bónus separado, para se ver de onde vem e para ele próprio dar
+            // nas vistas — é o que puxa a pessoa a voltar amanhã.
+            if (e.bonus > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${e.sequencia} dias seguidos",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "+${e.bonus}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Text(
-                buildString {
-                    append("${e.total} pontos")
-                    if (e.sequencia > 1) append(" · ${e.sequencia} dias seguidos")
-                },
+                "${e.total} pontos ao todo",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
