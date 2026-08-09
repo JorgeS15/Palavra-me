@@ -1,16 +1,15 @@
-# Botão "Sponsor" no topo do repositório.
-#
-# Ko-fi e não GitHub Sponsors, por duas razões: o Ko-fi aceita PayPal como
-# processador — e quem já tem PayPal já fez a verificação de identidade há
-# anos — e não cobra comissão sobre gorjetas. Fica só a taxa do PayPal, que
-# nenhuma plataforma evita.
-#
-# O botão aparece na mesma. Não depende de estar inscrito no programa do
-# GitHub; o FUNDING.yml aceita várias plataformas, e podem coexistir se um dia
-# fizer sentido acrescentar `github: JorgeS15`.
-#
-# Os pedidos de apoio ficam aqui, no repositório, e nunca dentro da app. A
-# Play tem regras sobre donativos, e há projetos open source que foram
-# sinalizados só por ligarem à página do projeto quando ela os mencionava.
+# These are supported funding model platforms
 
+github: # Replace with up to 4 GitHub Sponsors-enabled usernames e.g., [user1, user2]
+patreon: # Replace with a single Patreon username
+open_collective: # Replace with a single Open Collective username
 ko_fi: jorges15
+tidelift: # Replace with a single Tidelift platform-name/package-name e.g., npm/babel
+community_bridge: # Replace with a single Community Bridge project-name e.g., cloud-foundry
+liberapay: # Replace with a single Liberapay username
+issuehunt: # Replace with a single IssueHunt username
+lfx_crowdfunding: # Replace with a single LFX Crowdfunding project-name e.g., cloud-foundry
+polar: # Replace with a single Polar username
+buy_me_a_coffee: # Replace with a single Buy Me a Coffee username
+thanks_dev: # Replace with a single thanks.dev username
+custom: # Replace with up to 4 custom sponsorship URLs e.g., ['link1', 'link2']

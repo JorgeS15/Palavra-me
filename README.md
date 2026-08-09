@@ -2,6 +2,9 @@
 
 **Um dicionário de português que se lembra das palavras que aprendeste.**
 
+<img width="550" height="1024" alt="image" src="https://github.com/user-attachments/assets/c4e037d3-dffc-44a8-a0a2-37bc742190f8" />
+
+
 Estás a ler um livro, encontras uma palavra que não conheces, e procura-la.
 Vês o significado, os sinónimos, frases onde ela aparece — e ela fica guardada
 na tua coleção, com o livro e a frase onde a encontraste. Da próxima vez que
@@ -25,6 +28,9 @@ qualquer pessoa pode confirmar.
 **Não é só procurar — é fixar.** Cada palavra que registas volta, mais tarde,
 num pequeno jogo de revisão. Acertas, e ela demora mais tempo a reaparecer;
 falhas, e volta amanhã. É o teu vocabulário a crescer, sem o teres de gerir.
+
+<img width="540" height="126" alt="image" src="https://github.com/user-attachments/assets/15e0f270-834a-4d47-b0e2-a37b3184cf2d" />
+
 
 **Lembra-se de onde a encontraste.** Uma palavra sozinha esquece-se. Uma
 palavra ligada ao romance onde tropeçaste nela, à frase, à página — essa fica.
