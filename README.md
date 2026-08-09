@@ -29,6 +29,9 @@ qualquer pessoa pode confirmar.
 num pequeno jogo de revisão. Acertas, e ela demora mais tempo a reaparecer;
 falhas, e volta amanhã. É o teu vocabulário a crescer, sem o teres de gerir.
 
+<img width="540" height="126" alt="image" src="https://github.com/user-attachments/assets/15e0f270-834a-4d47-b0e2-a37b3184cf2d" />
+
+
 **Lembra-se de onde a encontraste.** Uma palavra sozinha esquece-se. Uma
 palavra ligada ao romance onde tropeçaste nela, à frase, à página — essa fica.
 
