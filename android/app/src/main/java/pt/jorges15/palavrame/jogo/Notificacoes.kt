@@ -127,7 +127,10 @@ object Lembrete {
         val notificacao = NotificationCompat.Builder(context, CANAL)
             // A palavra aparece; a definição não. Se a notificação
             // respondesse à pergunta, não valia a pena abrir a app.
-            .setContentTitle("Ainda te lembras de «$lemma»?")
+            // Aspas curvas e não angulares («»): numa notificação curta e a
+            // negrito, o «palavra» lê-se como <<palavra>>. As curvas são
+            // inequívocas em qualquer tipo de letra do sistema.
+            .setContentTitle("Ainda te lembras de “$lemma”?")
             .setContentText("Uma palavra da tua coleção, à espera.")
             .setSmallIcon(R.drawable.ic_notificacao)
             .setContentIntent(pendente)

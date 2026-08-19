@@ -182,8 +182,8 @@ private fun EcraInstalarDicionario(app: PalavrameApp, aoFicarPronto: () -> Unit)
             Text("Palavra-me", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(8.dp))
             Text(
-                if (app.dicionario != null) "A atualizar o dicionario."
-                else "A preparar o dicionario.",
+                if (app.dicionario != null) "A atualizar o dicionário."
+                else "A preparar o dicionário.",
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(Modifier.height(24.dp))
@@ -192,12 +192,12 @@ private fun EcraInstalarDicionario(app: PalavrameApp, aoFicarPronto: () -> Unit)
                 CircularProgressIndicator()
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Sao 200 MB. Demora alguns segundos e so acontece uma vez.",
+                    "São 200 MB. Demora alguns segundos e só acontece uma vez.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
                 Text(
-                    "Se preferires, podes escolher tu o ficheiro do dicionario.",
+                    "Se preferires, podes escolher tu o ficheiro do dicionário.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(24.dp))

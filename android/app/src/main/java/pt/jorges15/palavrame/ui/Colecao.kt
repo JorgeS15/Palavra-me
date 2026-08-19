@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.data.PalavraGuardada
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,6 +40,24 @@ fun EcraColecao(
     var aEditar by remember { mutableStateOf<PalavraGuardada?>(null) }
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
 
+    // Esquecer uma palavra apaga o livro e a frase que lhe estavam anotados,
+    // e isso não se reconstrói. Em vez de um diálogo de confirmação — que
+    // trava sempre, mesmo quando o toque foi de propósito — apaga-se já e
+    // dá-se uns segundos para anular. É o padrão do Android para isto.
+    val estadoSnackbar = remember { SnackbarHostState() }
+    val ambito = rememberCoroutineScope()
+    fun esquecerComAnular(p: PalavraGuardada) {
+        vm.apagar(p)
+        ambito.launch {
+            val r = estadoSnackbar.showSnackbar(
+                message = "Esqueceste «${p.lemma}»",
+                actionLabel = "Anular",
+                duration = SnackbarDuration.Short,
+            )
+            if (r == SnackbarResult.ActionPerformed) vm.repor(p)
+        }
+    }
+
     aEditar?.let { palavra ->
         DialogoRegistar(
             lemma = palavra.lemma,
@@ -59,7 +78,8 @@ fun EcraColecao(
                     }
                 },
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(estadoSnackbar) },
     ) { padding ->
         if (palavras.isEmpty()) {
             Box(Modifier.padding(padding).fillMaxSize().padding(32.dp)) {
@@ -136,7 +156,7 @@ fun EcraColecao(
                             p,
                             aoProcurar = { vm.procurar(p.lemma); aoVoltar() },
                             aoEditar = { aEditar = p },
-                            aoApagar = { vm.apagar(p) },
+                            aoApagar = { esquecerComAnular(p) },
                         )
                         HorizontalDivider()
                     }
@@ -154,21 +174,10 @@ private fun LinhaPalavra(
     aoApagar: () -> Unit,
 ) {
     val formato = remember { SimpleDateFormat("d MMM yyyy", Locale("pt", "PT")) }
-    var aConfirmar by remember { mutableStateOf(false) }
 
-    if (aConfirmar) {
-        AlertDialog(
-            onDismissRequest = { aConfirmar = false },
-            title = { Text("Esquecer «${palavra.lemma}»?") },
-            text = { Text("Sai da tua coleção. O dicionário não muda.") },
-            confirmButton = {
-                TextButton(onClick = { aConfirmar = false; aoApagar() }) { Text("Esquecer") }
-            },
-            dismissButton = {
-                TextButton(onClick = { aConfirmar = false }) { Text("Cancelar") }
-            },
-        )
-    }
+    // Sem diálogo de confirmação: o apagar é reversível pelo "Anular" do
+    // Snackbar (ver `esquecerComAnular`), portanto travar antes seria pedir
+    // duas vezes a mesma coisa.
     ListItem(
         headlineContent = { Text(palavra.lemma, fontWeight = FontWeight.Medium) },
         supportingContent = {
@@ -197,7 +206,7 @@ private fun LinhaPalavra(
                         tint = MaterialTheme.colorScheme.outline,
                     )
                 }
-                IconButton(onClick = { aConfirmar = true }) {
+                IconButton(onClick = aoApagar) {
                     Icon(
                         Icons.Default.DeleteOutline,
                         contentDescription = "Esquecer",

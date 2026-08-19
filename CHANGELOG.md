@@ -12,6 +12,322 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [0.30.0] - 2026-08-12
+
+### Added
+
+- **Comando `palavrame rever-curadoria`** — revisor interativo de terminal para
+  as definições curadas. Mostra uma palavra de cada vez (só as marcadas
+  `rascunho — rever`) e aceita-se com Enter, edita-se, corrige-se a classe,
+  apaga-se ou salta-se. Grava a cada decisão, num ficheiro temporário que só
+  depois substitui o original, para se poder parar a meio sem risco. Aceitar
+  limita-se a tirar a marca de rascunho. Torna a revisão das ~715 definições
+  cómoda, em vez de editar o CSV à mão.
+
+## [0.29.6] - 2026-08-12
+
+### Added
+
+- **Curadoria, lote 6 (último): +226 palavras**, fechando as **897 lacunas com
+  frequência conhecida**. No total, ~715 definições originais escritas à mão a
+  partir do `palavrame lacunas`; as restantes ~180 das 897 foram saltadas de
+  propósito (estrangeirismos, unidades, nomes próprios, grafias erradas e
+  palavras de sentido incerto — não se inventa). Tudo com `rascunho — rever`,
+  para revisão humana do Jorge. As lacunas sem frequência (1853) ficam para
+  curadoria orgânica, à medida que aparecerem a ler.
+
+## [0.29.5] - 2026-08-12
+
+### Added
+
+- **Curadoria, lote 5: +129 palavras** (`histerese`, `biótopo`, `celofane`,
+  `radioastronomia`, `superfluido`, `covalente`…). ~490 no total, cobertas as
+  ~620 mais frequentes das lacunas. Todas com `rascunho — rever`.
+
+## [0.29.4] - 2026-08-12
+
+### Added
+
+- **Curadoria, lote 4: +134 palavras** (`troposfera`, `miscigenação`,
+  `bioluminescência`, `sebastianismo`, `paraplégico`, `esquematizar`…). ~360
+  definições originais no total, cobertas as ~470 mais frequentes das lacunas.
+  Todas com `rascunho — rever`.
+
+## [0.29.3] - 2026-08-12
+
+### Added
+
+- **Curadoria, lote 3: +122 palavras** (`holograma`, `fitoterapia`,
+  `introspeção`, `hipotálamo`, `cromatografia`, `autogestão`…). Vamos em ~226
+  definições originais, a cobrir o topo da lista de lacunas por frequência.
+  Todas com `rascunho — rever`.
+
+## [0.29.2] - 2026-08-12
+
+### Added
+
+- **Curadoria, lote 2: +68 palavras** das lacunas mais frequentes, com
+  definições originais (`oceanário`, `glicémia`, `transfronteiriço`,
+  `alavancagem`, `biodegradável`, `interoperabilidade`…). Todas com `rascunho —
+  rever`. Trabalho a partir do `palavrame lacunas`, a decorrer por lotes; o
+  Jorge revê no fim. ~104 palavras curadas até aqui.
+
+## [0.29.1] - 2026-08-12
+
+### Added
+
+- **Curadoria: 36 palavras das lacunas mais frequentes**, com definições
+  originais escritas à mão (`cerimoniar`, `sequenciar`, `rentabilizar`,
+  `usabilidade`, `sinistralidade`, `interoperabilidade`…). Ficam marcadas com
+  `rascunho — rever` na coluna de nota, para o Jorge as validar. Primeiro lote
+  do trabalho a partir do `palavrame lacunas`.
+
+## [0.29.0] - 2026-08-12
+
+### Added
+
+- **Femininos e plurais regulares dos adjetivos.** O Hunspell deixou muitos
+  adjetivos sem marcas de flexão (`comezinho`, sem o `/fp` do `lânguido/fp`), e
+  sem elas a app não ligava o feminino ao lema: quem procurava `comezinha` não
+  chegava a `comezinho`, onde está a definição. Geram-se agora as flexões da
+  classe `-o/-a/-os/-as`, com verificação de colisão — se a forma já é outra
+  palavra (`meio` -> `meia`), não se inventa.
+
+- **Curadoria: `sintónico` e `acutilância`.** Duas palavras ausentes de todas
+  as fontes abertas, com definição **original** escrita à mão (não copiada de
+  dicionário fechado — isso envenenaria a licença aberta da base). É para isto
+  que existe o `seeds/curadoria.csv`.
+
+- **Comando `palavrame lacunas`.** Lista os lemas sem definição de uma DB
+  construída, para se saber o que curar. Ordena por frequência (os mais comuns
+  primeiro) e escreve um ficheiro já no formato do `curadoria.csv`, pronto a
+  preencher. Exclui o que não é candidato a definição: nomes próprios,
+  numerais, o que nem é palavra (datas, restos de citação), e — importante — os
+  lemas que afinal são flexão de outra palavra (`esteja` de *estar*), que sem
+  autoridade de lemas entram como lemas falsos. Medido na base atual: 2 671
+  lacunas reais (1,5%), 854 com frequência conhecida.
+
+## [0.28.2] - 2026-08-12
+
+### Fixed
+
+- **Grafias com trema deixam de ser entradas à parte.** `lângüido` (grafia
+  velha, com trema) unia mal: o Wikcionário traz `lânguido` com definições a
+  sério e `lângüido` só com "Ver lânguido", e apareciam as duas. O trema
+  (abolido no português, e que nunca distingue palavras) passa a ser removido
+  na grafia à entrada do pipeline, como já se fazia no texto das definições —
+  por isso `lângüido` funde-se em `lânguido`.
+
+- **Remissões para o próprio lema caem.** Depois de unir o trema, `lânguido`
+  ficava com uma aceção "Ver lânguido." a apontar para si mesma. Uma aceção
+  "Ver X" ou "O mesmo que X" em que X é o próprio lema é deitada fora; para
+  outra palavra, mantém-se.
+
+## [app v1.10.1] - 2026-08-12
+
+Só a app.
+
+### Changed
+
+- **O bónus de dias seguidos passa a parar em 5** (era 10). Continua a valer
+  +2 por dia, mas o teto é metade.
+
+### Fixed
+
+- Acentos em falta no ecrã que aparece enquanto o dicionário é preparado:
+  "São 200 MB… só acontece uma vez" e "dicionário".
+
+## [app v1.10.0] - 2026-08-12
+
+Só a app (o dicionário não muda).
+
+### Added
+
+- **O jogo revela as palavras das distrações.** Depois de responder, cada
+  opção mostra, na cor de destaque, a palavra que define — não só a certa. As
+  duas definições erradas deixam de ser texto solto e passam a ensinar a sua
+  própria palavra: cada pergunta fica a valer três palavras em vez de uma. A
+  `Pergunta` passa a levar o lema de cada opção até ao ecrã; sem alteração ao
+  dicionário.
+
+## [0.28.1] - 2026-08-12
+
+### Fixed
+
+- **Exemplos de homógrafos iam para o lema errado.** As frases sobre a *manga*
+  (fruto) apareciam no verbo *mangar*, porque "manga" é ao mesmo tempo o nome e
+  uma conjugação de mangar ("ele manga"), e a ligação de exemplos usa a tabela
+  de flexões. Regra nova: se a forma é ela própria um lema, o exemplo fica nesse
+  lema e não nas flexões de outro. As frases de formas não ambíguas ("estás a
+  mangar") continuam a ligar-se ao verbo.
+
+- **Wikitexto por limpar nas definições.** Ligações como `[[manguito:2]]` e
+  `[[fruto|manga]]` chegavam cruas ao ecrã; passam a ficar só com o texto
+  legível (`manguito`, `manga`). No `clean_definition`, portanto vale para
+  todas as fontes.
+
+## [0.28.0] - 2026-08-12
+
+### Added
+
+- **Curadoria de origem** (`seeds/origem.csv` + `palavrame.origem`). Um ficheiro
+  escrito à mão que rotula a variante/registo de uma palavra — `time,Brasil`,
+  `nené,Brasil` — para os casos que o Wikcionário não etiqueta e nenhuma
+  heurística apanha com segurança. O rótulo entra em `domains` e aparece na app
+  por cima da definição, como "Figurado" ou "Náutica"; aplica-se a todas as
+  aceções do lema, no build (f0 e f1). É irmã da `curadoria`: a diferença é que
+  aquela acrescenta definições e esta apenas as marca. Começa semeado com
+  `time`, `nené` e `neném` como Brasil — cresce à medida que se encontram mais.
+
+## [0.27.2] - 2026-08-12
+
+### Added
+
+- **Rótulo de variante/registo nas aceções do Wikcionário.** Em vez de deitar
+  fora o vocabulário brasileiro e os estrangeirismos, marcam-se: uma aceção
+  com etiqueta `Brazil`/`Brazilian` ganha o rótulo **Brasil**, e uma com
+  `raw_tag` "estrangeirismo" ganha **Estrangeirismo**. O rótulo entra no campo
+  `domains`, que a app já mostra em itálico por cima da definição — portanto a
+  app não muda, basta reconstruir a base. Medido no dump real: 5 667 aceções
+  rotuladas (4 453 Brasil, 1 219 Estrangeirismo); `timer`/`software` levam
+  Estrangeirismo, `ônibus`/`chope` levam Brasil, e as palavras portuguesas
+  ficam intactas.
+
+  Limitação medida e assumida: no Wikcionário o brasileiro é o padrão **não
+  marcado**, por isso `time` e `nené` ficam sem rótulo — a fonte não os
+  etiquetou e não temos como saber. Marcá-los exigiria uma autoridade de lemas
+  portuguesa (VOP do VOC, ou Hunspell + Dicionário Aberto), que fica para
+  decisão futura por o VOC não ter dump acessível.
+
+## [0.27.1] - 2026-08-12
+
+Dois bugs destapados pela unificação de grafia da 0.27.0, encontrados pelo
+Jorge a testar a base reconstruída.
+
+### Fixed
+
+- **Entradas duplicadas (`bebé`, `nené` a dobrar).** O acento pode vir num só
+  código (`é`, NFC) ou em dois (`e` + `´`, NFD); no ecrã é igual, mas como
+  cadeia é diferente, e a fusão — que agrupa por grafia exata — criava duas
+  entradas. A grafia aguda que a portugalização produz é NFC, o que expôs a
+  mistura vinda das fontes. Agora canonicaliza-se tudo para NFC à entrada do
+  pipeline (lemas, formas, definições, exemplos).
+
+- **Nomes próprios nos exemplos.** O exemplo de `nené` era *"...que Nené se
+  afirmou no Benfica"* — o jogador, não o nome comum. Um exemplo em que a
+  palavra-alvo só aparece capitalizada a meio da frase deixa de se ligar ao
+  substantivo comum. O Leipzig, por ser jornal, estava cheio destes.
+
+## [0.27.0] - 2026-08-12 — app v1.9.1
+
+Três problemas encontrados a usar a app, a partir de duas fotos do Jorge: a
+app é de português europeu, mas aparecia conteúdo brasileiro; um exemplo do
+verbo *beber* aparecia na entrada do nome *bebé*; e o jogo mostrava a própria
+palavra na definição certa.
+
+### Added
+
+- **Unir na grafia PT (decisão do Jorge).** Grafias brasileiras com
+  circunflexo — `bebê`, `gênero`, `fenômeno` — deixam de ser entradas à parte
+  e unem-se na gémea portuguesa com agudo (`bebé`, `género`, `fenómeno`). A
+  regra é segura por construção: só une quando a gémea aguda é palavra
+  atestada pelo Hunspell pt-PT **e** a circunflexa não é. Assim `avó`/`avô` e
+  `português` ficam intactos — nunca se inventa um circunflexo, só se
+  desfaz. A grafia brasileira fica registada como forma pesquisável, e cada
+  fusão vai para o relatório (`grafia_unida`) para inspeção. Novo módulo
+  `palavrame.portugalizar`.
+
+- **Adaptar a grafia no texto.** Nas definições e nos exemplos, palavra a
+  palavra, `gênero` vira `género` e `nenê` vira `nené` — mas só quando a gémea
+  aguda é portuguesa e a circunflexa não, pelo mesmo crivo. `português` e
+  `três` não se tocam. Vocabulário que não é grafia (`shopping`) não muda.
+
+### Changed
+
+- **Preferir exemplos PT.** Num mesmo sentido, um exemplo marcado `pt-BR` só
+  entra quando não há nenhuma alternativa portuguesa ou de variante
+  desconhecida. Antes eram só despriorizados; agora saem quando há por quê.
+
+### Fixed
+
+- **O jogo entregava a resposta.** A definição certa nomeava muitas vezes a
+  própria palavra (*"...da espécie Lasiommata megera"*), e bastava escolher a
+  opção onde ela aparecia. O lema — e as flexões da mesma raiz — passam a ser
+  mascarados com "…" em todas as opções. O lema já está no topo do ecrã.
+  (app v1.9.1)
+
+- **Exemplo do verbo na entrada do nome.** *"O menino bebe leite"* aparecia em
+  `bebé` porque os exemplos se ligavam ao lema pela forma **sem acentos**, e
+  `bebe` (de *beber*) e `bebé` normalizam para a mesma coisa. Passam a ligar-se
+  pela forma **exata, com acentos**; a frequência do Leipzig continua a ligar
+  pela normalizada, que é o correto para ela. Frases escritas à brasileira
+  (`bebê`) ainda chegam à entrada portuguesa, pela forma registada na fusão.
+
+## [0.26.1] - 2026-08-07 — app v1.9.0
+
+Quatro melhorias à app, de uma análise pedida pelo Jorge.
+
+### Added
+
+- **Partilhar uma palavra.** Botão de partilha na entrada: manda o lema, a
+  classe e as primeiras aceções como texto simples para qualquer app —
+  mensagens, notas, email. Sem rede, sem servidor: é a peça que faltava para
+  uma palavra bonita chegar a outra pessoa. É também a versão sem
+  infraestrutura da ideia dos "amigos" que ficou parada.
+
+- **Anular ao esquecer.** Apagar uma palavra da coleção deixa de pedir
+  confirmação e passa a mostrar um Snackbar com **"Anular"** durante uns
+  segundos. Esquecer apaga o livro e a frase anotados, que não se
+  reconstroem; o padrão do Android para dados reversíveis é este, e evita
+  perder tudo por um toque acidental. Um toque em vez de dois.
+
+### Changed
+
+- **O botão "Registar" fica sempre alcançável.** Numa entrada com muitas
+  aceções, ele desaparecia ao rolar — mau, para o gesto central da app. Passa
+  a uma barra fixa no fundo. O cabeçalho fica com o botão de partilha no lugar
+  que era do de registar.
+
+### Removed
+
+- `ui/Diagnostico.kt` (já era um ficheiro vazio) e as pastas mortas
+  `pt/stonehub237/`. *(A eliminação tem de ser feita à mão — o cliente de
+  sincronização bloqueia apagar ficheiros pela linha de comandos.)*
+
+## [0.26.0] - 2026-08-07 — app v1.8.5
+
+Dois problemas apanhados pelo Jorge a usar a app, um em cada lado.
+
+### Fixed — o dicionário
+
+- **Exemplos do Wikcionário que não eram frases.** O `dardejar` mostrava, como
+  primeiro exemplo, *"26 poetas hoje"* — um verso cortado a meio. O módulo do
+  Wikcionário aceitava como exemplo tudo o que um editor lá tivesse posto:
+  fragmentos de verso, fórmulas de derivação (*"reciclar + -abilidade = ..."*),
+  listas de números, títulos de livros, palavras soltas.
+
+  Novo filtro partilhado `text.frase_utilizavel`, aplicado ao Wikcionário:
+  exige comprimento de leitura, pelo menos quatro palavras, texto e não
+  símbolos, e recusa fórmulas e cabeçalhos em maiúsculas. **É tolerante com a
+  pontuação** de propósito — muitas frases boas do Wikcionário não acabam em
+  ponto, e exigi-lo deitava fora exemplos úteis. Dos 22 926 exemplos do
+  Wikcionário, ~74% passam; os 26% rejeitados são o lixo acima.
+
+  O Tatoeba e o Leipzig já filtravam por comprimento e não mudam.
+
+### Fixed — a app
+
+- **As aspas da notificação liam-se como `<<palavra>>`.** *"Ainda te lembras
+  de «lugubremente»?"* usava as aspas angulares portuguesas, corretas em texto
+  corrido mas ambíguas numa notificação curta e a negrito. Passam a aspas
+  curvas — *"Ainda te lembras de “lugubremente”?"* — inequívocas em
+  qualquer tipo de letra.
+
+### Verificação
+
+196 testes, com sete novos para o filtro de exemplos. Os dois exigem
+reconstruir a base para o exemplo mau desaparecer (`palavrame f1`).
+
 ## [0.25.5] - 2026-08-07 — app v1.8.4
 
 ### Changed

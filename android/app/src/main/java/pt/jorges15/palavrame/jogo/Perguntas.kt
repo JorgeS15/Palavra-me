@@ -1,5 +1,6 @@
 package pt.jorges15.palavrame.jogo
 
+import pt.jorges15.palavrame.data.Texto
 import kotlin.random.Random
 
 /**
@@ -21,6 +22,13 @@ data class Pergunta(
     val pos: String,
     /** Três definições, já baralhadas. */
     val opcoes: List<String>,
+    /**
+     * A palavra que cada opção define, alinhada com `opcoes`. Serve para
+     * revelar, depois de responder, de que palavra era cada distração — assim
+     * a pergunta ensina três palavras e não só uma. A da opção certa é o
+     * próprio `lemma`.
+     */
+    val lemasOpcoes: List<String>,
     val indiceCerto: Int,
     val livro: String?,
     val frase: String?,
@@ -175,15 +183,60 @@ object Perguntas {
         }
         if (escolhidas.size < 2) return null
 
-        val opcoes = (escolhidas.map { it.definicao } + alvo.definicao).shuffled(aleatorio)
+        // Esconde-se o lema em TODAS as opções, não só na certa: uma
+        // distração que por acaso o nomeie também baralha. Mascara-se depois
+        // de escolher, para os filtros de comprimento e semelhança acima
+        // trabalharem sobre o texto real. Cada opção guarda a sua palavra,
+        // para se revelar depois de responder.
+        val baralhadas = (
+            escolhidas.map { OpcaoGerada(mascararLema(it.definicao, alvo.lemma), it.lemma, false) }
+                + OpcaoGerada(mascararLema(alvo.definicao, alvo.lemma), alvo.lemma, true)
+            ).shuffled(aleatorio)
         return Pergunta(
             lemma = alvo.lemma,
             pos = alvo.pos,
-            opcoes = opcoes,
-            indiceCerto = opcoes.indexOf(alvo.definicao),
+            opcoes = baralhadas.map { it.definicao },
+            lemasOpcoes = baralhadas.map { it.lema },
+            indiceCerto = baralhadas.indexOfFirst { it.certa },
             livro = alvo.livro,
             frase = alvo.frase,
         )
+    }
+
+    /** Uma opção a caminho da pergunta: o texto (já mascarado), a palavra que
+     *  define, e se é a resposta certa. */
+    private data class OpcaoGerada(val definicao: String, val lema: String, val certa: Boolean)
+
+    private val PALAVRA = Regex("\\p{L}[\\p{L}\\p{N}'\\-]*")
+
+    /**
+     * Esconde o lema — e as flexões da mesma raiz — numa opção antes de a
+     * mostrar. Uma definição que nomeia a própria palavra (*"...da espécie
+     * Lasiommata megera"*) entregava a resposta a quem só tinha de escolher a
+     * opção onde a palavra aparecia. O lema já está no topo do ecrã; na
+     * definição não faz falta, e vale mais um "…" do que uma resposta grátis.
+     */
+    internal fun mascararLema(texto: String, lemma: String): String {
+        val alvo = Texto.normalizar(lemma)
+        if (alvo.length < 3) return texto
+        return PALAVRA.replace(texto) { m ->
+            if (revelaOLema(Texto.normalizar(m.value), alvo)) "…" else m.value
+        }
+    }
+
+    /**
+     * Uma palavra da definição denuncia o lema? Sim se for o lema, ou uma
+     * palavra que partilha com ele uma raiz longa — megera/megeras,
+     * cantar/cantará. Exige-se raiz comum de cinco letras para não esconder
+     * palavras só por partilharem um início curto (casa/casaco).
+     */
+    private fun revelaOLema(palavra: String, lema: String): Boolean {
+        if (palavra == lema) return true
+        if (lema.length < 5 || palavra.length < 5) return false
+        var i = 0
+        val n = minOf(lema.length, palavra.length)
+        while (i < n && lema[i] == palavra[i]) i++
+        return i >= 5
     }
 
     private fun comprimentoCompativel(certa: String, distracao: String): Boolean {

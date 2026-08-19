@@ -131,6 +131,9 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
                     i == e.respondida -> EstadoOpcao.ESCOLHIDA_ERRADA
                     else -> EstadoOpcao.DESCARTADA
                 },
+                // Depois de responder, revela-se de que palavra era cada
+                // opção: as distrações deixam de ser definições soltas.
+                palavra = if (e.respondida != null) e.pergunta.lemasOpcoes.getOrNull(i) else null,
                 aoTocar = { vm.responder(i) },
             )
         }
@@ -258,7 +261,12 @@ private fun Acecoes(entrada: Entrada) {
 private enum class EstadoOpcao { POR_RESPONDER, CERTA, ESCOLHIDA_ERRADA, DESCARTADA }
 
 @Composable
-private fun Opcao(texto: String, estado: EstadoOpcao, aoTocar: () -> Unit) {
+private fun Opcao(
+    texto: String,
+    estado: EstadoOpcao,
+    palavra: String?,
+    aoTocar: () -> Unit,
+) {
     val esquema = MaterialTheme.colorScheme
     val contorno = when (estado) {
         EstadoOpcao.CERTA -> BorderStroke(2.dp, esquema.primary)
@@ -275,12 +283,18 @@ private fun Opcao(texto: String, estado: EstadoOpcao, aoTocar: () -> Unit) {
         border = contorno,
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
     ) {
-        Text(
-            texto,
-            style = MaterialTheme.typography.bodyLarge,
-            color = cor,
-            modifier = Modifier.padding(16.dp),
-        )
+        Column(Modifier.padding(16.dp)) {
+            Text(texto, style = MaterialTheme.typography.bodyLarge, color = cor)
+            // A palavra que esta opção define, revelada depois de responder.
+            if (!palavra.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    palavra,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = esquema.primary,
+                )
+            }
+        }
     }
 }
 

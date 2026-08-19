@@ -123,6 +123,17 @@ class PesquisaViewModel(
         viewModelScope.launch { utilizador.palavras().apagar(palavra.id) }
     }
 
+    /**
+     * Repõe uma palavra que se acabou de apagar — o "Anular" do Snackbar.
+     *
+     * Reinsere o objeto inteiro, com o id, a data e o progresso de revisão
+     * intactos: anular um esquecimento devolve a palavra tal como estava, não
+     * um registo novo. Como a linha foi mesmo apagada, não há conflito.
+     */
+    fun repor(palavra: PalavraGuardada) {
+        viewModelScope.launch { utilizador.palavras().guardar(palavra) }
+    }
+
     /** Lemas já na coleção — o botão precisa de saber se já lá está. */
     val lemasGuardados: Flow<Set<String>> =
         palavrasGuardadas.map { lista -> lista.map { it.lemma }.toSet() }

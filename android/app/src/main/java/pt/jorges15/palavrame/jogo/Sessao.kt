@@ -67,14 +67,14 @@ data class Pontuacao(
         const val POR_ACERTO = 10
         const val POR_ERRO = 5
         const val BONUS_POR_DIA = 2
-        const val BONUS_MAXIMO = 10
+        const val BONUS_MAXIMO = 5
     }
 
     /**
      * A sequência e o bónus que ela vale, para uma resposta dada hoje.
      *
      * Isolado porque tanto a pontuação como o ecrã precisam do bónus: o ecrã
-     * para o mostrar em separado (*+10 · +8 sequência*), o cálculo para o
+     * para o mostrar em separado (*+10 · +5 sequência*), o cálculo para o
      * somar. Com dois sítios a computá-lo, mais dia menos dia divergiam.
      *
      * O bónus é uma vez por dia, na primeira resposta — senão bastava

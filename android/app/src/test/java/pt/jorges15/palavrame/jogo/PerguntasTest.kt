@@ -133,6 +133,63 @@ class PerguntasTest {
     }
 
     @Test
+    fun `a opcao nao mostra o proprio lema`() {
+        // O caso real: a definição de 'megera' acabava em "...da espécie
+        // Lasiommata megera", e bastava procurar a opção onde a palavra
+        // estava.
+        val d = "Mulher de mau génio; da espécie Lasiommata megera."
+        val m = Perguntas.mascararLema(d, "megera")
+        assertTrue("não pode conter o lema: $m", !m.lowercase().contains("megera"))
+        assertTrue("devia mascarar algo: $m", m.contains("…"))
+    }
+
+    @Test
+    fun `a mascara apanha flexoes da mesma raiz`() {
+        val m = Perguntas.mascararLema("As megeras gritavam à janela.", "megera")
+        assertTrue("flexão não mascarada: $m", !m.lowercase().contains("megera"))
+        assertTrue("não devia mexer no resto: $m", m.contains("janela"))
+    }
+
+    @Test
+    fun `a mascara nao mexe onde o lema nao aparece`() {
+        val d = "Magro. Pálido. Amortecido."
+        assertEquals(d, Perguntas.mascararLema(d, "macilento"))
+    }
+
+    @Test
+    fun `a mascara nao esconde palavras de raiz curta parecida`() {
+        // 'casa' não deve esconder 'casaco' só por partilharem 'casa'.
+        val m = Perguntas.mascararLema("Peça de vestuário; casaco.", "casa")
+        assertTrue("escondeu de mais: $m", m.contains("casaco"))
+    }
+
+    @Test
+    fun `cada opcao sabe de que palavra e`() {
+        val p = Perguntas.gerar(macilento, colecao, Random(3))!!
+        assertEquals(p.opcoes.size, p.lemasOpcoes.size)
+        // A palavra da opção certa é o lema da pergunta.
+        assertEquals(macilento.lemma, p.lemasOpcoes[p.indiceCerto])
+        // As outras são as palavras das distrações, vindas da coleção.
+        val lemasColecao = colecao.map { it.lemma }
+        p.lemasOpcoes.forEachIndexed { i, lema ->
+            if (i != p.indiceCerto) assertTrue("distração desconhecida: $lema", lema in lemasColecao)
+        }
+    }
+
+    @Test
+    fun `a opcao certa gerada nunca contem o lema`() {
+        val megera = Candidata(
+            "megera", "substantivo",
+            "Mulher perversa e de mau génio; da espécie Lasiommata megera.",
+        )
+        val p = Perguntas.gerar(megera, colecao, Random(7))!!
+        assertTrue(
+            "a certa mostra o lema: ${p.definicaoCerta}",
+            !p.definicaoCerta.lowercase().contains("megera"),
+        )
+    }
+
+    @Test
     fun `semelhanca ignora palavras gramaticais`() {
         // Sem ignorar 'de'/'que', duas definições quaisquer pareceriam
         // parecidas e o gerador rejeitaria distrações boas.

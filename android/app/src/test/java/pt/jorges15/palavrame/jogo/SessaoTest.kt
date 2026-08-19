@@ -119,17 +119,19 @@ class SessaoTest {
     fun `o avanco expoe o bonus para o ecra o separar`() {
         // O bug do "+18": o ecrã mostrava o ganho todo junto e parecia que
         // acertar dava 18. O `Avanco` passa a trazer o bónus à parte.
-        val quartoDia = Pontuacao(
-            pontos = 110, sequencia = 3, ultimoDia = hoje.minusDays(1).toString(),
+        // Dois dias: bónus 2 x 2 = 4, ainda abaixo do teto (5), para a
+        // multiplicação ficar visível no teste.
+        val segundoDia = Pontuacao(
+            pontos = 110, sequencia = 1, ultimoDia = hoje.minusDays(1).toString(),
         )
         val a = aplicarResposta(
-            caixaAtual = 0, pontuacaoAtual = quartoDia, acertou = true,
+            caixaAtual = 0, pontuacaoAtual = segundoDia, acertou = true,
             agora = agora, zona = lisboa,
         )
-        assertEquals("quatro dias seguidos", 4, a.pontuacao.sequencia)
-        assertEquals("bónus = 4 dias x 2", 8, a.bonus)
-        assertEquals("ganho total = 10 + 8", 18, a.ganho(quartoDia))
-        assertEquals("a base é o ganho menos o bónus", 10, a.ganho(quartoDia) - a.bonus)
+        assertEquals("dois dias seguidos", 2, a.pontuacao.sequencia)
+        assertEquals("bónus = 2 dias x 2", 4, a.bonus)
+        assertEquals("ganho total = 10 + 4", 14, a.ganho(segundoDia))
+        assertEquals("a base é o ganho menos o bónus", 10, a.ganho(segundoDia) - a.bonus)
     }
 
     @Test

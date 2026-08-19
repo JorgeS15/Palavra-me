@@ -16,10 +16,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +46,7 @@ fun EcraPesquisa(
     val palavras by vm.palavrasGuardadas.collectAsState(initial = emptyList())
     val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
     val progresso by vm.progresso.collectAsState(initial = null)
+    val context = LocalContext.current
     var aRegistar by remember { mutableStateOf<Entrada?>(null) }
 
     Scaffold(
@@ -117,6 +120,7 @@ fun EcraPesquisa(
                         jaGuardada = estado.entrada!!.lemma in guardados,
                         desenvolvedor = desenvolvedor,
                         aoRegistar = { aRegistar = it },
+                        aoPartilhar = { partilharEntrada(context, it) },
                         aoSeguir = { vm.procurar(it) },
                     )
 
@@ -189,9 +193,14 @@ private fun VistaEntrada(
     jaGuardada: Boolean,
     desenvolvedor: Boolean,
     aoRegistar: (Entrada) -> Unit,
+    aoPartilhar: (Entrada) -> Unit,
     aoSeguir: (String) -> Unit,
 ) {
-    LazyColumn {
+  // Column + LazyColumn com peso: o texto rola, mas o botão de registar fica
+  // sempre em baixo. Registar é o gesto central da app; numa entrada com sete
+  // aceções, o botão não pode desaparecer ao rolar.
+  Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -204,20 +213,11 @@ private fun VistaEntrada(
                         Text(sub.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                // Já registada: o botão informa em vez de duplicar.
-                if (jaGuardada) {
-                    AssistChip(
-                        onClick = {},
-                        enabled = false,
-                        label = { Text("Registada") },
-                        leadingIcon = { Icon(Icons.Default.Bookmark, null) },
-                    )
-                } else {
-                    FilledTonalButton(onClick = { aoRegistar(entrada) }) {
-                        Icon(Icons.Default.BookmarkBorder, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Registar")
-                    }
+                // Partilhar leva o significado para fora da app — a peça que
+                // faltava para uma palavra bonita chegar a outra pessoa, sem
+                // rede e sem servidor.
+                IconButton(onClick = { aoPartilhar(entrada) }) {
+                    Icon(Icons.Default.Share, "Partilhar")
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -323,6 +323,65 @@ private fun VistaEntrada(
             }
         }
     }
+
+    // A barra de registo, sempre visível. Já registada: informa em vez de
+    // duplicar; por registar: o botão que a app existe para tornar fácil.
+    HorizontalDivider()
+    Box(Modifier.fillMaxWidth().padding(16.dp, 12.dp)) {
+        if (jaGuardada) {
+            AssistChip(
+                onClick = {},
+                enabled = false,
+                label = { Text("Registada") },
+                leadingIcon = { Icon(Icons.Default.Bookmark, null) },
+            )
+        } else {
+            FilledTonalButton(
+                onClick = { aoRegistar(entrada) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.BookmarkBorder, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Registar")
+            }
+        }
+    }
+  }
+}
+
+/**
+ * Manda o significado para fora da app, como texto simples.
+ *
+ * Sem rede: é o intent de partilha do Android, que entrega a qualquer app —
+ * mensagens, notas, email. O texto leva a palavra, a classe, as primeiras
+ * aceções e a assinatura da app.
+ */
+private fun partilharEntrada(context: android.content.Context, entrada: Entrada) {
+    val texto = buildString {
+        append(entrada.lemma)
+        entrada.pos.takeIf { it.isNotBlank() && it != "desconhecido" }
+            ?.let { append(" ($it)") }
+        append("\n\n")
+        if (entrada.acecoes.isNotEmpty()) {
+            entrada.acecoes.take(5).forEachIndexed { i, a ->
+                append("${i + 1}. ${a.definicao}\n")
+            }
+        } else {
+            val sin = entrada.relacionadas.filter { it.relacao == "sinonimo" }
+            if (sin.isNotEmpty()) {
+                append("O mesmo que: ")
+                append(sin.take(6).joinToString(", ") { it.lemma })
+                append("\n")
+            }
+        }
+        append("\n— Palavra-me")
+    }
+    val envio = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, texto)
+        putExtra(android.content.Intent.EXTRA_SUBJECT, entrada.lemma)
+    }
+    context.startActivity(android.content.Intent.createChooser(envio, null))
 }
 
 /**
