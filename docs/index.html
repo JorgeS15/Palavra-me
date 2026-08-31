@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palavra-me — um dicionário para quem lê em português</title>
+<meta name="description" content="Encontras uma palavra que não conheces, pesquisas, e guardas na tua coleção com o livro e a frase onde a encontraste. Offline, grátis, código aberto, sem rastreio.">
+<style>
+  :root {
+    --fundo: #fbf7f2;
+    --texto: #2a2320;
+    --suave: #6b625b;
+    --destaque: #b06a3a;
+    --linha: #e7ddd2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .envolucro { max-width: 640px; margin: 0 auto; padding: 72px 24px 48px; }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 2.6rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .lema { font-size: 1.2rem; color: var(--suave); margin: 0 0 32px; }
+  p { margin: 0 0 18px; }
+  .valores {
+    display: flex; flex-wrap: wrap; gap: 8px 10px;
+    margin: 28px 0 36px; padding: 0; list-style: none;
+  }
+  .valores li {
+    font-size: 0.9rem; color: var(--destaque);
+    border: 1px solid var(--linha); border-radius: 999px;
+    padding: 4px 12px;
+  }
+  .accoes { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 40px; }
+  a.botao {
+    text-decoration: none; color: var(--fundo); background: var(--destaque);
+    padding: 10px 18px; border-radius: 10px; font-weight: 600;
+  }
+  a.link {
+    text-decoration: none; color: var(--destaque);
+    padding: 10px 4px; font-weight: 600;
+  }
+  a.link:hover, a.botao:hover { opacity: 0.9; }
+  .nota { font-size: 0.9rem; color: var(--suave); }
+  h2 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.4rem; margin: 40px 0 12px;
+  }
+  footer {
+    margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--linha);
+    font-size: 0.85rem; color: var(--suave);
+  }
+  footer a { color: var(--suave); }
+</style>
+</head>
+<body>
+  <main class="envolucro">
+    <h1>Palavra-me</h1>
+    <p class="lema">Um dicionário para quem lê em português.</p>
+
+    <p>
+      Encontras uma palavra que não conheces a ler um livro. Pesquisa-la, vês o
+      significado e frases de exemplo, e guarda-la na tua coleção — com o livro e
+      a frase onde a encontraste. Um jogo diário e discreto traz as palavras de
+      volta, para não as esqueceres.
+    </p>
+    <p>
+      O nome vem da forma enclítica portuguesa (<em>lembra-me</em>,
+      <em>ensina-me</em>): nomeia o gesto que se repete, não o objeto.
+    </p>
+
+    <ul class="valores">
+      <li>Funciona sem Internet</li>
+      <li>Sem anúncios</li>
+      <li>Sem rastreio</li>
+      <li>Código aberto</li>
+    </ul>
+
+    <div class="accoes">
+      <a class="botao" href="https://github.com/jorges15/palavra-me">Ver no GitHub</a>
+      <a class="link" href="privacidade.html">Política de privacidade</a>
+      <a class="link" href="https://ko-fi.com/jorges15">Apoiar</a>
+    </div>
+    <p class="nota">Brevemente na Google Play.</p>
+
+    <h2>Porque é diferente</h2>
+    <p>
+      O dicionário inteiro vive dentro do telemóvel. A app não tem sequer
+      permissão para aceder à Internet — nada do que registas sai do teu
+      dispositivo, e isso é uma garantia que se pode verificar, não uma promessa.
+      É construída a partir de fontes abertas do português, e tanto o código como
+      os dados são livres.
+    </p>
+
+    <footer>
+      Feito com cuidado por JorgeS15. Código sob licença Apache&nbsp;2.0; base de
+      dados sob CC&nbsp;BY-SA. As fontes e as respetivas licenças estão listadas
+      dentro da app, no ecrã «Fontes e licenças».
+    </footer>
+  </main>
+</body>
+</html>
