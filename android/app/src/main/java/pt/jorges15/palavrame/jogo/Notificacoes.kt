@@ -158,6 +158,11 @@ class LembreteWorker(
         // isso, o lembrete anunciava palavras que o jogo depois descartava.
         // Ver `escolherPalavra`.
         val app = applicationContext as? PalavrameApp
+        // Num processo iniciado só para o worker, o dicionário pode ainda não
+        // estar aberto. Sem ele, NENHUMA palavra conta como jogável e o
+        // lembrete ficava mudo mesmo havendo palavras vencidas. Abre-se aqui.
+        if (app != null && app.dicionario == null) app.abrirDicionario()
+
         val palavra = escolherPalavra(
             dicionario = app?.dicionario,
             utilizador = UtilizadorDb.obter(applicationContext),

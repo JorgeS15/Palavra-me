@@ -1,5 +1,6 @@
 package pt.jorges15.palavrame.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -22,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +49,23 @@ fun EcraPesquisa(
     val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
     val progresso by vm.progresso.collectAsState(initial = null)
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
     var aRegistar by remember { mutableStateOf<Entrada?>(null) }
+
+    // Ao abrir uma palavra — por pesquisa, sugestão, candidato ou sinónimo —
+    // fecha-se o teclado. Duas razões: a definição não deve ser vista com o
+    // teclado por cima, e com o teclado aberto o primeiro "retroceder" fechava
+    // só o teclado em vez de voltar à palavra anterior.
+    LaunchedEffect(estado.entrada?.lemmaId) {
+        if (estado.entrada != null) focus.clearFocus()
+    }
+
+    // Retroceder anda palavra a palavra pelo histórico; quando não há mais,
+    // fecha a entrada como dantes. Só ativo quando há uma entrada aberta —
+    // sem entrada, o "retroceder" do sistema sai do ecrã normalmente.
+    BackHandler(enabled = estado.entrada != null) {
+        if (!vm.voltarEntrada()) vm.fecharEntrada()
+    }
 
     Scaffold(
         topBar = {
@@ -106,7 +124,12 @@ fun EcraPesquisa(
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { vm.procurar() }),
+                // Fecha o teclado ao procurar: senão fica a tapar o botão de
+                // registar, mesmo em baixo, logo a seguir à definição.
+                keyboardActions = KeyboardActions(onSearch = {
+                    vm.procurar()
+                    focus.clearFocus()
+                }),
                 modifier = Modifier.fillMaxWidth(),
             )
 

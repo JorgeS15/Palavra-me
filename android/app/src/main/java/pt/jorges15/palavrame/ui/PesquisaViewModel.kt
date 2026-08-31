@@ -35,6 +35,11 @@ class PesquisaViewModel(
     private val _estado = MutableStateFlow(EstadoPesquisa())
     val estado: StateFlow<EstadoPesquisa> = _estado.asStateFlow()
 
+    // Histórico de palavras visitadas, para o "retroceder" andar palavra a
+    // palavra como um navegador. Só se toca na thread principal (as mutações
+    // de estado acontecem sempre aí), portanto não precisa de sincronização.
+    private val historico = ArrayDeque<Entrada>()
+
     val palavrasGuardadas = utilizador.palavras().todas()
 
     /** Alimenta a linha de estatísticas do ecrã inicial. */
@@ -81,6 +86,7 @@ class PesquisaViewModel(
                 withContext(Dispatchers.IO) { dicionario?.entrada(candidatos[0].lemmaId) }
             } else null
 
+            empilhar(entrada)
             _estado.value = _estado.value.copy(
                 texto = texto,
                 sugestoes = emptyList(),
@@ -94,12 +100,38 @@ class PesquisaViewModel(
     fun abrir(candidato: Candidato) {
         viewModelScope.launch {
             val entrada = withContext(Dispatchers.IO) { dicionario?.entrada(candidato.lemmaId) }
+            empilhar(entrada)
             _estado.value = _estado.value.copy(entrada = entrada)
         }
     }
 
+    /** Guarda a palavra atual no histórico antes de a trocar por outra. */
+    private fun empilhar(nova: Entrada?) {
+        val atual = _estado.value.entrada
+        if (nova != null && atual != null && atual.lemmaId != nova.lemmaId) {
+            historico.addLast(atual)
+        }
+    }
+
+    /**
+     * Volta à palavra anterior, se houver. Devolve `false` quando o histórico
+     * está vazio — aí o ecrã trata o "retroceder" como dantes (fecha a entrada).
+     */
+    fun voltarEntrada(): Boolean {
+        val anterior = historico.removeLastOrNull() ?: return false
+        _estado.value = _estado.value.copy(
+            texto = anterior.lemma,
+            entrada = anterior,
+            candidatos = emptyList(),
+            sugestoes = emptyList(),
+            procurou = true,
+        )
+        return true
+    }
+
     /** Limpa a pesquisa e volta ao ecrã vazio. */
     fun limpar() {
+        historico.clear()
         _estado.value = EstadoPesquisa()
     }
 

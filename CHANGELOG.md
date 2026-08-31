@@ -123,6 +123,49 @@ alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
   "Ver X" ou "O mesmo que X" em que X é o próprio lema é deitada fora; para
   outra palavra, mantém-se.
 
+## [app v1.11.1] - 2026-08-12
+
+Só a app. Afinações às alterações de 1.11.0.
+
+### Fixed
+
+- **Teclado por cima da definição.** Ao abrir uma palavra (por pesquisa,
+  sugestão, candidato ou sinónimo), o teclado fecha-se. Além de deixar a
+  definição à vista, resolve o retroceder: com o teclado aberto, o primeiro
+  "retroceder" fechava só o teclado em vez de voltar à palavra anterior — por
+  isso parecia que as palavras não empilhavam.
+
+- **Retroceder num subecrã fechava a app.** Faltava o tratamento do botão de
+  retroceder ao nível dos ecrãs: agora, da coleção, das definições ou do jogo,
+  retroceder volta à pesquisa; das licenças volta às definições; e só na
+  pesquisa (o ecrã inicial) é que o retroceder fecha a app.
+
+## [app v1.11.0] - 2026-08-12
+
+Só a app. Melhorias a partir de uso do Jorge.
+
+### Added
+
+- **Pesquisa na coleção.** Uma barra para filtrar as palavras registadas —
+  por lema, livro, autor ou frase, sem acentos —, para se poder puxar "tudo do
+  livro X", não só por palavra.
+- **Retroceder entre palavras.** Cada palavra aberta empilha-se; o botão de
+  retroceder recua palavra a palavra, como um navegador, até à primeira.
+- **Empurrão à bateria nas Definições.** Explicação e botão que abre as
+  definições da app, para se pôr a bateria em "Sem restrições" — a causa nº 1
+  de os lembretes não chegarem em telemóveis que matam o trabalho em segundo
+  plano (Xiaomi, Samsung...). Não se pede a permissão de isenção (restrita na
+  Play Store).
+
+### Fixed
+
+- **Teclado a tapar o botão de registar.** Ao procurar (Enter/lupa), o teclado
+  fecha-se, deixando o botão de registar alcançável.
+- **Lembrete mudo com o dicionário fechado.** Se o worker corria num processo
+  onde o dicionário ainda não estava aberto, nenhuma palavra contava como
+  jogável e não havia notificação mesmo com palavras vencidas. O worker abre
+  agora o dicionário se for preciso.
+
 ## [app v1.10.1] - 2026-08-12
 
 Só a app.

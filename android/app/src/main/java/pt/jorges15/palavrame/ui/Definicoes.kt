@@ -1,5 +1,8 @@
 package pt.jorges15.palavrame.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -370,6 +373,30 @@ private fun SeccaoJogo(preferencias: Preferencias) {
         color = MaterialTheme.colorScheme.outline,
         modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
     )
+
+    // Empurrão à bateria. Em muitos telemóveis (Xiaomi, Samsung, Huawei...) o
+    // sistema mata o trabalho em segundo plano e os lembretes não chegam. Não
+    // se pede a permissão de isenção — é restrita na Play Store; abrem-se as
+    // definições da app, onde a bateria se põe em "Sem restrições".
+    Text(
+        "Não recebes os lembretes? O telemóvel pode estar a poupar bateria à "
+            + "custa da app. Nas definições da app, põe a bateria em "
+            + "\"Sem restrições\".",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+        modifier = Modifier.padding(16.dp, 4.dp, 16.dp, 0.dp),
+    )
+    TextButton(
+        onClick = {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                )
+            )
+        },
+        modifier = Modifier.padding(start = 8.dp),
+    ) { Text("Abrir definições da app") }
 
     aEscolher?.let { extremo ->
         EscolherHora(

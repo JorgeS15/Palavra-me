@@ -3,6 +3,7 @@ package pt.jorges15.palavrame
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -69,6 +70,15 @@ class MainActivity : ComponentActivity() {
                 }
                 var ecra by remember {
                     mutableStateOf(if (daNotificacao) Ecra.JOGO else Ecra.PESQUISA)
+                }
+
+                // Retroceder num subecrã volta à pesquisa (das licenças, às
+                // definições); só na pesquisa é que o retroceder do sistema
+                // fecha a app. Desligado na pesquisa, para o histórico de
+                // palavras (dentro do EcraPesquisa) e a saída normal tratarem
+                // disso.
+                BackHandler(enabled = ecra != Ecra.PESQUISA) {
+                    ecra = if (ecra == Ecra.LICENCAS) Ecra.DEFINICOES else Ecra.PESQUISA
                 }
 
                 // Palavra vinda de outra app (o leitor de e-books): procura-se

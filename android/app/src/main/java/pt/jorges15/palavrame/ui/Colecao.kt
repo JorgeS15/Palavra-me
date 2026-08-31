@@ -6,9 +6,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.data.PalavraGuardada
+import pt.jorges15.palavrame.data.Texto
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,6 +40,7 @@ fun EcraColecao(
     val palavras by vm.palavrasGuardadas.collectAsState(initial = emptyList())
     var agruparPorLivro by remember { mutableStateOf(true) }
     var porData by remember { mutableStateOf(true) }
+    var filtro by remember { mutableStateOf("") }
     var aEditar by remember { mutableStateOf<PalavraGuardada?>(null) }
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
 
@@ -94,6 +98,21 @@ fun EcraColecao(
         }
 
         Column(Modifier.padding(padding)) {
+            OutlinedTextField(
+                value = filtro,
+                onValueChange = { filtro = it },
+                label = { Text("Filtrar") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = {
+                    if (filtro.isNotEmpty()) {
+                        IconButton(onClick = { filtro = "" }) {
+                            Icon(Icons.Default.Close, "Limpar")
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(16.dp, 8.dp, 16.dp, 0.dp),
+            )
             Row(
                 Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -120,10 +139,30 @@ fun EcraColecao(
             val ordenadas = if (porData) palavras
             else palavras.sortedBy { it.lemma.lowercase() }
 
+            // Filtro sem acentos, por qualquer campo — a palavra, o livro, o
+            // autor ou a frase — para se poder puxar "tudo do livro X", não só
+            // por lema.
+            val consulta = Texto.normalizar(filtro)
+            val filtradas = if (consulta.isBlank()) ordenadas
+            else ordenadas.filter { p ->
+                listOfNotNull(p.lemma, p.livro, p.autor, p.frase)
+                    .any { Texto.normalizar(it).contains(consulta) }
+            }
+
             val grupos: Map<String, List<PalavraGuardada>> = if (agruparPorLivro) {
-                ordenadas.groupBy { it.livro ?: "Sem livro" }
+                filtradas.groupBy { it.livro ?: "Sem livro" }
             } else {
-                mapOf("" to ordenadas)
+                mapOf("" to filtradas)
+            }
+
+            if (filtradas.isEmpty()) {
+                Text(
+                    "Nenhuma palavra corresponde a “$filtro”.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(16.dp),
+                )
+                return@Column
             }
 
             LazyColumn {
