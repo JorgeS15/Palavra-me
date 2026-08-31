@@ -12,118 +12,7 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
-## [0.30.0] - 2026-08-12
-
-### Added
-
-- **Comando `palavrame rever-curadoria`** — revisor interativo de terminal para
-  as definições curadas. Mostra uma palavra de cada vez (só as marcadas
-  `rascunho — rever`) e aceita-se com Enter, edita-se, corrige-se a classe,
-  apaga-se ou salta-se. Grava a cada decisão, num ficheiro temporário que só
-  depois substitui o original, para se poder parar a meio sem risco. Aceitar
-  limita-se a tirar a marca de rascunho. Torna a revisão das ~715 definições
-  cómoda, em vez de editar o CSV à mão.
-
-## [0.29.6] - 2026-08-12
-
-### Added
-
-- **Curadoria, lote 6 (último): +226 palavras**, fechando as **897 lacunas com
-  frequência conhecida**. No total, ~715 definições originais escritas à mão a
-  partir do `palavrame lacunas`; as restantes ~180 das 897 foram saltadas de
-  propósito (estrangeirismos, unidades, nomes próprios, grafias erradas e
-  palavras de sentido incerto — não se inventa). Tudo com `rascunho — rever`,
-  para revisão humana do Jorge. As lacunas sem frequência (1853) ficam para
-  curadoria orgânica, à medida que aparecerem a ler.
-
-## [0.29.5] - 2026-08-12
-
-### Added
-
-- **Curadoria, lote 5: +129 palavras** (`histerese`, `biótopo`, `celofane`,
-  `radioastronomia`, `superfluido`, `covalente`…). ~490 no total, cobertas as
-  ~620 mais frequentes das lacunas. Todas com `rascunho — rever`.
-
-## [0.29.4] - 2026-08-12
-
-### Added
-
-- **Curadoria, lote 4: +134 palavras** (`troposfera`, `miscigenação`,
-  `bioluminescência`, `sebastianismo`, `paraplégico`, `esquematizar`…). ~360
-  definições originais no total, cobertas as ~470 mais frequentes das lacunas.
-  Todas com `rascunho — rever`.
-
-## [0.29.3] - 2026-08-12
-
-### Added
-
-- **Curadoria, lote 3: +122 palavras** (`holograma`, `fitoterapia`,
-  `introspeção`, `hipotálamo`, `cromatografia`, `autogestão`…). Vamos em ~226
-  definições originais, a cobrir o topo da lista de lacunas por frequência.
-  Todas com `rascunho — rever`.
-
-## [0.29.2] - 2026-08-12
-
-### Added
-
-- **Curadoria, lote 2: +68 palavras** das lacunas mais frequentes, com
-  definições originais (`oceanário`, `glicémia`, `transfronteiriço`,
-  `alavancagem`, `biodegradável`, `interoperabilidade`…). Todas com `rascunho —
-  rever`. Trabalho a partir do `palavrame lacunas`, a decorrer por lotes; o
-  Jorge revê no fim. ~104 palavras curadas até aqui.
-
-## [0.29.1] - 2026-08-12
-
-### Added
-
-- **Curadoria: 36 palavras das lacunas mais frequentes**, com definições
-  originais escritas à mão (`cerimoniar`, `sequenciar`, `rentabilizar`,
-  `usabilidade`, `sinistralidade`, `interoperabilidade`…). Ficam marcadas com
-  `rascunho — rever` na coluna de nota, para o Jorge as validar. Primeiro lote
-  do trabalho a partir do `palavrame lacunas`.
-
-## [0.29.0] - 2026-08-12
-
-### Added
-
-- **Femininos e plurais regulares dos adjetivos.** O Hunspell deixou muitos
-  adjetivos sem marcas de flexão (`comezinho`, sem o `/fp` do `lânguido/fp`), e
-  sem elas a app não ligava o feminino ao lema: quem procurava `comezinha` não
-  chegava a `comezinho`, onde está a definição. Geram-se agora as flexões da
-  classe `-o/-a/-os/-as`, com verificação de colisão — se a forma já é outra
-  palavra (`meio` -> `meia`), não se inventa.
-
-- **Curadoria: `sintónico` e `acutilância`.** Duas palavras ausentes de todas
-  as fontes abertas, com definição **original** escrita à mão (não copiada de
-  dicionário fechado — isso envenenaria a licença aberta da base). É para isto
-  que existe o `seeds/curadoria.csv`.
-
-- **Comando `palavrame lacunas`.** Lista os lemas sem definição de uma DB
-  construída, para se saber o que curar. Ordena por frequência (os mais comuns
-  primeiro) e escreve um ficheiro já no formato do `curadoria.csv`, pronto a
-  preencher. Exclui o que não é candidato a definição: nomes próprios,
-  numerais, o que nem é palavra (datas, restos de citação), e — importante — os
-  lemas que afinal são flexão de outra palavra (`esteja` de *estar*), que sem
-  autoridade de lemas entram como lemas falsos. Medido na base atual: 2 671
-  lacunas reais (1,5%), 854 com frequência conhecida.
-
-## [0.28.2] - 2026-08-12
-
-### Fixed
-
-- **Grafias com trema deixam de ser entradas à parte.** `lângüido` (grafia
-  velha, com trema) unia mal: o Wikcionário traz `lânguido` com definições a
-  sério e `lângüido` só com "Ver lânguido", e apareciam as duas. O trema
-  (abolido no português, e que nunca distingue palavras) passa a ser removido
-  na grafia à entrada do pipeline, como já se fazia no texto das definições —
-  por isso `lângüido` funde-se em `lânguido`.
-
-- **Remissões para o próprio lema caem.** Depois de unir o trema, `lânguido`
-  ficava com uma aceção "Ver lânguido." a apontar para si mesma. Uma aceção
-  "Ver X" ou "O mesmo que X" em que X é o próprio lema é deitada fora; para
-  outra palavra, mantém-se.
-
-## [app v1.11.1] - 2026-08-12
+## [app v1.11.1] - 2026-08-31
 
 Só a app. Afinações às alterações de 1.11.0.
 
@@ -140,7 +29,7 @@ Só a app. Afinações às alterações de 1.11.0.
   retroceder volta à pesquisa; das licenças volta às definições; e só na
   pesquisa (o ecrã inicial) é que o retroceder fecha a app.
 
-## [app v1.11.0] - 2026-08-12
+## [app v1.11.0] - 2026-08-31
 
 Só a app. Melhorias a partir de uso do Jorge.
 
@@ -166,7 +55,118 @@ Só a app. Melhorias a partir de uso do Jorge.
   jogável e não havia notificação mesmo com palavras vencidas. O worker abre
   agora o dicionário se for preciso.
 
-## [app v1.10.1] - 2026-08-12
+## [0.30.0] - 2026-08-31
+
+### Added
+
+- **Comando `palavrame rever-curadoria`** — revisor interativo de terminal para
+  as definições curadas. Mostra uma palavra de cada vez (só as marcadas
+  `rascunho — rever`) e aceita-se com Enter, edita-se, corrige-se a classe,
+  apaga-se ou salta-se. Grava a cada decisão, num ficheiro temporário que só
+  depois substitui o original, para se poder parar a meio sem risco. Aceitar
+  limita-se a tirar a marca de rascunho. Torna a revisão das ~715 definições
+  cómoda, em vez de editar o CSV à mão.
+
+## [0.29.6] - 2026-08-31
+
+### Added
+
+- **Curadoria, lote 6 (último): +226 palavras**, fechando as **897 lacunas com
+  frequência conhecida**. No total, ~715 definições originais escritas à mão a
+  partir do `palavrame lacunas`; as restantes ~180 das 897 foram saltadas de
+  propósito (estrangeirismos, unidades, nomes próprios, grafias erradas e
+  palavras de sentido incerto — não se inventa). Tudo com `rascunho — rever`,
+  para revisão humana do Jorge. As lacunas sem frequência (1853) ficam para
+  curadoria orgânica, à medida que aparecerem a ler.
+
+## [0.29.5] - 2026-08-31
+
+### Added
+
+- **Curadoria, lote 5: +129 palavras** (`histerese`, `biótopo`, `celofane`,
+  `radioastronomia`, `superfluido`, `covalente`…). ~490 no total, cobertas as
+  ~620 mais frequentes das lacunas. Todas com `rascunho — rever`.
+
+## [0.29.4] - 2026-08-31
+
+### Added
+
+- **Curadoria, lote 4: +134 palavras** (`troposfera`, `miscigenação`,
+  `bioluminescência`, `sebastianismo`, `paraplégico`, `esquematizar`…). ~360
+  definições originais no total, cobertas as ~470 mais frequentes das lacunas.
+  Todas com `rascunho — rever`.
+
+## [0.29.3] - 2026-08-31
+
+### Added
+
+- **Curadoria, lote 3: +122 palavras** (`holograma`, `fitoterapia`,
+  `introspeção`, `hipotálamo`, `cromatografia`, `autogestão`…). Vamos em ~226
+  definições originais, a cobrir o topo da lista de lacunas por frequência.
+  Todas com `rascunho — rever`.
+
+## [0.29.2] - 2026-08-31
+
+### Added
+
+- **Curadoria, lote 2: +68 palavras** das lacunas mais frequentes, com
+  definições originais (`oceanário`, `glicémia`, `transfronteiriço`,
+  `alavancagem`, `biodegradável`, `interoperabilidade`…). Todas com `rascunho —
+  rever`. Trabalho a partir do `palavrame lacunas`, a decorrer por lotes; o
+  Jorge revê no fim. ~104 palavras curadas até aqui.
+
+## [0.29.1] - 2026-08-31
+
+### Added
+
+- **Curadoria: 36 palavras das lacunas mais frequentes**, com definições
+  originais escritas à mão (`cerimoniar`, `sequenciar`, `rentabilizar`,
+  `usabilidade`, `sinistralidade`, `interoperabilidade`…). Ficam marcadas com
+  `rascunho — rever` na coluna de nota, para o Jorge as validar. Primeiro lote
+  do trabalho a partir do `palavrame lacunas`.
+
+## [0.29.0] - 2026-08-31
+
+### Added
+
+- **Femininos e plurais regulares dos adjetivos.** O Hunspell deixou muitos
+  adjetivos sem marcas de flexão (`comezinho`, sem o `/fp` do `lânguido/fp`), e
+  sem elas a app não ligava o feminino ao lema: quem procurava `comezinha` não
+  chegava a `comezinho`, onde está a definição. Geram-se agora as flexões da
+  classe `-o/-a/-os/-as`, com verificação de colisão — se a forma já é outra
+  palavra (`meio` -> `meia`), não se inventa.
+
+- **Curadoria: `sintónico` e `acutilância`.** Duas palavras ausentes de todas
+  as fontes abertas, com definição **original** escrita à mão (não copiada de
+  dicionário fechado — isso envenenaria a licença aberta da base). É para isto
+  que existe o `seeds/curadoria.csv`.
+
+- **Comando `palavrame lacunas`.** Lista os lemas sem definição de uma DB
+  construída, para se saber o que curar. Ordena por frequência (os mais comuns
+  primeiro) e escreve um ficheiro já no formato do `curadoria.csv`, pronto a
+  preencher. Exclui o que não é candidato a definição: nomes próprios,
+  numerais, o que nem é palavra (datas, restos de citação), e — importante — os
+  lemas que afinal são flexão de outra palavra (`esteja` de *estar*), que sem
+  autoridade de lemas entram como lemas falsos. Medido na base atual: 2 671
+  lacunas reais (1,5%), 854 com frequência conhecida.
+
+## [0.28.2] - 2026-08-31
+
+### Fixed
+
+- **Grafias com trema deixam de ser entradas à parte.** `lângüido` (grafia
+  velha, com trema) unia mal: o Wikcionário traz `lânguido` com definições a
+  sério e `lângüido` só com "Ver lânguido", e apareciam as duas. O trema
+  (abolido no português, e que nunca distingue palavras) passa a ser removido
+  na grafia à entrada do pipeline, como já se fazia no texto das definições —
+  por isso `lângüido` funde-se em `lânguido`.
+
+- **Remissões para o próprio lema caem.** Depois de unir o trema, `lânguido`
+  ficava com uma aceção "Ver lânguido." a apontar para si mesma. Uma aceção
+  "Ver X" ou "O mesmo que X" em que X é o próprio lema é deitada fora; para
+  outra palavra, mantém-se.
+
+## [app v1.10.1] - 2026-08-31
 
 Só a app.
 
@@ -180,7 +180,7 @@ Só a app.
 - Acentos em falta no ecrã que aparece enquanto o dicionário é preparado:
   "São 200 MB… só acontece uma vez" e "dicionário".
 
-## [app v1.10.0] - 2026-08-12
+## [app v1.10.0] - 2026-08-31
 
 Só a app (o dicionário não muda).
 
@@ -193,7 +193,7 @@ Só a app (o dicionário não muda).
   `Pergunta` passa a levar o lema de cada opção até ao ecrã; sem alteração ao
   dicionário.
 
-## [0.28.1] - 2026-08-12
+## [0.28.1] - 2026-08-31
 
 ### Fixed
 
@@ -209,7 +209,7 @@ Só a app (o dicionário não muda).
   legível (`manguito`, `manga`). No `clean_definition`, portanto vale para
   todas as fontes.
 
-## [0.28.0] - 2026-08-12
+## [0.28.0] - 2026-08-31
 
 ### Added
 
@@ -222,7 +222,7 @@ Só a app (o dicionário não muda).
   aquela acrescenta definições e esta apenas as marca. Começa semeado com
   `time`, `nené` e `neném` como Brasil — cresce à medida que se encontram mais.
 
-## [0.27.2] - 2026-08-12
+## [0.27.2] - 2026-08-31
 
 ### Added
 
@@ -242,7 +242,7 @@ Só a app (o dicionário não muda).
   portuguesa (VOP do VOC, ou Hunspell + Dicionário Aberto), que fica para
   decisão futura por o VOC não ter dump acessível.
 
-## [0.27.1] - 2026-08-12
+## [0.27.1] - 2026-08-31
 
 Dois bugs destapados pela unificação de grafia da 0.27.0, encontrados pelo
 Jorge a testar a base reconstruída.
@@ -261,7 +261,7 @@ Jorge a testar a base reconstruída.
   palavra-alvo só aparece capitalizada a meio da frase deixa de se ligar ao
   substantivo comum. O Leipzig, por ser jornal, estava cheio destes.
 
-## [0.27.0] - 2026-08-12 — app v1.9.1
+## [0.27.0] - 2026-08-31 — app v1.9.1
 
 Três problemas encontrados a usar a app, a partir de duas fotos do Jorge: a
 app é de português europeu, mas aparecia conteúdo brasileiro; um exemplo do
