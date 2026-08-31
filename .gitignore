@@ -25,21 +25,3 @@ android/local.properties
 
 # Sistema
 .DS_Store
-
-# --- fora do repositório público, mas mantidos em disco -------------------
-#
-# Ficam na tua pasta; simplesmente não sobem. Não os apagues.
-
-# O briefing original. É o teu documento de trabalho, menciona decisões que
-# entretanto mudaram (o Priberam, o VOC) e não é o que alguém deve ler
-# primeiro sobre o projeto.
-plano-palavra-me.md
-
-# A documentação de trabalho fica toda fora: registo de licenças, desenho do
-# jogo, rascunhos de emails a instituições, guias de arranque. É material de
-# quem constrói, e o `docs/emails.md` é mesmo correspondência privada.
-#
-# A atribuição das fontes não depende disto e continua cumprida onde tem de
-# estar: no ecrã "Fontes e licenças" da app, e na tabela `sources` dentro da
-# própria base de dados, que viaja com ela.
-#docs/
