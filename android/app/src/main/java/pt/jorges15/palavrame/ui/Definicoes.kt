@@ -58,8 +58,11 @@ fun EcraDefinicoes(
         if (destino == null) return@rememberLauncherForActivityResult
         ambito.launch {
             val palavras = app.utilizador.palavras().todasAgora()
+            val progresso = app.utilizador.progresso().atual()
             mensagemBackup = when (
-                val r = Backup.exportar(context, destino, palavras, BuildConfig.VERSION_NAME)
+                val r = Backup.exportar(
+                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME
+                )
             ) {
                 is Backup.Resultado.Feito -> "Exportadas ${r.novas} palavras."
                 is Backup.Resultado.Erro -> "Falhou: ${r.motivo}"
@@ -73,7 +76,10 @@ fun EcraDefinicoes(
         if (origem == null) return@rememberLauncherForActivityResult
         ambito.launch {
             mensagemBackup = when (
-                val r = Backup.importar(context, origem, app.utilizador.palavras())
+                val r = Backup.importar(
+                    context, origem,
+                    app.utilizador.palavras(), app.utilizador.progresso(),
+                )
             ) {
                 is Backup.Resultado.Feito -> buildString {
                     append("Importadas ${r.novas} palavras")

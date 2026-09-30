@@ -157,6 +157,7 @@ class JogoViewModel(
                 outras = todas.values.filter { it.lemma != alvo.lemma },
                 aleatorio = aleatorio,
                 reserva = reserva(alvo),
+                sinonimosDoAlvo = dicionario?.sinonimosDe(alvo.lemma) ?: emptySet(),
             ) ?: continue
             return EstadoJogo.AJogar(
                 pergunta = pergunta,
@@ -172,13 +173,13 @@ class JogoViewModel(
      * não lhe der uma definição jogável.
      */
     private fun candidata(p: PalavraGuardada): Candidata? {
-        val entrada = dicionario?.entradaPorLema(p.lemma) ?: return null
-        val definicao = Perguntas.definicaoParaJogo(
-            entrada.acecoes.map { it.definicao }
-        ) ?: return null
+        // Consulta leve: só a classe e as definições, sem os exemplos e as
+        // relacionadas que a `Candidata` deitava fora (ponto 2.1 da revisão).
+        val (pos, definicoes) = dicionario?.candidataDeJogo(p.lemma) ?: return null
+        val definicao = Perguntas.definicaoParaJogo(definicoes) ?: return null
         return Candidata(
             lemma = p.lemma,
-            pos = entrada.pos,
+            pos = pos,
             definicao = definicao,
             livro = p.livro,
             frase = p.frase,

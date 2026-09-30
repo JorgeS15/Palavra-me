@@ -1,7 +1,9 @@
 package pt.jorges15.palavrame.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,7 @@ import java.util.Locale
 @Composable
 fun EcraColecao(
     vm: PesquisaViewModel,
+    desenvolvedor: Boolean = false,
     aoVoltar: () -> Unit,
 ) {
     val palavras by vm.palavrasGuardadas.collectAsState(initial = emptyList())
@@ -193,6 +197,7 @@ fun EcraColecao(
                     items(lista, key = { it.id }) { p ->
                         LinhaPalavra(
                             p,
+                            desenvolvedor = desenvolvedor,
                             aoProcurar = { vm.procurar(p.lemma); aoVoltar() },
                             aoEditar = { aEditar = p },
                             aoApagar = { esquecerComAnular(p) },
@@ -205,9 +210,34 @@ fun EcraColecao(
     }
 }
 
+/**
+ * O nível de domínio de uma palavra (a caixa de Leitner, 0 a 5), em pontinhos.
+ *
+ * Torna visível o sistema de repetição espaçada, que até aqui era invisível:
+ * uma palavra acabada de registar tem os cinco vazios; uma dominada, os cinco
+ * cheios. É o que dá sentido a ver uma palavra "subir de nível" ao acertá-la.
+ */
+@Composable
+private fun NivelMastery(nivel: Int) {
+    val cheio = MaterialTheme.colorScheme.primary
+    val vazio = MaterialTheme.colorScheme.outlineVariant
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier.padding(bottom = 2.dp),
+    ) {
+        repeat(5) { i ->
+            Box(
+                Modifier.size(6.dp).clip(CircleShape)
+                    .background(if (i < nivel) cheio else vazio)
+            )
+        }
+    }
+}
+
 @Composable
 private fun LinhaPalavra(
     palavra: PalavraGuardada,
+    desenvolvedor: Boolean,
     aoProcurar: () -> Unit,
     aoEditar: () -> Unit,
     aoApagar: () -> Unit,
@@ -221,6 +251,8 @@ private fun LinhaPalavra(
         headlineContent = { Text(palavra.lemma, fontWeight = FontWeight.Medium) },
         supportingContent = {
             Column {
+                // Os pontinhos do nível são do Modo Desenvolvedor.
+                if (desenvolvedor) NivelMastery(palavra.mastery)
                 palavra.frase?.let {
                     Text("«$it»", fontStyle = FontStyle.Italic,
                         style = MaterialTheme.typography.bodySmall)

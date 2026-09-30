@@ -146,6 +146,53 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
         )
     }
 
+    /**
+     * Só o que o jogo precisa de uma candidata: a classe e as definições.
+     *
+     * O `entradaPorLema` carrega também até 40 exemplos e até 40 relacionadas,
+     * que a `Candidata` deita fora — e o jogo chama isto para TODAS as palavras
+     * guardadas. Uma consulta só, sem esse peso (ver ponto 2.1 da revisão).
+     * Devolve nulo se a palavra não existe ou não tem definição.
+     */
+    fun candidataDeJogo(lemma: String): Pair<String, List<String>>? {
+        val sql = """
+            SELECT l.pos, s.definition
+            FROM senses s JOIN lemmas l ON l.id = s.lemma_id
+            WHERE l.id = (SELECT id FROM lemmas WHERE lemma = ? LIMIT 1)
+            ORDER BY s.ord
+        """
+        var pos = ""
+        val defs = db.rawQuery(sql, arrayOf(lemma)).use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    pos = c.getString(0) ?: ""
+                    add(c.getString(1))
+                }
+            }
+        }
+        return if (defs.isEmpty()) null else pos to defs
+    }
+
+    /**
+     * Os sinónimos de um lema, para os excluir das distrações do jogo.
+     *
+     * Duas palavras sinónimas têm muitas vezes definições redigidas de forma
+     * diferente (fontes diferentes) e escapam ao filtro de semelhança — daria
+     * uma pergunta com duas opções certas (ponto 1.7 da revisão). Só sinónimos:
+     * antónimos e hiperónimos são distrações legítimas.
+     */
+    fun sinonimosDe(lemma: String): Set<String> {
+        val sql = """
+            SELECT l2.lemma FROM synonyms y
+            JOIN lemmas l2 ON l2.id = y.synonym_id
+            WHERE y.lemma_id = (SELECT id FROM lemmas WHERE lemma = ? LIMIT 1)
+              AND y.relation = 'sinonimo'
+        """
+        return db.rawQuery(sql, arrayOf(lemma)).use { c ->
+            buildSet { while (c.moveToNext()) add(c.getString(0)) }
+        }
+    }
+
     private fun acecoes(lemmaId: Long): List<Acecao> {
         val sql = """
             SELECT s.id, s.ord, s.definition, s.domains, src.name, s.modernized

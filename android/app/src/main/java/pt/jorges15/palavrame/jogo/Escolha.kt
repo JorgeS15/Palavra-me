@@ -35,6 +35,8 @@ suspend fun escolherPalavra(
 
 /** Tem definição com corpo suficiente para render uma pergunta? */
 fun jogavel(dicionario: Dicionario?, lemma: String): Boolean {
-    val entrada = dicionario?.entradaPorLema(lemma) ?: return false
-    return Perguntas.definicaoParaJogo(entrada.acecoes.map { it.definicao }) != null
+    // Consulta leve (só as definições), como no `JogoViewModel` — o worker do
+    // lembrete corre isto para as palavras vencidas (ponto 2.1 da revisão).
+    val definicoes = dicionario?.candidataDeJogo(lemma)?.second ?: return false
+    return Perguntas.definicaoParaJogo(definicoes) != null
 }

@@ -148,11 +148,18 @@ object Perguntas {
          * reconheça: basta que a definição seja credível.
          */
         reserva: List<Candidata> = emptyList(),
+        /**
+         * Sinónimos do alvo, a excluir das distrações: uma palavra com o mesmo
+         * sentido pode ter uma definição diferente que escapa ao filtro de
+         * semelhança e daria duas opções certas (ponto 1.7 da revisão).
+         */
+        sinonimosDoAlvo: Set<String> = emptySet(),
     ): Pergunta? {
         if (alvo.definicao.length < MIN_CARACTERES) return null
 
         fun filtrar(lista: List<Candidata>) = lista
             .filter { it.lemma != alvo.lemma }
+            .filter { it.lemma !in sinonimosDoAlvo }
             .filter { comprimentoCompativel(alvo.definicao, it.definicao) }
             .filter { semelhanca(alvo.definicao, it.definicao) <= MAX_SEMELHANCA }
 

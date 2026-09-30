@@ -62,4 +62,16 @@ class TextoTest {
     fun `selecao e normalizacao encadeiam`() {
         assertEquals("ensonados", Texto.normalizar(Texto.limparSelecao("«Ensonados,")))
     }
+
+    @Test
+    fun `a palavra principal de uma selecao e a mais comprida`() {
+        // "o rosto ensonado" deve procurar 'ensonado', não 'o'.
+        assertEquals("ensonado", Texto.palavraPrincipal("o rosto ensonado"))
+        assertEquals("manga", Texto.palavraPrincipal("sumo de manga."))
+        // Com pontuação agarrada, limpa-se na mesma.
+        assertEquals("cobertor", Texto.palavraPrincipal("debaixo do cobertor,"))
+        // Uma seleção de uma só palavra devolve-a.
+        assertEquals("ensonado", Texto.palavraPrincipal("ensonado"))
+        assertEquals("", Texto.palavraPrincipal("   "))
+    }
 }

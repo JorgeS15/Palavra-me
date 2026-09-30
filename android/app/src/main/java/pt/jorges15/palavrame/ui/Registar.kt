@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pt.jorges15.palavrame.data.PalavraGuardada
@@ -27,27 +28,37 @@ fun DialogoRegistar(
     livrosAnteriores: List<Livro> = emptyList(),
     /** Não nulo = estamos a editar um registo que já existe. */
     existente: PalavraGuardada? = null,
+    /** Frase de contexto a pré-preencher (seleção vinda do leitor de e-books). */
+    fraseInicial: String? = null,
     aoCancelar: () -> Unit,
     aoGuardar: (PalavraGuardada) -> Unit,
 ) {
     // Quem está a ler um livro regista dele muitas palavras seguidas. Voltar
     // a escrever o título de cada vez é a fricção mais fácil de eliminar:
     // o último livro vem já preenchido e os anteriores estão a um toque.
+    // `rememberSaveable` (com chave no lema): o que já foi escrito sobrevive a
+    // rodar o telemóvel ou ao sistema recriar o processo. Perder o livro/frase
+    // a meio de um registo, num diálogo com cinco campos, é a fricção que mais
+    // dói. A chave no lema reinicia os campos quando se abre outra palavra.
     val livroInicial = existente?.livro ?: livrosAnteriores.firstOrNull()?.titulo.orEmpty()
-    var livro by remember { mutableStateOf(livroInicial) }
+    var livro by rememberSaveable(lemma) { mutableStateOf(livroInicial) }
     // Ao editar, o autor é o que já lá estava. Ao registar de novo, é o que
     // ficou associado ao livro pré-preenchido — se registaste dez palavras de
     // "Os Maias", não escreves "Eça de Queirós" onze vezes.
-    var autor by remember {
+    var autor by rememberSaveable(lemma) {
         mutableStateOf(
             existente?.autor
                 ?: livrosAnteriores.firstOrNull { it.titulo == livroInicial }?.autor
                 ?: ""
         )
     }
-    var pagina by remember { mutableStateOf(existente?.page?.toString().orEmpty()) }
-    var frase by remember { mutableStateOf(existente?.frase.orEmpty()) }
-    var nota by remember { mutableStateOf(existente?.note.orEmpty()) }
+    var pagina by rememberSaveable(lemma) { mutableStateOf(existente?.page?.toString().orEmpty()) }
+    // A frase pré-preenche-se com a seleção do leitor, quando vem uma; ao
+    // editar, é a que já lá estava.
+    var frase by rememberSaveable(lemma) {
+        mutableStateOf(existente?.frase ?: fraseInicial ?: "")
+    }
+    var nota by rememberSaveable(lemma) { mutableStateOf(existente?.note.orEmpty()) }
     var listaAberta by remember { mutableStateOf(false) }
 
     AlertDialog(

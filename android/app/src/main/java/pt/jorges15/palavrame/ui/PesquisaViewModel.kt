@@ -15,6 +15,7 @@ import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.UtilizadorDb
+import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
 
 data class EstadoPesquisa(
     val texto: String = "",
@@ -39,6 +40,13 @@ class PesquisaViewModel(
     // palavra como um navegador. Só se toca na thread principal (as mutações
     // de estado acontecem sempre aí), portanto não precisa de sincronização.
     private val historico = ArrayDeque<Entrada>()
+
+    // Frase de contexto vinda de uma seleção multi-palavra no leitor de
+    // e-books, para pré-preencher o campo da frase no registo. Sobrevive a
+    // corrigir o termo de pesquisa à mão; limpa-se ao registar, ao cancelar ou
+    // ao limpar a pesquisa.
+    private val _fraseSugerida = MutableStateFlow<String?>(null)
+    val fraseSugerida: StateFlow<String?> = _fraseSugerida.asStateFlow()
 
     val palavrasGuardadas = utilizador.palavras().todas()
 
@@ -73,6 +81,21 @@ class PesquisaViewModel(
                 _estado.value = _estado.value.copy(sugestoes = sugestoes)
             }
         }
+    }
+
+    /**
+     * Pesquisa uma palavra e guarda a frase de contexto — uma seleção com mais
+     * do que uma palavra vinda do leitor. O termo de pesquisa é a palavra
+     * principal; a frase inteira fica para pré-preencher o registo.
+     */
+    fun procurarComContexto(palavra: String, frase: String) {
+        _fraseSugerida.value = frase
+        procurar(palavra)
+    }
+
+    /** A frase de contexto foi usada (ou dispensada): esquece-a. */
+    fun limparContexto() {
+        _fraseSugerida.value = null
     }
 
     /** Chamado pela pesquisa e também pelo PROCESS_TEXT vindo do e-book. */
@@ -132,6 +155,7 @@ class PesquisaViewModel(
     /** Limpa a pesquisa e volta ao ecrã vazio. */
     fun limpar() {
         historico.clear()
+        _fraseSugerida.value = null
         _estado.value = EstadoPesquisa()
     }
 
@@ -169,4 +193,20 @@ class PesquisaViewModel(
     /** Lemas já na coleção — o botão precisa de saber se já lá está. */
     val lemasGuardados: Flow<Set<String>> =
         palavrasGuardadas.map { lista -> lista.map { it.lemma }.toSet() }
+
+    /**
+     * Há mesmo alguma coisa a rever agora? Alimenta o botão "Rever" do ecrã
+     * inicial — que só aparece quando há algo vencido, para dar acesso ao jogo
+     * a quem não liga os lembretes sem quebrar a regra de nunca convidar quando
+     * não há nada a dizer (ponto 3.5 da revisão).
+     *
+     * Não confirma a jogabilidade (isso exigiria o dicionário para cada
+     * palavra); se a única vencida não der pergunta, o ecrã do jogo trata
+     * disso com elegância.
+     */
+    val porRever: Flow<Int> = palavrasGuardadas.map { lista ->
+        if (lista.size < MINIMO_PARA_JOGAR) return@map 0
+        val agora = System.currentTimeMillis()
+        lista.count { it.proximaRevisao == null || it.proximaRevisao <= agora }
+    }
 }

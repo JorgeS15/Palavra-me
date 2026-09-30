@@ -190,6 +190,31 @@ class PerguntasTest {
     }
 
     @Test
+    fun `um sinonimo do alvo nao entra nas distracoes`() {
+        // 'sonolento' é sinónimo de 'ensonado' mas a definição é redigida de
+        // forma diferente — passaria o filtro de semelhança e daria uma
+        // pergunta com duas opções certas. A exclusão por sinónimo trava isso.
+        val ensonado = Candidata(
+            "ensonado", "adjetivo", "Que tem sono; com vontade de dormir.",
+        )
+        val sonolento = Candidata(
+            "sonolento", "adjetivo",
+            "Diz-se de quem cabeceia e mal mantém os olhos abertos.",
+        )
+        val p = Perguntas.gerar(
+            ensonado,
+            outras = listOf(sonolento, alfarrabio, enxovia, janota),
+            aleatorio = Random(1),
+            sinonimosDoAlvo = setOf("sonolento"),
+        )
+        assertNotNull(p)
+        assertTrue(
+            "o sinónimo não podia ser uma opção: ${p!!.lemasOpcoes}",
+            "sonolento" !in p.lemasOpcoes,
+        )
+    }
+
+    @Test
     fun `semelhanca ignora palavras gramaticais`() {
         // Sem ignorar 'de'/'que', duas definições quaisquer pareceriam
         // parecidas e o gerador rejeitaria distrações boas.

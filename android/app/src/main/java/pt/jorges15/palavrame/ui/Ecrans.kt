@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -47,10 +48,14 @@ fun EcraPesquisa(
     val guardados by vm.lemasGuardados.collectAsState(initial = emptySet())
     val palavras by vm.palavrasGuardadas.collectAsState(initial = emptyList())
     val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
+    val porRever by vm.porRever.collectAsState(initial = 0)
     val progresso by vm.progresso.collectAsState(initial = null)
     val context = LocalContext.current
     val focus = LocalFocusManager.current
-    var aRegistar by remember { mutableStateOf<Entrada?>(null) }
+    val fraseSugerida by vm.fraseSugerida.collectAsState()
+    // Guarda-se o lema (não a Entrada) e em `rememberSaveable`: o diálogo de
+    // registo aberto sobrevive a rodar o telemóvel, com o que já lá escreveste.
+    var lemaARegistar by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Ao abrir uma palavra — por pesquisa, sugestão, candidato ou sinónimo —
     // fecha-se o teclado. Duas razões: a definição não deve ser vista com o
@@ -142,7 +147,7 @@ fun EcraPesquisa(
                         estado.entrada!!,
                         jaGuardada = estado.entrada!!.lemma in guardados,
                         desenvolvedor = desenvolvedor,
-                        aoRegistar = { aRegistar = it },
+                        aoRegistar = { lemaARegistar = it.lemma },
                         aoPartilhar = { partilharEntrada(context, it) },
                         aoSeguir = { vm.procurar(it) },
                     )
@@ -166,6 +171,10 @@ fun EcraPesquisa(
                     recentes = palavras.take(12),
                     total = palavras.size,
                     progresso = progresso,
+                    // "N por rever" é do Modo Desenvolvedor, como o botão de
+                    // rever: para quem lê, o jogo vem só pelo lembrete.
+                    porRever = if (desenvolvedor) porRever else 0,
+                    aoRever = aoAbrirJogo,
                     aoEscolher = { vm.procurar(it) },
                 )
               }
@@ -175,12 +184,15 @@ fun EcraPesquisa(
         }
     }
 
-    aRegistar?.let { entrada ->
+    lemaARegistar?.let { lema ->
         DialogoRegistar(
-            lemma = entrada.lemma,
+            lemma = lema,
             livrosAnteriores = livros,
-            aoCancelar = { aRegistar = null },
-            aoGuardar = { palavra -> vm.registar(palavra); aRegistar = null },
+            fraseInicial = fraseSugerida,
+            aoCancelar = { lemaARegistar = null; vm.limparContexto() },
+            aoGuardar = { palavra ->
+                vm.registar(palavra); lemaARegistar = null; vm.limparContexto()
+            },
         )
     }
 }
@@ -420,6 +432,8 @@ private fun EcraInicial(
     recentes: List<PalavraGuardada>,
     total: Int,
     progresso: Progresso?,
+    porRever: Int,
+    aoRever: () -> Unit,
     aoEscolher: (String) -> Unit,
 ) {
     if (recentes.isEmpty()) {
@@ -440,6 +454,15 @@ private fun EcraInicial(
     }
 
     Column(Modifier.padding(top = 24.dp)) {
+        // A deixa para rever, só quando há mesmo algo vencido. Toca para jogar.
+        if (porRever > 0) {
+            Text(
+                if (porRever == 1) "1 palavra por rever" else "$porRever palavras por rever",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(onClick = aoRever).padding(bottom = 12.dp),
+            )
+        }
         Estatisticas(total, progresso)
         Text(
             if (total > recentes.size) "As últimas que registaste (de $total)"

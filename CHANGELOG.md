@@ -12,6 +12,82 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [app v1.14.0] - 2026-08-31
+
+Só a app. Ponto 3.4 da revisão: tornar o Leitner visível (no Modo Desenvolvedor).
+
+### Added
+
+- **Nível de domínio em pontinhos (Modo Desenvolvedor).** Cada palavra da
+  coleção mostra a sua caixa de repetição espaçada (0 a 5) em cinco pontinhos —
+  vazios numa palavra acabada de registar, a encherem à medida que a acertas. O
+  sistema que decidia em silêncio quando cada palavra voltava passa a ver-se.
+  Fica atrás do Modo Desenvolvedor, para não pôr números à frente de quem só
+  quer ler.
+
+- **"N por rever" no ecrã inicial (Modo Desenvolvedor).** Uma linha discreta com
+  o número de palavras vencidas, que abre o jogo ao toque. Fica atrás do Modo
+  Desenvolvedor, como o botão de rever: para quem lê, o jogo vem só pelo
+  lembrete.
+
+## [app v1.13.0] - 2026-08-31
+
+Só a app. Dois pontos da revisão de código: 1.7 e 2.1.
+
+### Fixed
+
+- **Sinónimos como distrações uns dos outros (1.7).** As opções erradas do jogo
+  deixam de poder ser sinónimos da palavra-alvo — que, com uma definição
+  redigida de outra forma, escapavam ao filtro de semelhança e davam uma
+  pergunta com duas respostas certas. Só se excluem sinónimos; antónimos e
+  hiperónimos continuam a servir de distração.
+
+### Changed
+
+- **O jogo faz muito menos consultas (2.1).** A montagem do jogo pedia, para
+  cada palavra da coleção, a entrada inteira do dicionário (aceções + até 40
+  exemplos + até 40 relacionadas) e deitava fora quase tudo — só usa a classe e
+  as definições. Passa a haver uma consulta leve dedicada, usada também pelo
+  `jogavel()` do lembrete. Numa coleção grande, corta o trabalho a uma fração.
+
+## [app v1.12.0] - 2026-08-31
+
+Só a app. Dois pontos da revisão de código: 3.1 e 1.3.
+
+### Added
+
+- **Capturar a frase da seleção (3.1).** Quando a seleção enviada do leitor de
+  e-books traz mais do que uma palavra, procura-se a palavra principal (a mais
+  comprida — "o rosto ensonado" abre `ensonado`, não `o`) e a frase inteira
+  fica guardada como contexto, a pré-preencher o campo "A frase onde a
+  encontraste" no registo. Era o campo que a app existe para valorizar e que
+  na prática ficava quase sempre vazio. A frase sobrevive a corrigires o termo
+  de pesquisa à mão; esquece-se ao registar, cancelar ou limpar.
+
+### Fixed
+
+- **O estado deixa de se perder na rotação (1.3).** O ecrã atual e o diálogo de
+  registo (com o livro, a frase e a nota já escritos) passam a usar
+  `rememberSaveable`. Rodar o telemóvel a meio de um registo já não apaga o que
+  tinhas escrito.
+
+## [app v1.11.2] - 2026-08-31
+
+Só a app.
+
+### Fixed
+
+- **A cópia de segurança perdia o progresso de revisão.** A exportação não
+  escrevia a `proxima_revisao` de cada palavra nem a tabela de progresso
+  (pontos, sequência, acertos, erros). Ao importar noutro telemóvel, a coleção
+  inteira voltava à fila no primeiro dia e a sequência de dias perdia-se — o
+  contrário do que o comentário no código prometia. Agora ambas vão na cópia.
+  O progresso do jogo só é adotado da cópia se o local ainda estiver vazio:
+  restaura numa mudança de telemóvel, mas nunca esmaga um progresso em uso.
+  Cópias antigas continuam a importar (os campos em falta assumem os valores
+  de origem). A serialização foi separada do IO e ganhou um teste de
+  round-trip (`BackupTest`), que teria apanhado o bug.
+
 ## [app v1.11.1] - 2026-08-31
 
 Só a app. Afinações às alterações de 1.11.0.
@@ -1632,13 +1708,4 @@ entradas revistas à mão.
   palavra e dump TEI), Wikcionário (JSONL do wiktextract), VOC da CPLP,
   wordnet PT (N-Triples e TSV), Hunspell do Natura, Tatoeba, Leipzig.
 - **Expansão de afixos Hunspell** (`affix.py`): SFX, PFX, produto cruzado,
-  bandeiras de continuação, condições com classes de caracteres, e strip do
-  lema inteiro para formas supletivas. É o que produz a tabela `forms`, e é o
-  que faz `couberam` chegar a `caber`.
-- **Fusão** com as regras da secção 5.2 do plano: o VOC decide a lista de
-  lemas, a grafia e a classe gramatical; aceções de fontes diferentes nunca se
-  fundem; conflitos ficam num relatório em vez de se resolverem em silêncio.
-- **Escrita do `dicionario.db`** com o esquema da secção 6.1, índices, FTS5
-  com `content=lemmas`, tabela `meta` com versão e data, e checksum sha256 ao
-  lado do ficheiro.
-- **Validação** em duas famílias: integridade (chaves, proveniência
+  bandeiras de continuação, condições com

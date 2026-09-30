@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -19,6 +20,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.data.Preferencias
+import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.jogo.JogoViewModel
 import pt.jorges15.palavrame.jogo.Lembrete
 import pt.jorges15.palavrame.ui.EcraColecao
@@ -68,7 +70,7 @@ class MainActivity : ComponentActivity() {
                 val lemaDaNotificacao = remember {
                     if (daNotificacao) intent?.getStringExtra(Lembrete.EXTRA_LEMA) else null
                 }
-                var ecra by remember {
+                var ecra by rememberSaveable {
                     mutableStateOf(if (daNotificacao) Ecra.JOGO else Ecra.PESQUISA)
                 }
 
@@ -82,11 +84,31 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Palavra vinda de outra app (o leitor de e-books): procura-se
-                // logo, sem passar pelo teclado.
-                LaunchedEffect(Unit) { textoRecebido()?.let(vm::procurar) }
+                // logo, sem passar pelo teclado. Se a seleção trouxer mais do
+                // que uma palavra, procura-se a principal e guarda-se a frase
+                // inteira como contexto, para pré-preencher o registo (3.1).
+                LaunchedEffect(Unit) {
+                    val recebido = textoRecebido() ?: return@LaunchedEffect
+                    val frase = recebido.trim()
+                    if (frase.any { it.isWhitespace() }) {
+                        val palavra = Texto.palavraPrincipal(frase)
+                        if (palavra.isNotBlank()) {
+                            vm.procurarComContexto(palavra, frase.take(300))
+                        }
+                    } else {
+                        vm.procurar(Texto.limparSelecao(frase))
+                    }
+                }
 
                 when (ecra) {
-                    Ecra.COLECAO -> EcraColecao(vm, aoVoltar = { ecra = Ecra.PESQUISA })
+                    Ecra.COLECAO -> {
+                        val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
+                        EcraColecao(
+                            vm,
+                            desenvolvedor = desenvolvedor,
+                            aoVoltar = { ecra = Ecra.PESQUISA },
+                        )
+                    }
                     Ecra.DEFINICOES -> EcraDefinicoes(
                         preferencias,
                         aoAbrirLicencas = { ecra = Ecra.LICENCAS },

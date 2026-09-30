@@ -37,4 +37,18 @@ object Texto {
             .removeSurrounding("«", "»")
             .trim { !it.isLetter() && it != '-' && it != '\'' }
             .substringBefore(' ')
+
+    /**
+     * De uma seleção com várias palavras (frase enviada do leitor), a mais
+     * provável de ser a que se quer procurar: a **mais comprida**. As palavras
+     * que fazem parar a leitura costumam ser as longas, e "o rosto ensonado"
+     * deve procurar `ensonado`, não `o`. Uma seleção de uma só palavra
+     * devolve-a. A frase inteira guarda-se à parte, como contexto.
+     */
+    fun palavraPrincipal(bruto: String): String =
+        bruto.split(Regex("\\s+"))
+            .map { it.trim { c -> !c.isLetter() && c != '-' && c != '\'' } }
+            .filter { it.isNotBlank() }
+            .maxByOrNull { it.length }
+            .orEmpty()
 }
