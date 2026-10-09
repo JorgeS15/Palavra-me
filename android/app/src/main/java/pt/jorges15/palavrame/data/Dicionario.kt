@@ -3,6 +3,7 @@ package pt.jorges15.palavrame.data
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import java.io.File
+import kotlin.random.Random
 
 /**
  * Acesso ao `dicionario.db` — **só leitura, sempre**.
@@ -64,14 +65,29 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
      * pela frequência, como o plano manda (secção 9).
      */
     fun procurar(escrito: String, limite: Int = 25): List<Candidato> {
+        // Com espaços, tenta-se primeiro a expressão inteira ("de facto", "a
+        // fim de"): a base tem dez mil locuções, e antes a pesquisa cortava no
+        // primeiro espaço e procurava "de". Se a expressão não existir, segue
+        // como dantes, pela primeira palavra.
+        if (escrito.trim().any { it.isWhitespace() }) {
+            val expressao = procurarExpressao(escrito, limite)
+            if (expressao.isNotEmpty()) return expressao
+        }
         val chave = Texto.normalizar(Texto.limparSelecao(escrito))
         if (chave.isEmpty()) return emptyList()
 
+        // `GROUP BY l.id`, e não `DISTINCT`: um lema atingido por duas formas
+        // de superfície que normalizam para a mesma chave (p. ex. o infinitivo
+        // e uma grafia com maiúscula) dava duas linhas iguais no ecrã — a
+        // "palavra a dobrar" que se via nalgumas entradas. Agrupar por lema
+        // devolve-o uma só vez; `MIN(f.form)` fica com uma forma representativa
+        // para o "· via ...".
         val sql = """
-            SELECT DISTINCT l.id, l.lemma, l.pos, l.frequency_rank, f.form
+            SELECT l.id, l.lemma, l.pos, l.frequency_rank, MIN(f.form) AS form
             FROM forms f
             JOIN lemmas l ON l.id = f.lemma_id
             WHERE f.normalized = ?
+            GROUP BY l.id
             ORDER BY (l.frequency_rank IS NULL), l.frequency_rank, l.lemma
             LIMIT ?
         """
@@ -94,6 +110,142 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
                 }
             }
         }
+    }
+
+    /**
+     * Uma expressão de várias palavras, tal e qual: a locução como lema, ou
+     * como forma de um lema. Vazio se não existir (ou se não tiver espaços).
+     */
+    fun procurarExpressao(escrito: String, limite: Int = 25): List<Candidato> {
+        val chave = Texto.normalizar(escrito)
+        if (!chave.contains(' ')) return emptyList()
+        val sql = """
+            SELECT l.id, l.lemma, l.pos, l.frequency_rank
+            FROM lemmas l
+            WHERE l.normalized = ?
+               OR l.id IN (SELECT f.lemma_id FROM forms f WHERE f.normalized = ?)
+            ORDER BY (l.frequency_rank IS NULL), l.frequency_rank, l.lemma
+            LIMIT ?
+        """
+        return db.rawQuery(sql, arrayOf(chave, chave, limite.toString())).use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add(
+                        Candidato(
+                            lemmaId = c.getLong(0),
+                            lemma = c.getString(1),
+                            pos = c.getString(2) ?: "",
+                            frequencyRank = if (c.isNull(3)) null else c.getInt(3),
+                            viaForma = null,
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * "Querias dizer…?": palavras do dicionário a uma ou duas letras de
+     * distância do que foi escrito, para quando a pesquisa não encontra nada.
+     *
+     * Compara com as formas (não só os lemas), para apanhar também flexões mal
+     * escritas: "coubreram" sugere "caber". Conta a troca de duas letras
+     * vizinhas como um só erro ("exlutar" -> "exultar"). Devolve lemas, os
+     * mais próximos e frequentes primeiro.
+     *
+     * Para não percorrer milhão e meio de formas, procura por camadas e pára
+     * na primeira que der resultado: primeiro as formas que começam pelas
+     * mesmas duas letras (o caso comum, um erro a meio ou no fim); depois só
+     * pela primeira letra (erro na segunda); depois por qualquer primeira
+     * letra seguida da segunda escrita (erro na primeira: "xxultar"); e por fim
+     * as duas primeiras trocadas ("xeultar").
+     */
+    fun parecidas(escrito: String, limite: Int = 6): List<String> {
+        val chave = Texto.normalizar(Texto.limparSelecao(escrito))
+            .filter { it != '[' && it != '*' && it != '?' }
+        if (chave.length < 3) return emptyList()
+        val maximo = if (chave.length <= 5) 1 else 2
+        val camadas = listOf(
+            chave.take(2) + "*",
+            chave.take(1) + "*",
+            "?" + chave[1] + "*",
+            "" + chave[1] + chave[0] + "*",
+        ).distinct()
+        for (padrao in camadas) {
+            val achadas = parecidasPor(padrao, chave, maximo, limite)
+            if (achadas.isNotEmpty()) return achadas
+        }
+        return emptyList()
+    }
+
+    private fun parecidasPor(padrao: String, chave: String, maximo: Int, limite: Int): List<String> {
+        val sql = """
+            SELECT f.normalized, l.lemma, l.frequency_rank
+            FROM forms f JOIN lemmas l ON l.id = f.lemma_id
+            WHERE f.normalized GLOB ?
+              AND LENGTH(f.normalized) BETWEEN CAST(? AS INTEGER) AND CAST(? AS INTEGER)
+        """
+        // O CAST não é enfeite. O `rawQuery` passa os parâmetros como TEXTO, e
+        // no SQLite um número comparado com um texto é sempre menor: sem o
+        // CAST, `LENGTH(...) BETWEEN '10' AND '14'` é falso para tudo e o
+        // "Querias dizer" nunca encontrava nada.
+        // lema -> (distância, frequência) — fica a melhor de cada lema.
+        val melhores = HashMap<String, Pair<Int, Int>>()
+        db.rawQuery(
+            sql,
+            arrayOf(
+                padrao,
+                (chave.length - maximo).toString(),
+                (chave.length + maximo).toString(),
+            ),
+        ).use { c ->
+            while (c.moveToNext()) {
+                val d = distancia(chave, c.getString(0), maximo)
+                if (d == 0 || d > maximo) continue
+                val lema = c.getString(1)
+                val rank = if (c.isNull(2)) Int.MAX_VALUE else c.getInt(2)
+                val atual = melhores[lema]
+                if (atual == null || d < atual.first || (d == atual.first && rank < atual.second)) {
+                    melhores[lema] = d to rank
+                }
+            }
+        }
+        return melhores.entries
+            .sortedWith(compareBy({ it.value.first }, { it.value.second }, { it.key }))
+            .take(limite)
+            .map { it.key }
+    }
+
+    /**
+     * Distância de edição com troca de vizinhas (Damerau restrita), com
+     * paragem cedo: devolve `maximo + 1` assim que já não pode ficar abaixo.
+     */
+    private fun distancia(a: String, b: String, maximo: Int): Int {
+        if (kotlin.math.abs(a.length - b.length) > maximo) return maximo + 1
+        val n = a.length
+        val m = b.length
+        var anterior2 = IntArray(m + 1)
+        var anterior = IntArray(m + 1) { it }
+        var atual = IntArray(m + 1)
+        for (i in 1..n) {
+            atual[0] = i
+            var menor = atual[0]
+            for (j in 1..m) {
+                val custo = if (a[i - 1] == b[j - 1]) 0 else 1
+                var v = minOf(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + custo)
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                    v = minOf(v, anterior2[j - 2] + 1)
+                }
+                atual[j] = v
+                if (v < menor) menor = v
+            }
+            if (menor > maximo) return maximo + 1
+            val livre = anterior2
+            anterior2 = anterior
+            anterior = atual
+            atual = livre
+        }
+        return anterior[m]
     }
 
     /** Sugestões enquanto se escreve. Prefixo sobre a forma normalizada. */
@@ -271,28 +423,60 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
         maximo: Int,
         limite: Int = 30,
     ): List<Triple<String, String, String>> {
+        // Várias sondas curtas a partir de pontos ao acaso, em vez de
+        // `ORDER BY RANDOM()`. Esse lia e ordenava TODAS as aceções da classe
+        // (centenas de milhares) a cada pergunta, e era justamente com
+        // coleções pequenas, num telemóvel fraco, que isto corria. Cada sonda
+        // é uma leitura pela chave primária que pára às primeiras que servem.
+        val teto = maiorAcecao
+        if (teto <= 0L) return emptyList()
         val sql = """
             SELECT l.lemma, l.pos, s.definition
             FROM senses s JOIN lemmas l ON l.id = s.lemma_id
-            WHERE l.pos = ?
-              AND LENGTH(s.definition) BETWEEN ? AND ?
+            WHERE s.id >= CAST(? AS INTEGER) AND l.pos = ?
+              -- CAST: o rawQuery passa os parâmetros como texto, e um número
+              -- comparado com texto é sempre menor no SQLite. Sem isto, esta
+              -- condição era falsa para tudo e as distrações do dicionário
+              -- nunca chegavam ao jogo.
+              AND LENGTH(s.definition) BETWEEN CAST(? AS INTEGER) AND CAST(? AS INTEGER)
               -- Milhares de adjetivos do Wikcionário são gentílicos
               -- ("relativo ou pertencente a Melo"). Como distração são
               -- todos iguais entre si e nenhum ensina nada.
               AND s.definition NOT LIKE 'relativo ou pertencente%'
               AND s.definition NOT LIKE 'natural ou habitante%'
-            ORDER BY RANDOM() LIMIT ?
+              -- Os mesmos gentílicos noutras redações: "Pertencente às
+              -- Bermudas ou relativo a elas", "Natural das Bermudas ou seu
+              -- habitante".
+              AND s.definition NOT LIKE 'pertencente %'
+              AND s.definition NOT LIKE 'natural d%'
+              AND s.definition NOT LIKE '%habitante%'
+            ORDER BY s.id LIMIT ?
         """
-        return db.rawQuery(
-            sql,
-            arrayOf(pos, minimo.toString(), maximo.toString(), limite.toString()),
-        ).use { c ->
-            buildList {
+        val porSonda = 5
+        val achadas = LinkedHashMap<String, Triple<String, String, String>>()
+        repeat((limite / porSonda) * 2) {
+            if (achadas.size >= limite) return@repeat
+            val inicio = Random.nextLong(1, teto + 1)
+            db.rawQuery(
+                sql,
+                arrayOf(
+                    inicio.toString(), pos, minimo.toString(), maximo.toString(),
+                    porSonda.toString(),
+                ),
+            ).use { c ->
                 while (c.moveToNext()) {
-                    add(Triple(c.getString(0), c.getString(1), c.getString(2)))
+                    val definicao = c.getString(2)
+                    achadas.putIfAbsent(definicao, Triple(c.getString(0), c.getString(1), definicao))
                 }
             }
         }
+        return achadas.values.take(limite)
+    }
+
+    /** O maior id de aceção, para as sondas ao acaso. Não muda numa base aberta. */
+    private val maiorAcecao: Long by lazy {
+        db.rawQuery("SELECT MAX(id) FROM senses", null)
+            .use { if (it.moveToFirst()) it.getLong(0) else 0L }
     }
 
     /**

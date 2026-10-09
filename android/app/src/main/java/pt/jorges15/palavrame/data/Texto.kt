@@ -39,6 +39,22 @@ object Texto {
             .substringBefore(' ')
 
     /**
+     * A forma a guardar quando se regista uma palavra que o dicionário não tem.
+     *
+     * Limpa como uma seleção (aspas, pontuação, só a primeira palavra) e tira
+     * a maiúscula de início de frase: "Ensonados," passa a "ensonados". Sem
+     * isto ficavam duas entradas que só diferiam na maiúscula, o CSV submetido
+     * vinha sujo, e a palavra nunca saía da lista "em falta". Siglas e nomes
+     * com mais maiúsculas (ONU, McDonald) ficam como estão.
+     */
+    fun paraRegisto(bruto: String): String {
+        val limpo = limparSelecao(bruto)
+        if (limpo.length < 2) return limpo
+        val soInicial = limpo[0].isUpperCase() && limpo.drop(1).none { it.isUpperCase() }
+        return if (soInicial) limpo[0].lowercase() + limpo.drop(1) else limpo
+    }
+
+    /**
      * De uma seleção com várias palavras (frase enviada do leitor), a mais
      * provável de ser a que se quer procurar: a **mais comprida**. As palavras
      * que fazem parar a leitura costumam ser as longas, e "o rosto ensonado"
@@ -48,7 +64,25 @@ object Texto {
     fun palavraPrincipal(bruto: String): String =
         bruto.split(Regex("\\s+"))
             .map { it.trim { c -> !c.isLetter() && c != '-' && c != '\'' } }
-            .filter { it.isNotBlank() }
+            // Só palavras: um endereço, um número de página ou "p.123" que
+            // venham agarrados à partilha não podem ganhar por serem compridos.
+            .filter { t -> t.isNotBlank() && t.all { it.isLetter() || it == '-' || it == '\'' } }
             .maxByOrNull { it.length }
             .orEmpty()
+
+    private val enderecos = Regex("(https?://|www\\.)\\S+", RegexOption.IGNORE_CASE)
+    private val aspas = "\"'“”‘’«»„"
+
+    /**
+     * Limpa o texto que chega pelo "Partilhar" de outra app.
+     *
+     * Ao contrário da seleção direta, a partilha vem muitas vezes embrulhada: há
+     * leitores que juntam um link para o livro ou põem a passagem entre aspas.
+     * Tira-se o link, as aspas das pontas e os espaços a mais; o resto é tratado
+     * como uma seleção normal.
+     */
+    fun limparPartilha(bruto: String): String =
+        espacos.replace(enderecos.replace(bruto, " "), " ")
+            .trim()
+            .trim { it in aspas || it.isWhitespace() }
 }

@@ -215,6 +215,62 @@ class PerguntasTest {
     }
 
     @Test
+    fun `a definicao salta a acecao que nomeia a palavra e junta a seguinte`() {
+        // O caso real: a notificação anunciou "periclitante" e o jogo, sem
+        // pergunta possível para ela, perguntou outra palavra. Tirando "Que
+        // periclita" só depois de juntar, sobrava "Que está em perigo", curta
+        // de mais. Tirando antes, junta-se a aceção seguinte.
+        val acecoes = listOf(
+            "Que está em perigo",
+            "Que periclita",
+            "Que decai de maneira perigosa",
+            "Que periclita, que corre perigo.",
+        )
+        assertEquals(
+            "Que está em perigo; que decai de maneira perigosa.",
+            Perguntas.definicaoParaJogo(acecoes, "periclitante"),
+        )
+        // Sem o lema, o comportamento antigo mantém-se.
+        assertEquals(
+            "Que está em perigo; que periclita.",
+            Perguntas.definicaoParaJogo(acecoes),
+        )
+    }
+
+    @Test
+    fun `tira o pedaco que nomeia a palavra em vez de mostrar reticencias`() {
+        // As reticências apareciam quase sempre na opção certa e denunciavam-na.
+        val deferente = Candidata(
+            "deferente", "adjetivo", "Que defere; gentil, cortês e atencioso.",
+        )
+        val p = Perguntas.gerar(deferente, colecao, Random(4))!!
+        assertEquals("Gentil, cortês e atencioso.", p.definicaoCerta)
+        p.opcoes.forEach { assertTrue("ficaram reticências: $it", !it.contains("…")) }
+    }
+
+    @Test
+    fun `sem definicao que sobre usa os sinonimos`() {
+        val exultacao = Candidata("exultação", "substantivo", "Ato ou efeito de exultar.")
+        val p = Perguntas.gerar(
+            exultacao, colecao, Random(5),
+            sinonimosDoAlvo = setOf("júbilo", "regozijo", "alegria"),
+        )!!
+        assertEquals("Júbilo; regozijo; alegria.", p.definicaoCerta)
+    }
+
+    @Test
+    fun `sem definicao nem sinonimos nao ha pergunta`() {
+        val exultacao = Candidata("exultação", "substantivo", "Ato ou efeito de exultar.")
+        assertNull(Perguntas.gerar(exultacao, colecao, Random(6)))
+    }
+
+    @Test
+    fun `definicao sem o lema fica igual quando nao ha nada a tirar`() {
+        val d = "Cárcere térreo ou subterrâneo, escuro e húmido."
+        assertEquals(d, Perguntas.definicaoSemOLema(d, "enxovia"))
+    }
+
+    @Test
     fun `semelhanca ignora palavras gramaticais`() {
         // Sem ignorar 'de'/'que', duas definições quaisquer pareceriam
         // parecidas e o gerador rejeitaria distrações boas.

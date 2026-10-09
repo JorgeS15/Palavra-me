@@ -5,7 +5,9 @@ import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import pt.jorges15.palavrame.data.Dicionario
+import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.UtilizadorDb
+import pt.jorges15.palavrame.jogo.Lembrete
 import java.io.File
 import java.util.zip.GZIPInputStream
 
@@ -23,6 +25,7 @@ class PalavrameApp : Application() {
      * Não é `by lazy` porque a base pode ser instalada ou trocada com a app
      * já a correr — é exatamente o que o botão de importar faz.
      */
+    @Volatile
     var dicionario: Dicionario? = null
         private set
 
@@ -31,6 +34,16 @@ class PalavrameApp : Application() {
     override fun onCreate() {
         super.onCreate()
         abrirDicionario()
+        // Repõe o agendamento dos lembretes se não corresponder às
+        // preferências (ver `Lembrete.garantirAgendamento`).
+        val pref = Preferencias(this)
+        Lembrete.garantirAgendamento(
+            this,
+            ligado = pref.jogoLigado.value,
+            quantos = pref.quantosPorDia.value,
+            inicio = pref.inicioDaJanela.value,
+            fim = pref.fimDaJanela.value,
+        )
     }
 
     private val prefs by lazy {

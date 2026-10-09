@@ -58,7 +58,7 @@ fun EcraColecao(
         vm.apagar(p)
         ambito.launch {
             val r = estadoSnackbar.showSnackbar(
-                message = "Esqueceste «${p.lemma}»",
+                message = "Esqueceste \"${p.lemma}\"",
                 actionLabel = "Anular",
                 duration = SnackbarDuration.Short,
             )
@@ -154,14 +154,14 @@ fun EcraColecao(
             }
 
             val grupos: Map<String, List<PalavraGuardada>> = if (agruparPorLivro) {
-                filtradas.groupBy { it.livro ?: "Sem livro" }
+                filtradas.groupBy { it.livro ?: SEM_LIVRO }
             } else {
                 mapOf("" to filtradas)
             }
 
             if (filtradas.isEmpty()) {
                 Text(
-                    "Nenhuma palavra corresponde a “$filtro”.",
+                    "Nenhuma palavra corresponde a \"$filtro\".",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(16.dp),
@@ -210,6 +210,9 @@ fun EcraColecao(
     }
 }
 
+/** O grupo das palavras registadas sem livro. */
+private const val SEM_LIVRO = "Sem livro"
+
 /**
  * O nível de domínio de uma palavra (a caixa de Leitner, 0 a 5), em pontinhos.
  *
@@ -254,7 +257,7 @@ private fun LinhaPalavra(
                 // Os pontinhos do nível são do Modo Desenvolvedor.
                 if (desenvolvedor) NivelMastery(palavra.mastery)
                 palavra.frase?.let {
-                    Text("«$it»", fontStyle = FontStyle.Italic,
+                    Text("\"$it\"", fontStyle = FontStyle.Italic,
                         style = MaterialTheme.typography.bodySmall)
                 }
                 Text(

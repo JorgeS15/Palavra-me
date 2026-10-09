@@ -43,9 +43,10 @@ class Preferencias(context: Context) {
     /**
      * Quantos lembretes por dia e entre que horas.
      *
-     * Um por dia, às 21h, é o ponto de partida — o serão de quem lê. Quem
-     * quiser mais escolhe quantos e a janela; as horas saem distribuídas
-     * uniformemente por `horasDosLembretes`.
+     * Quatro por dia, das 9h às 21h, é o ponto de partida: espalha as palavras
+     * pelo dia de quem lê sem apanhar a madrugada nem a hora de dormir (9, 13,
+     * 17, 21). Quem quiser mais ou menos escolhe quantos e a janela; as horas
+     * saem distribuídas uniformemente por `horasDosLembretes`.
      */
     private val _quantosPorDia =
         MutableStateFlow(prefs.getInt(CHAVE_QUANTOS, QUANTOS_POR_OMISSAO))
@@ -110,9 +111,9 @@ class Preferencias(context: Context) {
         private const val CHAVE_FIM = "jogo_fim"
         private const val CHAVE_DESENVOLVEDOR = "modo_desenvolvedor"
 
-        const val QUANTOS_POR_OMISSAO = 1
-        const val INICIO_POR_OMISSAO = 21
-        const val FIM_POR_OMISSAO = 22
+        const val QUANTOS_POR_OMISSAO = 4
+        const val INICIO_POR_OMISSAO = 9
+        const val FIM_POR_OMISSAO = 21
 
         /**
          * Teto de lembretes por dia.

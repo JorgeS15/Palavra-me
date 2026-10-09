@@ -21,23 +21,60 @@ private val Tinta = Color(0xFF2B2B2B)
 private val Papel = Color(0xFFFBF8F3)
 private val Marcador = Color(0xFF8C5A3C)
 
+// A paleta define TODOS os papéis que os componentes usam. Os que ficavam por
+// definir caíam no lilás de origem do Material 3: o botão "Registar" (tonal),
+// os botões segmentados dos temas, o fundo dos diálogos e o contorno dos
+// cartões apareciam arroxeados ao lado do papel e da tinta.
 private val claro = lightColorScheme(
     primary = Marcador,
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFF2DFD2),
+    onPrimaryContainer = Color(0xFF3B2414),
+    secondary = Color(0xFF7A6A5C),
+    onSecondary = Papel,
+    secondaryContainer = Color(0xFFEFE3D6),
+    onSecondaryContainer = Tinta,
+    tertiary = Marcador,
+    onTertiary = Color(0xFFFFFFFF),
     background = Papel,
     surface = Papel,
     surfaceVariant = Color(0xFFF0EAE0),
+    onSurfaceVariant = Color(0xFF4F463E),
+    surfaceContainerLowest = Color(0xFFFFFCF8),
+    surfaceContainerLow = Color(0xFFF8F3EC),
+    surfaceContainer = Color(0xFFF4EEE6),
+    surfaceContainerHigh = Color(0xFFF0EAE0),
+    surfaceContainerHighest = Color(0xFFEAE3D8),
     onBackground = Tinta,
     onSurface = Tinta,
     outline = Color(0xFF8A8178),
+    outlineVariant = Color(0xFFDDD3C7),
 )
 
 private val escuro = darkColorScheme(
     primary = Color(0xFFD8A98C),
+    onPrimary = Color(0xFF2B1A10),
+    primaryContainer = Color(0xFF5A3A26),
+    onPrimaryContainer = Color(0xFFF5DCCB),
+    secondary = Color(0xFFCDBBA9),
+    onSecondary = Color(0xFF2B2219),
+    secondaryContainer = Color(0xFF3A2F26),
+    onSecondaryContainer = Color(0xFFEDE6DC),
+    tertiary = Color(0xFFD8A98C),
+    onTertiary = Color(0xFF2B1A10),
     background = Color(0xFF16130F),
     surface = Color(0xFF16130F),
     surfaceVariant = Color(0xFF2A251F),
+    onSurfaceVariant = Color(0xFFD3C8BC),
+    surfaceContainerLowest = Color(0xFF110E0B),
+    surfaceContainerLow = Color(0xFF1C1814),
+    surfaceContainer = Color(0xFF201B17),
+    surfaceContainerHigh = Color(0xFF2A251F),
+    surfaceContainerHighest = Color(0xFF353029),
     onBackground = Color(0xFFEDE6DC),
     onSurface = Color(0xFFEDE6DC),
+    outline = Color(0xFF9C9187),
+    outlineVariant = Color(0xFF4A4038),
 )
 
 /**

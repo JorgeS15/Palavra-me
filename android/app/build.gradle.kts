@@ -35,8 +35,8 @@ android {
         applicationId = "pt.jorges15.palavrame"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.14.0"
+        versionCode = 25
+        versionName = "1.16.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -53,10 +53,18 @@ android {
 
     buildTypes {
         release {
-            // Sem R8 por agora: o ganho num APK dominado por 60 MB de
-            // dicionario e residual, e o risco de partir o Room ou o
-            // Compose por reflexao nao compensa enquanto a app for pessoal.
-            isMinifyEnabled = false
+            // R8 ligado agora que a app e publica: encolhe o codigo (a
+            // biblioteca de icones traz milhares e usamos uns vinte), torna o
+            // Compose mais rapido e ofusca os nomes. As regras proprias estao
+            // em proguard-rules.pro; Room, WorkManager e Compose trazem as
+            // suas. Testar SEMPRE a versao de lancamento antes de publicar:
+            // um problema do R8 so aparece nela.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             if (temChave) {
                 signingConfig = signingConfigs.getByName("lancamento")
             } else {
@@ -87,6 +95,17 @@ android {
         // Um asset de ~60 MB precisa disto para o Gradle não o partir.
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+}
+
+/**
+ * Exporta o esquema da `utilizador.db` a cada compilação, para
+ * `app/schemas/`. Esses ficheiros vão para o git: são o registo de como a
+ * coleção era em cada versão, e é a partir deles que se testam as migrações
+ * seguintes. (As versões 1 a 3 nunca foram exportadas; o `MigracoesTest` cobre-as
+ * criando essas bases à mão.)
+ */
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 kotlin {
@@ -201,6 +220,8 @@ dependencies {
     // Esta implementação real deixa o round-trip do Backup correr na JVM.
     testImplementation("org.json:json:20231013")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

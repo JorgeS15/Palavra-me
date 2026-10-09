@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Palavrame" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      O fundo da janela é o que aparece antes de o Compose desenhar. Com o tema
+      claro do sistema e sem cor própria, quem tinha o telemóvel em escuro via
+      um clarão branco ao abrir a app. Fica a cor do papel aqui e a do fundo
+      escuro em values-night.
+    -->
+    <style name="Theme.Palavrame" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fundo_janela</item>
+    </style>
 </resources>

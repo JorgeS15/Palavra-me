@@ -14,6 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.RoomDatabase.JournalMode
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -44,6 +45,12 @@ data class PalavraGuardada(
     val page: Int? = null,
     @ColumnInfo(name = "context_snippet") val frase: String? = null,
     val note: String? = null,
+    /**
+     * O significado escrito pelo próprio, quando a palavra não está no
+     * dicionário ou está lá sem definição. É o que se pode submeter depois
+     * para a curadoria — e o que se mostra a quem volta a abrir a palavra.
+     */
+    val significado: String? = null,
     /** Caixa da repetição espaçada, 0 a 5. Ver `docs/jogo.md`. */
     val mastery: Int = 0,
     @ColumnInfo(name = "last_reviewed") val revistaEm: Long? = null,
@@ -177,9 +184,29 @@ val MIGRACAO_2_3 = object : Migration(2, 3) {
     }
 }
 
+/**
+ * v3 -> v4: o significado escrito pelo próprio.
+ *
+ * Acrescenta a coluna para o sentido que o utilizador escreve quando a palavra
+ * não está no dicionário. Nada é apagado nem reescrito: as palavras já
+ * registadas ficam com `significado` a nulo, como sempre estiveram.
+ */
+val MIGRACAO_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE saved_words ADD COLUMN significado TEXT")
+    }
+}
+
+/**
+ * Todas as migrações, por ordem. A app e o teste de migrações
+ * (`androidTest/.../MigracoesTest`) usam esta mesma lista, para não haver uma
+ * migração que a app corre e o teste não verifica.
+ */
+val MIGRACOES = arrayOf(MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4)
+
 @Database(
     entities = [PalavraGuardada::class, Progresso::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class UtilizadorDb : RoomDatabase() {
@@ -197,7 +224,14 @@ abstract class UtilizadorDb : RoomDatabase() {
                     // Sem fallbackToDestructiveMigration: apagar dados do
                     // utilizador por causa de uma migração é exatamente o
                     // que o plano proíbe. As migrações escrevem-se à mão.
-                    .addMigrations(MIGRACAO_1_2, MIGRACAO_2_3)
+                    .addMigrations(*MIGRACOES)
+                    // Diário TRUNCATE e não WAL (o padrão do Room). Em WAL as
+                    // escritas recentes vivem num `utilizador.db-wal` à parte,
+                    // e a cópia de segurança do Android, que só inclui o
+                    // `utilizador.db`, podia ficar sem os últimos registos.
+                    // Assim o ficheiro está sempre completo por si só. Numa base
+                    // deste tamanho a diferença de desempenho não se nota.
+                    .setJournalMode(JournalMode.TRUNCATE)
                     .build().also { instancia = it }
             }
     }

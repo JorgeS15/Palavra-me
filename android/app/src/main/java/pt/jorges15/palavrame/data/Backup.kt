@@ -159,6 +159,7 @@ object Backup {
         p.page?.let { put("pagina", it) }
         p.frase?.let { put("frase", it) }
         p.note?.let { put("nota", it) }
+        p.significado?.let { put("significado", it) }
         if (p.mastery != 0) put("dominio", p.mastery)
         p.revistaEm?.let { put("revista_em", it) }
         // A próxima revisão TEM de ir: sem ela, a palavra importada fica
@@ -176,6 +177,7 @@ object Backup {
             page = if (o.has("pagina")) o.optInt("pagina") else null,
             frase = o.optString("frase").takeIf { it.isNotBlank() },
             note = o.optString("nota").takeIf { it.isNotBlank() },
+            significado = o.optString("significado").takeIf { it.isNotBlank() },
             mastery = o.optInt("dominio", 0),
             revistaEm = if (o.has("revista_em")) o.optLong("revista_em") else null,
             proximaRevisao = if (o.has("proxima_revisao")) o.optLong("proxima_revisao") else null,

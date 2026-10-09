@@ -12,6 +12,269 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [app v1.16.0] - 2026-10-09
+
+Só a app.
+
+### Added
+
+- **Níveis.** "Nível 3 · Leitor atento": sete níveis com nomes ligados à
+  leitura (Folheador, Leitor, Leitor atento, Bibliófilo, Letrado, Erudito,
+  Dicionário vivo), contados pelos acertos totais (0, 10, 25, 50, 100, 200,
+  400). Medem o que se aprendeu e não o quanto se joga, e nunca descem: errar
+  faz parte da repetição espaçada. No ecrã inicial, a linha de estatísticas
+  passa a mostrar o nível, as palavras que já sabes (acertadas pelo menos três
+  vezes seguidas), os dias seguidos, os pontos e quanto falta para o nível
+  seguinte. No jogo, o topo mostra o nível em vez dos pontos, e uma resposta
+  que faz subir diz-o numa linha ("Subiste ao nível 4: Bibliófilo.").
+
+## [app v1.15.3] - 2026-10-06
+
+Só a app.
+
+### Changed
+
+- **"Querias dizer…?" enquanto se escreve.** Antes só aparecia depois de
+  carregar em procurar. Agora, quando nada começa pelo que está escrito, as
+  palavras parecidas aparecem logo por baixo da caixa, ao fim de um instante
+  sem escrever. Não aparecem se o que está escrito existir (uma flexão certa,
+  como "couberam", não recebe sugestões).
+- **"Querias dizer…?" apanha mais erros.** Antes só olhava para palavras com as
+  mesmas duas primeiras letras. Agora, se aí não encontrar nada, tenta só com a
+  primeira letra, depois com um erro na primeira letra ("xxultar" sugere
+  "exultar") e com as duas primeiras trocadas.
+- **Escrever uma palavra nova fecha a que estava aberta.** A palavra aberta de
+  uma pesquisa anterior ficava à frente e tapava as sugestões enquanto se
+  escrevia (a lista de começos e o "Querias dizer"). Passa para o histórico: o
+  "retroceder" volta a ela, e a meio de uma pesquisa sem palavra anterior limpa
+  a caixa. A app só fecha a partir do ecrã inicial vazio.
+
+### Fixed
+
+- **O "Querias dizer…?" nunca encontrava nada, e as distrações do dicionário
+  nunca chegavam ao jogo.** As duas consultas comparavam o comprimento do texto
+  com parâmetros que o Android passa como texto, e no SQLite um número
+  comparado com texto é sempre menor: a condição era falsa para tudo. Passa a
+  converter-se o parâmetro para número (`CAST`). Com as distrações do
+  dicionário a funcionar, coleções pequenas deixam de repetir sempre as mesmas
+  opções erradas, e o filtro de gentílicos foi alargado para não as deixar
+  entrar ("Natural das Bermudas…", "Pertencente às Bermudas…").
+- **A notificação anunciava uma palavra e o jogo perguntava outra**
+  ("periclitante" no aviso, "iconoclasta" no jogo). O lembrete achava a
+  palavra jogável; o jogo, ao tirar da definição o pedaço que a nomeava, ficava
+  com uma definição curta de mais e passava em silêncio à seguinte. Duas
+  correções: o pedaço que nomeia a palavra sai de cada aceção antes de as
+  juntar, e junta-se a seguinte que sirva ("Que está em perigo; que decai de
+  maneira perigosa."); e o lembrete passa a usar as mesmas funções do jogo,
+  só anunciando uma palavra depois de gerar mesmo a pergunta para ela. Também
+  deixa de avisar quando a coleção ainda não chega para jogar.
+- **O autor não seguia o livro.** Ao trocar de livro no registo, o autor
+  antigo ficava. Passa a ir agarrado ao livro: escolher um livro da lista põe
+  sempre o autor desse livro (ou nenhum), e escrever o título à mão também o
+  atualiza, a não ser que o autor tenha sido escrito à mão.
+
+### Removed
+
+- **Livro atual.** O ícone para marcar um livro como "a ler" na coleção, e a
+  linha "A ler: …" no ecrã inicial. Fazia quase o mesmo que o pré-preenchimento
+  com o último livro usado, que continua.
+
+## [0.32.0] - 2026-10-02 · app v1.15.2
+
+Pipeline e app. Tudo o que entrou depois da 1.15.1 publicada: as correções e
+melhorias da revisão de código completa, a pesquisa de locuções, o "Querias
+dizer…?", o livro atual, a receção pelo "Partilhar" e uma base mais leve.
+
+### Added
+
+- **"Querias dizer…?"** Quando uma pesquisa não encontra nada, a app sugere
+  palavras a uma ou duas letras de distância, antes de oferecer registar uma
+  palavra nova. Compara também com as flexões ("coubreram" sugere "caber") e
+  conta a troca de duas letras vizinhas como um só erro ("exlutar" sugere
+  "exultar"). Tudo no dispositivo.
+- **Pesquisa de locuções.** Uma pesquisa com espaços procura primeiro a
+  expressão inteira ("de facto", "a fim de"). A base tem cerca de dez mil
+  locuções que até aqui não se conseguiam abrir: a pesquisa cortava no primeiro
+  espaço. Uma seleção curta vinda do leitor de e-books também é tentada como
+  locução antes de se ir à palavra principal.
+- **Receber palavras pelo "Partilhar".** A Palavra-me passa a aparecer na lista
+  do Partilhar de outras apps, e não só no menu de seleção de texto (serve os
+  leitores sem esse menu, como o Kindle). O link e as aspas que alguns leitores
+  juntam ao texto são tirados antes de procurar, e a palavra principal de uma
+  passagem ignora links e números.
+- **Livro atual.** Na coleção, um ícone no cabeçalho de cada livro marca-o como
+  o livro que se está a ler: passa a vir pré-preenchido em cada registo e
+  aparece no ecrã inicial ("A ler: …"), com um X para desmarcar.
+- **Coluna de leitura em ecrãs largos.** Em tablets e com o telemóvel deitado,
+  o conteúdo fica numa coluna de no máximo 720 dp.
+- **Flexões escritas à mão na curadoria (pipeline).** O `curadoria.csv` ganha
+  uma coluna opcional `formas`, com flexões separadas por `;`, para a pesquisa
+  chegar ao lema a partir delas ("adelgaçantes" leva a "adelgaçante"). Não se
+  adivinha nada: escreve-se só o que interessa. Os adjetivos regulares em `-o`
+  continuam a receber feminino e plurais automaticamente. Linhas sem a coluna
+  continuam válidas.
+
+### Fixed
+
+- **Toque duplo no jogo contava a resposta duas vezes** (pontos e caixa de
+  Leitner a dobrar). A resposta passa a ficar marcada logo no toque.
+- **Lembretes presos ao horário antigo.** Quem ligou os lembretes com a
+  predefinição antiga (1 por dia, às 21h) ficava só com esse, enquanto as
+  Definições mostravam o horário novo. A app confere o agendamento ao arrancar
+  e reagenda quando não corresponde, sem cancelar o lembrete que esteja a
+  correr.
+- **Instalar o dicionário em "Dicionário e licenças" podia fazer a app
+  rebentar** na pesquisa seguinte: os ecrãs guardavam a base antiga, que tinha
+  sido fechada. Passam a pedi-la à app em cada uso.
+- **Palavras fora do dicionário eram registadas tal como escritas** (maiúscula
+  de início de frase, pontuação), o que criava duplicados e sujava a
+  submissão. Passam a guardar-se limpas ("Ensonados," fica "ensonados"), e uma
+  palavra registada no plural deixa de contar como em falta quando o dicionário
+  passa a ter o singular.
+- **O autor pré-preenchido no registo era o mais antigo** escrito para aquele
+  livro, e não o mais recente.
+- **Rodar o ecrã depois de vir do leitor de e-books repetia a pesquisa** e
+  perdia a palavra que entretanto se tinha aberto.
+- **Cópia de segurança completa.** A coleção deixa de usar o modo WAL, em que
+  os registos mais recentes podiam ficar num ficheiro à parte que a cópia de
+  segurança do Android não incluía.
+- **Classe gramatical com acentos** em todo o lado onde aparece: "nome
+  próprio", "advérbio", "preposição", "conjunção", "interjeição", "locução".
+
+### Changed
+
+- **Jogo sem reticências.** Em vez de esconder o nome da palavra com "…" (que
+  aparecia quase sempre na opção certa e a denunciava), tira-se da definição o
+  pedaço que a nomeia: "Que defere; gentil, cortês." passa a "Gentil, cortês.".
+  Se não sobrar definição que chegue, a opção certa passa a ser os sinónimos;
+  se nem isso houver, a palavra não é perguntada.
+- **Base mais leve dentro do APK (pipeline).** O `empacotar` gera uma cópia sem
+  o que a app nunca lê (`forms.tag`, o índice de lema para formas e o FTS):
+  203,5 MB passam a 146,2 MB instalados, e o ficheiro no APK de 64 para cerca de
+  53 MB. A base completa em `out/` não muda e continua a ser a que se valida e
+  publica. `--completa` empacota a base inteira, como antes.
+- **Distrações do jogo mais rápidas.** Deixam de usar `ORDER BY RANDOM()`, que
+  lia e ordenava todas as aceções da classe a cada pergunta, e passam a várias
+  leituras curtas a partir de pontos ao acaso.
+- **Emails.** O de contacto leva a versão da app e a data do dicionário, como o
+  da submissão. Nos dois, o assunto e o corpo vão também no próprio endereço
+  `mailto:`, para as apps de email que ignoravam os extras e abriam a mensagem
+  vazia. No CSV da submissão, um significado escrito em várias linhas passa a
+  uma só.
+- **Paleta completa.** O botão "Registar", os botões dos temas, os diálogos e os
+  contornos dos cartões deixam de aparecer no lilás de origem do Material, no
+  tema claro e no escuro. E sem clarão branco ao abrir em modo escuro.
+- Texto do canal de notificação atualizado (deixa de dizer "uma vez por dia").
+  Ao partilhar uma definição, a própria app já não aparece como destino.
+- Política de privacidade (`site/privacidade.html`): nova secção sobre submeter
+  palavras e contactar por email, e o texto "selecionado ou partilhado".
+- Definição do "Palavra-me" na curadoria sem travessão.
+
+- **R8 ligado na versão de lançamento** (otimização, encolhimento e
+  ofuscação do código, como a Play Console recomenda). A app fica mais leve e o
+  Compose mais rápido. Regras próprias em `proguard-rules.pro`: o worker do
+  lembrete e os nomes do tema (guardados nas preferências) ficam protegidos.
+
+### Removed
+
+- `Diagnostico.kt` (vazio) e os textos sem uso do `strings.xml`. O plano passa
+  a indicar o pacote definitivo, `pt.jorges15.palavrame`.
+
+### Tests
+
+- O CSV da submissão (escape de vírgulas e aspas, uma linha por palavra, quatro
+  campos) passa a ter testes, num ficheiro próprio (`Submissao.kt`) sem
+  Android. Também a coluna `formas` da curadoria, o `empacotar`, a limpeza do
+  texto partilhado e o jogo sem reticências.
+- **Teste das migrações da coleção** (`MigracoesTest`, corre num telemóvel ou
+  emulador com `.\gradlew connectedDebugAndroidTest`). Cria à mão uma
+  `utilizador.db` das versões 1 e 3, com palavras, e abre-a com a app atual: o
+  Room corre as migrações e valida o esquema, e o teste confirma que nada se
+  perdeu. A app e o teste usam a mesma lista de migrações (`MIGRACOES`). O
+  esquema passa a ser exportado para `app/schemas/` a cada compilação.
+
+## [0.31.0] - 2026-10-02 · app v1.15.1
+
+A v1.15.0 chegou a ser criada na faixa de teste mas ficou sem pacote associado
+(lançamento vazio); esta é a mesma app com o `versionName` acertado.
+
+
+Pipeline e app. Palavras que faltavam, um duplicado que afinal era da pesquisa,
+e o caminho para uma palavra fora do dicionário não ser um beco sem saída.
+
+### Added
+
+- **A curadoria pode criar lemas novos (pipeline).** Até aqui a curadoria só
+  preenchia lemas que já existiam; uma palavra ausente de todas as fontes
+  abertas — como `adelgaçante` — não tinha por onde entrar. Passa a abrir lema
+  novo quando (e só quando) nenhuma outra fonte reclamou aquela grafia, que é a
+  regra 2 que a fonte já documentava. Acrescentados `adelgaçante`, `sesgado` e a
+  entrada ovo-de-páscoa `Palavra-me`.
+
+- **Registar uma palavra fora do dicionário, com o teu significado.** Quando a
+  pesquisa não encontra nada, deixa de ser um beco: podes registá-la na mesma e
+  escrever o que ela quer dizer. O significado fica guardado na coleção (nova
+  coluna `significado`, migração v3→v4 que não toca em nada do que já lá está) e
+  volta a aparecer quando reabres a palavra. Distingue-se "não está no
+  dicionário" de "está, mas sem significado atribuído".
+
+- **Submeter palavras em falta (Definições → Contribuir).** O botão "Submeter"
+  abre um ecrã de seleção com as palavras da coleção que faltam ao dicionário —
+  ou que lá estão sem significado — (todas marcadas por omissão, desmarcam-se as
+  que não se quer) e envia-as **por email**. O assunto leva a contagem
+  ("Palavra-me: 3 palavras em falta"); o corpo leva a versão da app e a data do
+  dicionário, a lista legível das palavras, e no fim a string **CSV** sem
+  cabeçalho, pronta a colar por baixo das linhas do `seeds/curadoria.csv`.
+  **Sem rede:** a app continua sem permissão de Internet; é o email que envia.
+
+- **O teu significado fica sempre visível.** O significado que escreveste para
+  uma palavra aparece na entrada tenha ela definição ou não, inclusive depois
+  de a palavra passar a estar no dicionário numa versão seguinte. A coleção
+  nunca é tocada, portanto o contributo não se perde.
+
+- **Aviso ao registar uma palavra em falta.** Ao registar uma palavra que não
+  está no dicionário (ou sem significado), aparece um lembrete de que a podes
+  propor ao dicionário oficial em Definições, Contribuir.
+
+### Changed
+
+- **Lembretes: predefinição de 4 por dia, das 9h às 21h** (antes 1/dia às 21h).
+  Espalha as palavras pelo dia de quem lê sem apanhar a madrugada nem a hora de
+  dormir. Continua tudo configurável; quem já tinha escolhido mantém a escolha.
+
+- **Temas em botões segmentados.** A escolha do tema (secção agora "Temas", antes
+  "Aspeto") passa de uma lista de rádios empilhados para três botões numa linha
+  só — ocupa menos espaço.
+
+- **Relações com acentos.** Os cabeçalhos das palavras relacionadas mostram
+  "Sinónimos", "Antónimos", "Hiperónimos", "Hipónimos", acentuados, como devem
+  estar numa app de português (a base guarda-os por slug sem acento; o acento
+  entra na apresentação).
+
+- **Contacto nas Definições.** Uma secção "Contacto" com um botão que abre o
+  email para sugestões, problemas ou ajuda. Sem rede, como o resto.
+
+- **Texto afinado para a versão pública.** Aspas retas em todo o lado (em vez de
+  «» e ""), e sem travessões nas frases visíveis.
+
+### Fixed
+
+- **A "palavra a dobrar" na pesquisa.** Um lema atingido por duas formas de
+  superfície que normalizam para a mesma chave aparecia duas vezes na lista de
+  resultados. A pesquisa passa a agrupar por lema — uma palavra, uma linha.
+
+- **Símbolos de 1913 já não viram lemas (pipeline).** O Dicionário Aberto
+  lematiza símbolos astronómicos e de pontuação (`☿`, `(...)`, `&`, `…`); sem
+  uma única letra, normalizavam para vazio e ficavam na base como lemas
+  fantasma. Deixam de abrir lema.
+
+- **Build do dicionário imune à sincronização de nuvem (pipeline).** A F1
+  escreve agora o SQLite num ficheiro temporário local e só move o ficheiro
+  final, já fechado, para `out/`. Em pastas sincronizadas (ownCloud, OneDrive,
+  Dropbox) o cliente de sincronização mexia no `.db` a meio da escrita e
+  corrompia-o — o `database disk image is malformed` que rebentava a meio da
+  build.
+
 ## [app v1.14.0] - 2026-08-31
 
 Só a app. Ponto 3.4 da revisão: tornar o Leitner visível (no Modo Desenvolvedor).

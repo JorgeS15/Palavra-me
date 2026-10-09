@@ -18,6 +18,33 @@ import org.junit.Test
 class TextoTest {
 
     @Test
+    fun `partilha tira o link e as aspas`() {
+        assertEquals("ensonado", Texto.limparPartilha("\"ensonado\" https://read.amazon.com/kp/abc"))
+        assertEquals("de facto", Texto.limparPartilha("  «de facto»  "))
+        assertEquals("o rosto ensonado", Texto.limparPartilha("“o rosto ensonado” www.exemplo.pt/x"))
+    }
+
+    @Test
+    fun `palavra principal ignora links e numeros`() {
+        // Um link comprido não pode ganhar à palavra por ter mais letras.
+        assertEquals("ensonado", Texto.palavraPrincipal("ensonado https://read.amazon.com/kp/abcdef"))
+        assertEquals("macilento", Texto.palavraPrincipal("p.123 macilento"))
+    }
+
+    @Test
+    fun `registo de palavra em falta guarda a forma limpa`() {
+        // Maiúscula de início de frase e pontuação agarrada saem.
+        assertEquals("ensonados", Texto.paraRegisto("Ensonados,"))
+        assertEquals("ensonados", Texto.paraRegisto("  «Ensonados»  "))
+        assertEquals("água-tinta", Texto.paraRegisto("Água-tinta."))
+        // Siglas e nomes com mais maiúsculas ficam como estão.
+        assertEquals("ONU", Texto.paraRegisto("ONU"))
+        assertEquals("McDonald", Texto.paraRegisto("McDonald"))
+        // Só a primeira palavra, como na pesquisa.
+        assertEquals("rosto", Texto.paraRegisto("rosto ensonado"))
+    }
+
+    @Test
     fun `normaliza como o pipeline`() {
         assertEquals("couberam", Texto.normalizar("couberam"))
         assertEquals("pusesse", Texto.normalizar("pusesse"))

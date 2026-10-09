@@ -1,0 +1,147 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 4,
+    "identityHash": "2638932a1857371d1b57078aac2bfdeb",
+    "entities": [
+      {
+        "tableName": "saved_words",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `lemma` TEXT NOT NULL, `saved_at` INTEGER NOT NULL, `book_title` TEXT, `book_author` TEXT, `page` INTEGER, `context_snippet` TEXT, `note` TEXT, `significado` TEXT, `mastery` INTEGER NOT NULL, `last_reviewed` INTEGER, `proxima_revisao` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lemma",
+            "columnName": "lemma",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "guardadaEm",
+            "columnName": "saved_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "livro",
+            "columnName": "book_title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "autor",
+            "columnName": "book_author",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "page",
+            "columnName": "page",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "frase",
+            "columnName": "context_snippet",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "significado",
+            "columnName": "significado",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mastery",
+            "columnName": "mastery",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revistaEm",
+            "columnName": "last_reviewed",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "proximaRevisao",
+            "columnName": "proxima_revisao",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_saved_words_lemma",
+            "unique": true,
+            "columnNames": [
+              "lemma"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_saved_words_lemma` ON `${TABLE_NAME}` (`lemma`)"
+          }
+        ]
+      },
+      {
+        "tableName": "progresso",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `pontos` INTEGER NOT NULL, `sequencia` INTEGER NOT NULL, `ultimo_dia` TEXT, `acertos` INTEGER NOT NULL, `erros` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pontos",
+            "columnName": "pontos",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequencia",
+            "columnName": "sequencia",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ultimoDia",
+            "columnName": "ultimo_dia",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "acertos",
+            "columnName": "acertos",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "erros",
+            "columnName": "erros",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2638932a1857371d1b57078aac2bfdeb')"
+    ]
+  }
+}

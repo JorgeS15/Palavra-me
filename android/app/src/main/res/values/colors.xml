@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#2B2B2B</color>
+    <!-- O papel do tema claro (ver ui/theme/Tema.kt). -->
+    <color name="fundo_janela">#FBF8F3</color>
 </resources>

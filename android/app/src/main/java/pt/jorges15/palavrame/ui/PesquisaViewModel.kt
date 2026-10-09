@@ -3,6 +3,8 @@ package pt.jorges15.palavrame.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +16,7 @@ import pt.jorges15.palavrame.data.Candidato
 import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
 import pt.jorges15.palavrame.data.PalavraGuardada
+import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.data.UtilizadorDb
 import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
 
@@ -23,15 +26,24 @@ data class EstadoPesquisa(
     val candidatos: List<Candidato> = emptyList(),
     val entrada: Entrada? = null,
     val procurou: Boolean = false,
+    /** "Querias dizer…?" — só preenchido quando a pesquisa não encontrou nada. */
+    val parecidas: List<String> = emptyList(),
 )
 
 /** Um livro já na coleção, com o autor que lhe ficou associado (se algum). */
 data class Livro(val titulo: String, val autor: String?)
 
 class PesquisaViewModel(
-    private val dicionario: Dicionario?,
+    /**
+     * Pede-se o dicionário à app em cada uso, em vez de guardar a instância
+     * do arranque: instalar uma base nova (em "Dicionário e licenças") fecha a
+     * antiga, e uma referência guardada rebentava na pesquisa seguinte.
+     */
+    private val obterDicionario: () -> Dicionario?,
     private val utilizador: UtilizadorDb,
 ) : ViewModel() {
+
+    private val dicionario: Dicionario? get() = obterDicionario()
 
     private val _estado = MutableStateFlow(EstadoPesquisa())
     val estado: StateFlow<EstadoPesquisa> = _estado.asStateFlow()
@@ -64,21 +76,52 @@ class PesquisaViewModel(
      */
     val livrosUsados: Flow<List<Livro>> = palavrasGuardadas.map { lista ->
         // A lista vem por data decrescente (ver o DAO), portanto o primeiro
-        // registo de cada título é o mais recente. `associateBy` mantém o
-        // primeiro que vê para cada chave, que é exatamente o que se quer.
+        // registo de cada título é o mais recente. `groupBy` mantém essa ordem
+        // dentro de cada grupo, e fica-se com o primeiro autor escrito. (Era
+        // `associate`, que guarda o ÚLTIMO valor de cada chave: pré-preenchia
+        // o autor mais antigo, ao contrário do que se queria.)
         lista.filter { !it.livro.isNullOrBlank() }
-            .associate { it.livro!! to it.autor }
-            .map { (titulo, autor) -> Livro(titulo, autor) }
+            .groupBy { it.livro!! }
+            .map { (titulo, registos) ->
+                Livro(titulo, registos.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) })
+            }
     }
 
+    /** O trabalho da tecla anterior: cancela-se quando se escreve outra. */
+    private var aEscrever: Job? = null
+
     fun escrever(texto: String) {
-        _estado.value = _estado.value.copy(texto = texto, procurou = false)
-        viewModelScope.launch {
+        // Escrever é começar uma pesquisa nova: a palavra que estava aberta (e
+        // a lista de candidatos) sai da frente, senão tapava as sugestões — o
+        // ecrã dá prioridade à entrada aberta, e nem a lista de começos nem o
+        // "Querias dizer" chegavam a aparecer. A palavra fica no histórico, e o
+        // "retroceder" volta a ela.
+        _estado.value.entrada?.let { historico.addLast(it) }
+        _estado.value = _estado.value.copy(
+            texto = texto, procurou = false, parecidas = emptyList(),
+            entrada = null, candidatos = emptyList(),
+        )
+        aEscrever?.cancel()
+        aEscrever = viewModelScope.launch {
             val sugestoes = withContext(Dispatchers.IO) {
                 dicionario?.sugerir(texto).orEmpty()
             }
-            if (_estado.value.texto == texto) {
-                _estado.value = _estado.value.copy(sugestoes = sugestoes)
+            if (_estado.value.texto != texto) return@launch
+            _estado.value = _estado.value.copy(sugestoes = sugestoes)
+
+            // "Querias dizer…?" enquanto se escreve: quando nada começa pelo
+            // que foi escrito, é provável que haja um erro. Espera-se um
+            // instante (se vier outra tecla, isto é cancelado) e só se sugere
+            // se o que está escrito não existir — "couberam" não aparece na
+            // lista de começos, mas é uma flexão certa e não merece sugestões.
+            if (sugestoes.isNotEmpty() || Texto.normalizar(texto).length < 4) return@launch
+            delay(350)
+            val parecidas = withContext(Dispatchers.IO) {
+                val d = dicionario ?: return@withContext emptyList()
+                if (d.procurar(texto).isNotEmpty()) emptyList() else d.parecidas(texto)
+            }
+            if (_estado.value.texto == texto && !_estado.value.procurou) {
+                _estado.value = _estado.value.copy(parecidas = parecidas)
             }
         }
     }
@@ -90,7 +133,16 @@ class PesquisaViewModel(
      */
     fun procurarComContexto(palavra: String, frase: String) {
         _fraseSugerida.value = frase
-        procurar(palavra)
+        viewModelScope.launch {
+            // Uma seleção curta pode ser ela própria uma locução ("de facto",
+            // "a fim de"). Se for, procura-se a expressão inteira; senão, a
+            // palavra principal, como antes.
+            val curta = frase.trim().split(Regex("\\s+")).size in 2..4
+            val eExpressao = curta && withContext(Dispatchers.IO) {
+                dicionario?.procurarExpressao(frase).orEmpty().isNotEmpty()
+            }
+            procurar(if (eExpressao) frase.trim() else palavra)
+        }
     }
 
     /** A frase de contexto foi usada (ou dispensada): esquece-a. */
@@ -100,6 +152,7 @@ class PesquisaViewModel(
 
     /** Chamado pela pesquisa e também pelo PROCESS_TEXT vindo do e-book. */
     fun procurar(texto: String = _estado.value.texto) {
+        aEscrever?.cancel()   // a pesquisa substitui as sugestões da escrita
         viewModelScope.launch {
             val candidatos = withContext(Dispatchers.IO) {
                 dicionario?.procurar(texto).orEmpty()
@@ -108,6 +161,11 @@ class PesquisaViewModel(
             val entrada = if (candidatos.size == 1) {
                 withContext(Dispatchers.IO) { dicionario?.entrada(candidatos[0].lemmaId) }
             } else null
+            // Nada encontrado: palavras parecidas, para o caso de ser um erro
+            // de escrita, antes de oferecer registá-la como nova.
+            val parecidas = if (candidatos.isEmpty()) {
+                withContext(Dispatchers.IO) { dicionario?.parecidas(texto).orEmpty() }
+            } else emptyList()
 
             empilhar(entrada)
             _estado.value = _estado.value.copy(
@@ -116,6 +174,7 @@ class PesquisaViewModel(
                 candidatos = candidatos,
                 entrada = entrada,
                 procurou = true,
+                parecidas = parecidas,
             )
         }
     }
@@ -148,12 +207,14 @@ class PesquisaViewModel(
             candidatos = emptyList(),
             sugestoes = emptyList(),
             procurou = true,
+            parecidas = emptyList(),
         )
         return true
     }
 
     /** Limpa a pesquisa e volta ao ecrã vazio. */
     fun limpar() {
+        aEscrever?.cancel()
         historico.clear()
         _fraseSugerida.value = null
         _estado.value = EstadoPesquisa()
@@ -208,5 +269,43 @@ class PesquisaViewModel(
         if (lista.size < MINIMO_PARA_JOGAR) return@map 0
         val agora = System.currentTimeMillis()
         lista.count { it.proximaRevisao == null || it.proximaRevisao <= agora }
+    }
+}
+
+/** Como uma palavra registada falha o dicionário. */
+enum class TipoFalta { NAO_ENCONTRADA, SEM_SIGNIFICADO }
+
+/** Uma palavra da coleção que o dicionário não cobre — candidata a submissão. */
+data class PalavraEmFalta(
+    val lemma: String,
+    val significadoProprio: String?,
+    val tipo: TipoFalta,
+)
+
+/**
+ * As palavras registadas que o dicionário não cobre: as que não existem lá de
+ * todo, e as que existem mas sem significado atribuído. É o que se submete
+ * para a curadoria — e distingue-se um caso do outro, como o Jorge pediu.
+ *
+ * Corre em IO: percorre a coleção e consulta o dicionário por cada palavra.
+ */
+suspend fun palavrasEmFalta(
+    dicionario: Dicionario?,
+    utilizador: UtilizadorDb,
+): List<PalavraEmFalta> = withContext(Dispatchers.IO) {
+    val dic = dicionario ?: return@withContext emptyList()
+    utilizador.palavras().todasAgora().mapNotNull { p ->
+        // Primeiro a grafia exata; se falhar, pelas formas (como a pesquisa).
+        // Assim uma palavra registada no plural ou com outra grafia deixa de
+        // contar como "em falta" quando o dicionário a passa a ter.
+        val entrada = dic.entradaPorLema(p.lemma)
+            ?: dic.procurar(p.lemma).firstOrNull()?.let { dic.entrada(it.lemmaId) }
+        when {
+            entrada == null ->
+                PalavraEmFalta(p.lemma, p.significado, TipoFalta.NAO_ENCONTRADA)
+            entrada.acecoes.isEmpty() ->
+                PalavraEmFalta(p.lemma, p.significado, TipoFalta.SEM_SIGNIFICADO)
+            else -> null
+        }
     }
 }

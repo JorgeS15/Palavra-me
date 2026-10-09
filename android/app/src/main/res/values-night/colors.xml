@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- O fundo do tema escuro (ver ui/theme/Tema.kt). -->
+    <color name="fundo_janela">#16130F</color>
+</resources>

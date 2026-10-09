@@ -49,6 +49,17 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+
+            <!--
+              O mesmo gesto pelo "Partilhar", para os leitores que não mostram
+              a Palavra-me no menu de seleção de texto (o Kindle, por exemplo)
+              mas deixam partilhar a passagem selecionada.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

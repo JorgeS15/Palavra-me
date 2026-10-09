@@ -22,6 +22,7 @@ class BackupTest {
             page = 42,
             frase = "Tinha o rosto ensonado.",
             note = "coloquial",
+            significado = "Que tem sono; sonolento.",
             mastery = 5,
             revistaEm = 2000L,
             proximaRevisao = 3000L,
@@ -37,6 +38,7 @@ class BackupTest {
         assertEquals(p.page, volta.page)
         assertEquals(p.frase, volta.frase)
         assertEquals(p.note, volta.note)
+        assertEquals(p.significado, volta.significado)
         assertEquals(p.mastery, volta.mastery)
         assertEquals(p.revistaEm, volta.revistaEm)
         // O campo do bug 1.1: sem ele, a coleção importada voltava toda à fila.

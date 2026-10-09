@@ -60,12 +60,16 @@ object Lembrete {
      * se o sistema matar um, os outros continuam, e reconfigurar é só voltar
      * a chamar isto.
      *
-     * Cancela-se sempre tudo antes de agendar, senão as horas antigas
-     * ficavam a tocar ao lado das novas.
+     * Cancelam-se as horas que deixam de existir, senão ficavam a tocar ao
+     * lado das novas. As que se mantêm são atualizadas e não canceladas:
+     * cancelar tudo antes de agendar podia matar o próprio lembrete que
+     * estivesse a correr nesse momento (o reagendamento ao arrancar pode
+     * acontecer dentro do processo aberto pelo lembrete).
      */
     fun agendar(context: Context, quantos: Int, inicio: Int, fim: Int) {
         val gestor = WorkManager.getInstance(context)
-        cancelar(context)
+        val horas = horasDosLembretes(quantos, inicio, fim)
+        (0..23).filter { it !in horas }.forEach { gestor.cancelUniqueWork("$TRABALHO-$it") }
 
         val restricoes = Constraints.Builder()
             // Só quando a bateria não está em apuros. Um jogo de vocabulário
@@ -73,7 +77,7 @@ object Lembrete {
             .setRequiresBatteryNotLow(true)
             .build()
 
-        horasDosLembretes(quantos, inicio, fim).forEach { hora ->
+        horas.forEach { hora ->
             val pedido = PeriodicWorkRequestBuilder<LembreteWorker>(1, TimeUnit.DAYS)
                 .setInitialDelay(minutosAte(hora), TimeUnit.MINUTES)
                 .setConstraints(restricoes)
@@ -83,18 +87,48 @@ object Lembrete {
                 "$TRABALHO-$hora", ExistingPeriodicWorkPolicy.UPDATE, pedido
             )
         }
+        preferenciasInternas(context).edit()
+            .putString(CHAVE_AGENDADO, assinatura(quantos, inicio, fim)).apply()
     }
 
     fun cancelar(context: Context) {
         WorkManager.getInstance(context).cancelAllWorkByTag(ETIQUETA)
+        preferenciasInternas(context).edit().remove(CHAVE_AGENDADO).apply()
     }
+
+    /**
+     * Garante que o que está agendado corresponde às preferências. Chamar ao
+     * arrancar a app.
+     *
+     * Só as Definições agendavam. Quem ligou os lembretes com a predefinição
+     * antiga (1 por dia, às 21h) e nunca mexeu no número ficava com esse
+     * agendamento para sempre, enquanto o ecrã — que lê as preferências, com a
+     * predefinição nova — dizia "9h, 13h, 17h, 21h". Compara-se a assinatura do
+     * que foi agendado com a das preferências e reagenda-se só se divergirem:
+     * reagendar a cada arranque reiniciaria os atrasos sem necessidade.
+     */
+    fun garantirAgendamento(context: Context, ligado: Boolean, quantos: Int, inicio: Int, fim: Int) {
+        if (!ligado) return
+        val agendado = preferenciasInternas(context).getString(CHAVE_AGENDADO, null)
+        if (agendado != assinatura(quantos, inicio, fim)) {
+            agendar(context, quantos, inicio, fim)
+        }
+    }
+
+    private fun assinatura(quantos: Int, inicio: Int, fim: Int) =
+        horasDosLembretes(quantos, inicio, fim).joinToString(",")
+
+    private fun preferenciasInternas(context: Context) =
+        context.getSharedPreferences("palavrame", Context.MODE_PRIVATE)
+
+    private const val CHAVE_AGENDADO = "lembretes_agendados"
 
     fun criarCanal(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val canal = NotificationChannel(
             CANAL, "Revisão diária", NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Uma palavra da tua coleção, uma vez por dia."
+            description = "Palavras da tua coleção, nas horas que escolheste."
         }
         context.getSystemService(NotificationManager::class.java)
             ?.createNotificationChannel(canal)
@@ -127,10 +161,7 @@ object Lembrete {
         val notificacao = NotificationCompat.Builder(context, CANAL)
             // A palavra aparece; a definição não. Se a notificação
             // respondesse à pergunta, não valia a pena abrir a app.
-            // Aspas curvas e não angulares («»): numa notificação curta e a
-            // negrito, o «palavra» lê-se como <<palavra>>. As curvas são
-            // inequívocas em qualquer tipo de letra do sistema.
-            .setContentTitle("Ainda te lembras de “$lemma”?")
+            .setContentTitle("Ainda te lembras de \"$lemma\"?")
             .setContentText("Uma palavra da tua coleção, à espera.")
             .setSmallIcon(R.drawable.ic_notificacao)
             .setContentIntent(pendente)

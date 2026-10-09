@@ -15,9 +15,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import pt.jorges15.palavrame.data.Entrada
+import pt.jorges15.palavrame.data.rotuloPos
 import pt.jorges15.palavrame.jogo.EstadoJogo
 import pt.jorges15.palavrame.jogo.JogoViewModel
 import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
+import pt.jorges15.palavrame.jogo.Niveis
 
 /**
  * O ecrã do jogo.
@@ -47,7 +49,9 @@ fun EcraJogo(vm: JogoViewModel, aoVoltar: () -> Unit) {
                 actions = {
                     progresso?.let {
                         Text(
-                            "${it.pontos} pontos",
+                            // O nível, e não os pontos: é o número que diz
+                            // onde se está.
+                            "Nível ${Niveis.para(it.acertos).numero}",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.padding(end = 16.dp),
@@ -81,7 +85,7 @@ fun EcraJogo(vm: JogoViewModel, aoVoltar: () -> Unit) {
                 is EstadoJogo.NadaARever -> Explicacao(
                     titulo = "Nada a rever",
                     texto = "Já reviste tudo o que estava por rever. As palavras "
-                        + "voltam sozinhas quando for altura — quanto melhor as "
+                        + "voltam sozinhas quando for altura. Quanto melhor as "
                         + "souberes, mais tempo demoram.",
                     aoVoltar = aoVoltar,
                 )
@@ -100,7 +104,7 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
     ) {
         if (e.treinoLivre) {
             Text(
-                "Treino livre — não há nada a rever hoje, e por isso o "
+                "Treino livre: não há nada a rever hoje, e por isso o "
                     + "calendário não mexe.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
@@ -115,7 +119,7 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
         )
         if (e.pergunta.pos.isNotBlank() && e.pergunta.pos != "desconhecido") {
             Text(
-                e.pergunta.pos,
+                rotuloPos(e.pergunta.pos),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -178,6 +182,16 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
+            // Subir de nível merece uma linha, e só uma: sem medalhas nem
+            // animações, como o resto da app.
+            e.subiuDeNivel?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Subiste ao nível ${it.numero}: ${it.nome}.",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             DepoisDeResponder(e)
             Spacer(Modifier.height(28.dp))
             // Uma pergunta, e acabou: a sessão tem de caber no intervalo em
@@ -225,7 +239,7 @@ private fun DepoisDeResponder(e: EstadoJogo.AJogar) {
         Spacer(Modifier.height(4.dp))
         e.frase?.let {
             Text(
-                "«$it»",
+                "\"$it\"",
                 style = MaterialTheme.typography.bodyMedium,
                 fontStyle = FontStyle.Italic,
             )

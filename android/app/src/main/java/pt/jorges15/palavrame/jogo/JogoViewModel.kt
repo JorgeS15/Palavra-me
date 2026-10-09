@@ -47,6 +47,8 @@ sealed interface EstadoJogo {
         val bonus: Int = 0,
         val total: Int = 0,
         val sequencia: Int = 0,
+        /** O nível novo, se esta resposta fez subir (nulo se não subiu). */
+        val subiuDeNivel: Nivel? = null,
         /** Não havia nada vencido: joga-se, mas o calendário não mexe. */
         val treinoLivre: Boolean = false,
         /**
@@ -70,7 +72,12 @@ sealed interface EstadoJogo {
  * Aqui só se lê, se escreve e se decide o que mostrar a seguir.
  */
 class JogoViewModel(
-    private val dicionario: Dicionario?,
+    /**
+     * Pede-se o dicionário à app em cada uso, em vez de guardar a instância
+     * do arranque: instalar uma base nova fecha a antiga, e uma referência
+     * guardada rebentava na consulta seguinte ("already-closed object").
+     */
+    private val obterDicionario: () -> Dicionario?,
     private val utilizador: UtilizadorDb,
     /**
      * O Modo Desenvolvedor está ligado.
@@ -94,6 +101,8 @@ class JogoViewModel(
     private val aleatorio: Random = Random.Default,
     private val agora: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
+
+    private val dicionario: Dicionario? get() = obterDicionario()
 
     private val _estado = MutableStateFlow<EstadoJogo>(EstadoJogo.ACarregar)
     val estado: StateFlow<EstadoJogo> = _estado.asStateFlow()
@@ -124,7 +133,9 @@ class JogoViewModel(
 
     private suspend fun montar(): EstadoJogo {
         val guardadas = utilizador.palavras().todasAgora()
-        todas = guardadas.mapNotNull { p -> candidata(p)?.let { p.lemma to it } }.toMap()
+        // As mesmas funções que o lembrete usa (ver `Escolha.kt`): a palavra
+        // anunciada na notificação é sempre uma que o jogo consegue perguntar.
+        todas = candidatas(dicionario, guardadas)
 
         if (todas.size < MINIMO_PARA_JOGAR) {
             return EstadoJogo.PoucasPalavras(todas.size)
@@ -152,13 +163,7 @@ class JogoViewModel(
         // não é falha nenhuma: quer dizer que não havia distrações à altura.
         for (palavra in fila) {
             val alvo = todas[palavra.lemma] ?: continue
-            val pergunta = Perguntas.gerar(
-                alvo = alvo,
-                outras = todas.values.filter { it.lemma != alvo.lemma },
-                aleatorio = aleatorio,
-                reserva = reserva(alvo),
-                sinonimosDoAlvo = dicionario?.sinonimosDe(alvo.lemma) ?: emptySet(),
-            ) ?: continue
+            val pergunta = perguntaPara(dicionario, alvo, todas, aleatorio) ?: continue
             return EstadoJogo.AJogar(
                 pergunta = pergunta,
                 treinoLivre = semCalendario,
@@ -169,45 +174,20 @@ class JogoViewModel(
     }
 
     /**
-     * Uma palavra guardada transformada em candidata, ou nulo se o dicionário
-     * não lhe der uma definição jogável.
+     * Uma resposta já a caminho da base. O estado só passa a "respondida"
+     * depois de gravar, e nesse intervalo as opções continuavam tocáveis: um
+     * toque duplo contava a resposta duas vezes (pontos e caixa de Leitner).
+     * Marca-se aqui, no fio principal, antes de lançar a escrita.
      */
-    private fun candidata(p: PalavraGuardada): Candidata? {
-        // Consulta leve: só a classe e as definições, sem os exemplos e as
-        // relacionadas que a `Candidata` deitava fora (ponto 2.1 da revisão).
-        val (pos, definicoes) = dicionario?.candidataDeJogo(p.lemma) ?: return null
-        val definicao = Perguntas.definicaoParaJogo(definicoes) ?: return null
-        return Candidata(
-            lemma = p.lemma,
-            pos = pos,
-            definicao = definicao,
-            livro = p.livro,
-            frase = p.frase,
-        )
-    }
-
-    /**
-     * Distrações do dicionário, para quando a coleção ainda é pequena.
-     *
-     * Só se vai buscá-las quando fazem falta: numa coleção crescida é uma
-     * consulta cara e inútil.
-     */
-    private fun reserva(alvo: Candidata): List<Candidata> {
-        if (todas.size - 1 >= Perguntas.COLECAO_AUTOSSUFICIENTE) return emptyList()
-        val d = dicionario ?: return emptyList()
-        val n = alvo.definicao.length
-        return d.definicoesParaDistracao(
-            pos = alvo.pos,
-            minimo = maxOf(Perguntas.MIN_CARACTERES, (n / 2.0).toInt()),
-            maximo = n * 2,
-        ).map { (lemma, pos, definicao) -> Candidata(lemma, pos, definicao) }
-    }
+    private var aResponder = false
 
     fun responder(opcao: Int) {
         val atual = _estado.value as? EstadoJogo.AJogar ?: return
-        if (atual.respondida != null) return          // já respondeu a esta
+        if (atual.respondida != null || aResponder) return  // já respondeu a esta
+        aResponder = true
 
         viewModelScope.launch {
+          try {
             val acertou = opcao == atual.pergunta.indiceCerto
             val lemma = atual.pergunta.lemma
 
@@ -222,7 +202,10 @@ class JogoViewModel(
                     contaParaOCalendario = !semCalendario,
                 )
                 gravar(guardada, avanco)
-                Resultado(dicionario?.entradaPorLema(lemma), avanco, avanco.ganho(anterior))
+                Resultado(
+                    dicionario?.entradaPorLema(lemma), avanco, avanco.ganho(anterior),
+                    Niveis.subiu(anterior.acertos, avanco.pontuacao.acertos),
+                )
             }
 
             _estado.value = atual.copy(
@@ -234,12 +217,21 @@ class JogoViewModel(
                 bonus = resultado.avanco.bonus,
                 total = resultado.avanco.pontuacao.pontos,
                 sequencia = resultado.avanco.pontuacao.sequencia,
+                subiuDeNivel = resultado.subiuDeNivel,
             )
+          } finally {
+            aResponder = false
+          }
         }
     }
 
     /** O que a resposta produziu, passado do fio de fundo para o estado. */
-    private data class Resultado(val entrada: Entrada?, val avanco: Avanco, val ganho: Int)
+    private data class Resultado(
+        val entrada: Entrada?,
+        val avanco: Avanco,
+        val ganho: Int,
+        val subiuDeNivel: Nivel?,
+    )
 
     private suspend fun pontuacaoAtual(): Pontuacao {
         val p = utilizador.progresso().atual() ?: Progresso()

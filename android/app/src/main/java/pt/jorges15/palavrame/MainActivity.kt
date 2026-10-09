@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,6 +45,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val app = application as PalavrameApp
         val preferencias = Preferencias(this)
+        // O texto vindo do leitor de e-books trata-se só na primeira criação.
+        // Ao rodar o ecrã a atividade é recriada com o mesmo intent, e repetir
+        // a pesquisa deitava fora a navegação entretanto feita (um sinónimo
+        // aberto, a frase de contexto).
+        val primeiraCriacao = savedInstanceState == null
 
         setContent {
             val tema by preferencias.tema.collectAsState()
@@ -88,8 +94,12 @@ class MainActivity : ComponentActivity() {
                 // que uma palavra, procura-se a principal e guarda-se a frase
                 // inteira como contexto, para pré-preencher o registo (3.1).
                 LaunchedEffect(Unit) {
+                    if (!primeiraCriacao) return@LaunchedEffect
                     val recebido = textoRecebido() ?: return@LaunchedEffect
-                    val frase = recebido.trim()
+                    // Pela partilha pode vir um link ou aspas agarradas; sai
+                    // tudo isso antes de decidir o que procurar.
+                    val frase = Texto.limparPartilha(recebido)
+                    if (frase.isBlank()) return@LaunchedEffect
                     if (frase.any { it.isWhitespace() }) {
                         val palavra = Texto.palavraPrincipal(frase)
                         if (palavra.isNotBlank()) {
@@ -100,6 +110,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                LarguraDeLeitura {
                 when (ecra) {
                     Ecra.COLECAO -> {
                         val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
@@ -136,6 +147,7 @@ class MainActivity : ComponentActivity() {
                         aoAbrirJogo = { ecra = Ecra.JOGO },
                     )
                 }
+                }
             }
         }
     }
@@ -150,7 +162,7 @@ class MainActivity : ComponentActivity() {
     private fun fabrica(app: PalavrameApp) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            PesquisaViewModel(app.dicionario, app.utilizador) as T
+            PesquisaViewModel({ app.dicionario }, app.utilizador) as T
     }
 
     private fun fabricaJogo(
@@ -161,10 +173,30 @@ class MainActivity : ComponentActivity() {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             JogoViewModel(
-                app.dicionario, app.utilizador,
+                { app.dicionario }, app.utilizador,
                 treinoLivre = treinoLivre,
                 lemaPreferido = lemaPreferido,
             ) as T
+    }
+}
+
+/**
+ * Limita a largura do conteúdo a uma coluna de leitura.
+ *
+ * Num telemóvel não muda nada. Num tablet, ou num telemóvel deitado, as
+ * definições estendiam-se de margem a margem, com linhas de 150 caracteres
+ * que se leem mal. Centra-se uma coluna de no máximo 720 dp; o fundo à volta é
+ * o mesmo papel, por isso a fronteira não se vê.
+ */
+@Composable
+private fun LarguraDeLeitura(conteudo: @Composable () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(Modifier.fillMaxHeight().widthIn(max = 720.dp).fillMaxWidth()) {
+            conteudo()
+        }
     }
 }
 

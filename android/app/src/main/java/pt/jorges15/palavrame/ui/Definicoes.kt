@@ -97,6 +97,11 @@ fun EcraDefinicoes(
     // quando já não há nada de novo para instalar.
     var haNovoNoApk by remember { mutableStateOf(app.temDicionarioEmpacotado()) }
 
+    // Submissão de palavras em falta — sem rede: a app entrega a lista ao
+    // email (é o email que envia; a app continua sem permissão de Internet).
+    var mensagemFalta by remember { mutableStateOf<String?>(null) }
+    var mostrarSubmissao by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -112,17 +117,24 @@ fun EcraDefinicoes(
         Column(
             Modifier.padding(padding).verticalScroll(rememberScrollState()),
         ) {
-            Seccao("Aspeto")
-            Tema.entries.forEach { opcao ->
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clickable { preferencias.definirTema(opcao) }
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = tema == opcao, onClick = { preferencias.definirTema(opcao) })
-                    Spacer(Modifier.width(8.dp))
-                    Text(opcao.etiqueta, style = MaterialTheme.typography.bodyLarge)
+            Seccao("Temas")
+            // Botões segmentados: as três opções numa linha só, em vez de uma
+            // lista de rádios empilhados que ocupava o triplo do espaço. No
+            // segmento, "Como o telemóvel" encurta-se para "Sistema" — não
+            // cabia, e ali ao lado de "Claro"/"Escuro" percebe-se na mesma.
+            SingleChoiceSegmentedButtonRow(
+                Modifier.fillMaxWidth().padding(16.dp, 4.dp),
+            ) {
+                Tema.entries.forEachIndexed { i, opcao ->
+                    SegmentedButton(
+                        selected = tema == opcao,
+                        onClick = { preferencias.definirTema(opcao) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = i, count = Tema.entries.size,
+                        ),
+                    ) {
+                        Text(if (opcao == Tema.SISTEMA) "Sistema" else opcao.etiqueta)
+                    }
                 }
             }
 
@@ -162,6 +174,25 @@ fun EcraDefinicoes(
                 )
             }
 
+            Seccao("Contribuir")
+            Text(
+                "Contribui com novas palavras para o dicionário.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(16.dp, 4.dp),
+            )
+            OutlinedButton(
+                onClick = { mostrarSubmissao = true },
+                modifier = Modifier.padding(16.dp, 8.dp),
+            ) { Text("Submeter por mail") }
+            mensagemFalta?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
+                )
+            }
+
             Seccao("Sobre")
             Linha("Versão da app", BuildConfig.VERSION_NAME)
             // O dicionário e as licenças passam para um ecrã só deles: são
@@ -185,10 +216,68 @@ fun EcraDefinicoes(
                 )
             }
 
+            Seccao("Contacto")
+            Text(
+                "Sugestões, problemas ou ajuda.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(16.dp, 4.dp),
+            )
+            OutlinedButton(
+                onClick = {
+                    // Espaço para a mensagem em cima; a versão da app e a data
+                    // do dicionário vão no fundo, para saber de que build veio
+                    // o contacto (como na submissão de palavras).
+                    val intent = intentEmail(
+                        para = CONTACTO_EMAIL,
+                        assunto = "Palavra-me: contacto",
+                        corpo = "\n\n" + linhaVersao(
+                            BuildConfig.VERSION_NAME, app.dicionario?.construidoEm,
+                        ),
+                    )
+                    mensagem = try {
+                        context.startActivity(intent); null
+                    } catch (e: Exception) {
+                        "Não encontrei uma app de email neste telemóvel."
+                    }
+                },
+                modifier = Modifier.padding(16.dp, 8.dp),
+            ) { Text("Contactar por email") }
+            mensagem?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
+                )
+            }
+
             Seccao("Avançado")
             SeccaoDesenvolvedor(preferencias)
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (mostrarSubmissao) {
+        DialogoSubmeterFaltas(
+            app = app,
+            aoFechar = { mostrarSubmissao = false },
+            aoEnviar = { escolhidas ->
+                val intent = intentEmail(
+                    para = EMAIL_SUBMISSAO,
+                    assunto = assuntoSubmissao(escolhidas.size),
+                    corpo = corpoDeFalta(
+                        escolhidas, BuildConfig.VERSION_NAME,
+                        app.dicionario?.construidoEm,
+                    ),
+                )
+                try {
+                    context.startActivity(intent)
+                    mensagemFalta = null
+                } catch (e: Exception) {
+                    mensagemFalta = "Não encontrei uma app de email neste telemóvel."
+                }
+            },
+        )
     }
 }
 
@@ -504,3 +593,111 @@ private fun Linha(etiqueta: String, valor: String) {
         )
     }
 }
+
+// --- submissão de palavras em falta ---------------------------------------
+
+/**
+ * Escolher quais palavras em falta submeter.
+ *
+ * Abre com todas marcadas — o caso comum é enviá-las todas — e deixa desmarcar
+ * as que não se quer mandar (um registo a meio, uma palavra que afinal não
+ * interessa). A submissão vai por email.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DialogoSubmeterFaltas(
+    app: PalavrameApp,
+    aoFechar: () -> Unit,
+    aoEnviar: (List<PalavraEmFalta>) -> Unit,
+) {
+    // null = ainda a procurar; lista vazia = não há nada em falta.
+    var faltas by remember { mutableStateOf<List<PalavraEmFalta>?>(null) }
+    val marcadas = remember { mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(Unit) {
+        val lista = palavrasEmFalta(app.dicionario, app.utilizador)
+        lista.forEach { marcadas[it.lemma] = true }
+        faltas = lista
+    }
+    val escolhidas = faltas.orEmpty().filter { marcadas[it.lemma] == true }
+
+    AlertDialog(
+        onDismissRequest = aoFechar,
+        title = { Text("Submeter palavras em falta") },
+        text = {
+            val lista = faltas
+            when {
+                lista == null -> Text("A procurar…")
+                lista.isEmpty() ->
+                    Text("Não tens palavras em falta. Está tudo no dicionário.")
+                else -> Column(
+                    Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())
+                ) {
+                    lista.forEach { f ->
+                        val marcada = marcadas[f.lemma] ?: true
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { marcadas[f.lemma] = !marcada }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = marcada,
+                                onCheckedChange = { marcadas[f.lemma] = it },
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(f.lemma, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    if (f.tipo == TipoFalta.NAO_ENCONTRADA)
+                                        "não está no dicionário"
+                                    else "sem significado",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!faltas.isNullOrEmpty()) {
+                TextButton(
+                    enabled = escolhidas.isNotEmpty(),
+                    onClick = { aoEnviar(escolhidas); aoFechar() },
+                ) { Text("Enviar por email") }
+            }
+        },
+        dismissButton = { TextButton(onClick = aoFechar) { Text("Fechar") } },
+    )
+}
+
+// Para onde vão as submissões e como as identificar na caixa de entrada. É o
+// email do Jorge, não o de contacto público da app: chega-lhe direto.
+private const val EMAIL_SUBMISSAO = "jorgea15santos@gmail.com"
+
+// Contacto geral (sugestões, problemas, ajuda). O mesmo email das submissões.
+private const val CONTACTO_EMAIL = "jorgea15santos@gmail.com"
+
+// O assunto, o corpo e o CSV da submissão vivem em `Submissao.kt`, sem
+// Android, para se poderem testar.
+
+/**
+ * Um email pronto a enviar, para abrir na app de email da pessoa.
+ *
+ * O destinatário, o assunto e o corpo vão em dois sítios: no endereço
+ * `mailto:` (que todas as apps de email leem) e nos extras do intent (que a
+ * maioria prefere). Algumas apps ignoram os extras e abriam o email vazio;
+ * outras ignoram o endereço. Com os dois, todas recebem tudo.
+ */
+private fun intentEmail(para: String, assunto: String, corpo: String): Intent {
+    val endereco = "mailto:" + Uri.encode(para, "@") +
+        "?subject=" + Uri.encode(assunto) +
+        "&body=" + Uri.encode(corpo)
+    return Intent(Intent.ACTION_SENDTO, Uri.parse(endereco)).apply {
+        putExtra(Intent.EXTRA_EMAIL, arrayOf(para))
+        putExtra(Intent.EXTRA_SUBJECT, assunto)
+        putExtra(Intent.EXTRA_TEXT, corpo)
+    }
+}
+

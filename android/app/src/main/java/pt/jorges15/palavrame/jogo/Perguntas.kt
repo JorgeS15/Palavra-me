@@ -84,8 +84,16 @@ object Perguntas {
      * cortesia. As primeiras aceções são as principais; é por aí que se
      * começa.
      */
-    fun definicaoParaJogo(acecoes: List<String>): String? {
-        val limpas = acecoes.map { it.trim() }.filter { it.isNotEmpty() }
+    fun definicaoParaJogo(acecoes: List<String>, lemma: String? = null): String? {
+        // Com o lema, tira-se primeiro de cada aceção o pedaço que o nomeia
+        // ("Que periclita" em `periclitante`), e só depois se junta. Se se
+        // tirasse depois de juntar, "Que está em perigo; que periclita" ficava
+        // curta de mais e a palavra perdia-se, quando a aceção seguinte ("Que
+        // decai de maneira perigosa") servia perfeitamente.
+        val alvo = lemma?.let { Texto.normalizar(it) }?.takeIf { it.length >= 3 }
+        val limpas = acecoes
+            .map { a -> if (alvo == null) a.trim() else retirarPedacos(a.trim(), alvo) }
+            .filter { it.isNotEmpty() }
         if (limpas.isEmpty()) return null
 
         // A principal, quando já se basta a si própria.
@@ -155,13 +163,26 @@ object Perguntas {
          */
         sinonimosDoAlvo: Set<String> = emptySet(),
     ): Pergunta? {
-        if (alvo.definicao.length < MIN_CARACTERES) return null
+        // A definição certa sem a parte que nomeia a palavra. Antes escondia-se
+        // o lema com "…", mas era quase sempre a certa que o continha ("que
+        // defere" passava a "que …") e as reticências denunciavam a resposta.
+        // Agora tira-se o pedaço inteiro; se não sobrar definição que chegue,
+        // usam-se os sinónimos; se nem isso, não se pergunta.
+        val definicaoAlvo = definicaoSemOLema(alvo.definicao, alvo.lemma)
+            ?: sinonimosComoDefinicao(sinonimosDoAlvo, alvo.lemma)
+            ?: return null
+        val certa = alvo.copy(definicao = definicaoAlvo)
 
         fun filtrar(lista: List<Candidata>) = lista
-            .filter { it.lemma != alvo.lemma }
+            .filter { it.lemma != certa.lemma }
             .filter { it.lemma !in sinonimosDoAlvo }
-            .filter { comprimentoCompativel(alvo.definicao, it.definicao) }
-            .filter { semelhanca(alvo.definicao, it.definicao) <= MAX_SEMELHANCA }
+            // Uma distração que nomeie o alvo também perde esse pedaço, para
+            // as opções serem tratadas todas da mesma maneira.
+            .mapNotNull { c ->
+                definicaoSemOLema(c.definicao, certa.lemma)?.let { c.copy(definicao = it) }
+            }
+            .filter { comprimentoCompativel(certa.definicao, it.definicao) }
+            .filter { semelhanca(certa.definicao, it.definicao) <= MAX_SEMELHANCA }
 
         // Baralha primeiro para não escolher sempre as mesmas duas, e só
         // depois ordena pela classe gramatical — assim a preferência
@@ -182,7 +203,7 @@ object Perguntas {
             // Completa com o dicionário, evitando repetir definições. Uma
             // da coleção e uma do dicionário é a mistura preferida: revisita
             // uma palavra registada e mantém a variedade.
-            val jaUsadas = daColecao.map { it.definicao }.toSet() + alvo.definicao
+            val jaUsadas = daColecao.map { it.definicao }.toSet() + certa.definicao
             val doDicionario = ordenar(filtrar(reserva))
                 .filter { it.definicao !in jaUsadas }
                 .distinctBy { it.definicao }
@@ -190,14 +211,12 @@ object Perguntas {
         }
         if (escolhidas.size < 2) return null
 
-        // Esconde-se o lema em TODAS as opções, não só na certa: uma
-        // distração que por acaso o nomeie também baralha. Mascara-se depois
-        // de escolher, para os filtros de comprimento e semelhança acima
-        // trabalharem sobre o texto real. Cada opção guarda a sua palavra,
-        // para se revelar depois de responder.
+        // Os pedaços que nomeavam o lema já saíram acima. A máscara fica só
+        // como rede de segurança, e normalmente não encontra nada. Cada opção
+        // guarda a sua palavra, para se revelar depois de responder.
         val baralhadas = (
-            escolhidas.map { OpcaoGerada(mascararLema(it.definicao, alvo.lemma), it.lemma, false) }
-                + OpcaoGerada(mascararLema(alvo.definicao, alvo.lemma), alvo.lemma, true)
+            escolhidas.map { OpcaoGerada(mascararLema(it.definicao, certa.lemma), it.lemma, false) }
+                + OpcaoGerada(mascararLema(certa.definicao, certa.lemma), certa.lemma, true)
             ).shuffled(aleatorio)
         return Pergunta(
             lemma = alvo.lemma,
@@ -230,6 +249,54 @@ object Perguntas {
             if (revelaOLema(Texto.normalizar(m.value), alvo)) "…" else m.value
         }
     }
+
+    /**
+     * A definição sem os pedaços que nomeiam o lema, ou nulo se o que sobra
+     * não chega para uma opção.
+     *
+     * Parte-se nos separadores de sentido (`;` e fim de frase) e deitam-se
+     * fora os pedaços onde aparece o lema ou uma palavra da mesma raiz:
+     * "Que defere; gentil, cortês." fica "Gentil, cortês.". Quando nada é
+     * tirado, o texto volta exatamente como estava.
+     */
+    internal fun definicaoSemOLema(texto: String, lemma: String): String? {
+        val alvo = Texto.normalizar(lemma)
+        val limpo = if (alvo.length < 3) texto else retirarPedacos(texto, alvo)
+        return limpo.takeIf { it.length >= MIN_CARACTERES }
+    }
+
+    private val SEPARADOR = Regex(";|\\.(?=\\s|$)")
+
+    private fun retirarPedacos(texto: String, alvo: String): String {
+        val pedacos = texto.split(SEPARADOR).map { it.trim() }.filter { it.isNotEmpty() }
+        fun revela(p: String) = PALAVRA.findAll(p).any { revelaOLema(Texto.normalizar(it.value), alvo) }
+        if (pedacos.none(::revela)) return texto
+        val ficam = pedacos.filterNot(::revela)
+        if (ficam.isEmpty()) return ""
+        return ficam.mapIndexed { i, p -> if (i == 0) maiusculaInicial(p) else minusculaInicial(p) }
+            .joinToString("; ") + "."
+    }
+
+    /**
+     * Os sinónimos do alvo escritos como uma definição de 1913 ("Júbilo;
+     * regozijo; alegria."), para quando a definição, sem a parte que nomeava a
+     * palavra, já não chega. É o mesmo feitio das definições curtas do
+     * Dicionário Aberto, por isso não destoa das outras opções. Ficam de fora
+     * os sinónimos da mesma raiz, que voltariam a denunciar a resposta.
+     */
+    internal fun sinonimosComoDefinicao(sinonimos: Collection<String>, lemma: String): String? {
+        val alvo = Texto.normalizar(lemma)
+        val uteis = sinonimos
+            .filter { !revelaOLema(Texto.normalizar(it), alvo) }
+            .take(5)
+        if (uteis.isEmpty()) return null
+        val texto = uteis.mapIndexed { i, s -> if (i == 0) maiusculaInicial(s) else s }
+            .joinToString("; ") + "."
+        return texto.takeIf { it.length >= MIN_CARACTERES }
+    }
+
+    private fun maiusculaInicial(texto: String): String =
+        if (texto.isEmpty()) texto else texto[0].uppercaseChar() + texto.substring(1)
 
     /**
      * Uma palavra da definição denuncia o lema? Sim se for o lema, ou uma

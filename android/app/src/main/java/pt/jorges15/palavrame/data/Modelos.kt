@@ -1,5 +1,22 @@
 package pt.jorges15.palavrame.data
 
+/**
+ * Rótulo em português, acentuado, para uma classe gramatical que a base guarda
+ * por slug sem acento ("nome proprio", "adverbio", "preposicao"...). É uma app
+ * de português: o que aparece no ecrã leva os acentos, ainda que o slug interno
+ * não os tenha. As que já estão certas (substantivo, adjetivo, verbo...) passam
+ * sem mudança.
+ */
+fun rotuloPos(pos: String): String = when (pos) {
+    "nome proprio" -> "nome próprio"
+    "adverbio" -> "advérbio"
+    "preposicao" -> "preposição"
+    "conjuncao" -> "conjunção"
+    "interjeicao" -> "interjeição"
+    "locucao" -> "locução"
+    else -> pos
+}
+
 /** Um candidato devolvido pela pesquisa. "cantada" pode ser mais do que um. */
 data class Candidato(
     val lemmaId: Long,
