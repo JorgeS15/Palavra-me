@@ -4,30 +4,6 @@ Todas as alterações relevantes ao projeto. Formato baseado em
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
-Duas versões, porque são dois artefactos: a do **pipeline** (`pipeline/
-pyproject.toml`) titula as entradas; a da **app** (`android/app/build.gradle.kts`)
-vai indicada quando muda. Correções e afinações sobem o PATCH; funcionalidade
-nova sobe o MINOR.
-
-Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
-alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
-
-## [app v1.16.0] - 2026-10-09
-
-Só a app.
-
-### Added
-
-- **Níveis.** "Nível 3 · Leitor atento": sete níveis com nomes ligados à
-  leitura (Folheador, Leitor, Leitor atento, Bibliófilo, Letrado, Erudito,
-  Dicionário vivo), contados pelos acertos totais (0, 10, 25, 50, 100, 200,
-  400). Medem o que se aprendeu e não o quanto se joga, e nunca descem: errar
-  faz parte da repetição espaçada. No ecrã inicial, a linha de estatísticas
-  passa a mostrar o nível, as palavras que já sabes (acertadas pelo menos três
-  vezes seguidas), os dias seguidos, os pontos e quanto falta para o nível
-  seguinte. No jogo, o topo mostra o nível em vez dos pontos, e uma resposta
-  que faz subir diz-o numa linha ("Subiste ao nível 4: Bibliófilo.").
-
 ## [app v1.15.3] - 2026-10-06
 
 Só a app.
