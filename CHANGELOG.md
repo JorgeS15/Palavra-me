@@ -1,8 +1,89 @@
 # Changelog
 
-Todas as alterações relevantes ao projeto. Formato baseado em
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versões seguem
-[SemVer](https://semver.org/lang/pt-BR/).
+## [app v1.17.1] - 2026-11-01
+
+Só a app.
+
+### Changed
+
+- **Um livro da estante abre a coleção nesse livro.** Tocar numa capa em "Na
+  tua estante" leva à Coleção já com as palavras desse livro no topo; os
+  outros livros ficam recolhidos.
+- **Os livros da coleção recolhem-se.** Tocar no cabeçalho de um livro oculta
+  ou mostra as suas palavras (a seta à direita diz em que estado está). A
+  filtrar, mostra-se sempre tudo o que corresponde.
+- **"Onde a encontraste", no Rever, mostra a capa do livro** com o título e o
+  autor, como na estante, em vez de um retângulo só com a cor.
+- **Ícone da app com as cores do redesign:** fundo na tinta do tema
+  (`#1E1A15`), páginas no papel (`#F4EEE3`) e a fita em terracota clara
+  (`#E58A5C`). A forma não muda. Traz agora também a camada monocromática,
+  para os ícones temáticos do Android 13 e seguintes.
+- **Definições, "As minhas palavras":** texto mais simples ("Faz uma cópia de
+  segurança das tuas palavras, para não as perderes se mudares de
+  telemóvel.") e os botões "Exportar cópia" e "Importar cópia" um por linha,
+  porque lado a lado o texto ficava cortado.
+- **"Registadas há pouco" passa a "Últimas registadas"** no ecrã inicial.
+
+### Removed
+
+- A frase "Uma palavra, e acabou. A próxima chega com o lembrete." por baixo
+  das opções do Rever.
+
+## [app v1.17.0] - 2026-10-31
+
+Só a app.
+
+### Changed
+
+- **Redesign visual.** Nova identidade, em claro e escuro: papel creme,
+  destaque terracota e um marcador amarelo por trás das palavras, como num
+  livro sublinhado. O conteúdo vai em Literata (serifa) e os controlos em
+  Instrument Sans. As duas fontes vão dentro da app, sem rede.
+- **Navegação em baixo.** Procurar, Coleção e Definições passam para uma barra
+  inferior. O Rever é um ecrã inteiro, com "×" para fechar.
+- **Procurar.** "O que encontraste hoje?", com o campo grande. Enquanto se
+  escreve, um cartão com até cinco sugestões (cada uma com a classe) ou o
+  "Querias dizer", e no fim a linha "Procurar". Sem texto: o cartão de
+  progresso (nível, barra até ao seguinte, palavras, que já sabes, dias
+  seguidos; só depois da primeira resposta), "Na tua estante" com uma capa por
+  livro, e as oito palavras registadas há pouco. O chip da sequência aparece
+  em cima quando ela está ativa. O atalho para rever continua a ser só do Modo
+  desenvolvedor.
+- **Palavra.** O lema grande com o marcador, a pílula "Na tua coleção" com o
+  livro e a página, aceções com números em itálico, exemplos em caixa com uma
+  barra de destaque (os gerados continuam marcados) e as palavras relacionadas
+  em pílulas, mais apagadas quando não têm definição. Em baixo, "Registar" ou,
+  já registada, "Registada" e "Editar".
+- **Registar** passa a uma folha que sobe de baixo: os livros recentes em
+  chips com a cor de cada um, "Sem livro" e "+ Outro" para um livro novo. O
+  autor continua agarrado ao livro. Ao guardar, aparece "\"x\" está na tua
+  coleção.".
+- **Não encontrada.** O termo com um sublinhado ondulado, os "Querias dizer"
+  em cartões com a primeira definição de cada um, e "Registar mesmo assim".
+  Voltar daqui deixa o termo no campo, para o corrigir.
+- **Coleção.** Filtro, "Por livro" ou "Todas", "Recentes" ou "A-Z", grupos com
+  a lombada do livro e a contagem. Tocar numa palavra abre-a em Procurar.
+- **Rever.** Opções com A, B e C, certa a verde e errada a vermelho, a palavra
+  de cada opção revelada, e "Onde a encontraste" com a lombada, o autor e a
+  página.
+- **Definições** em grupos; o tema com ícones. Em "Dicionário e licenças",
+  uma secção Tipografia com as duas fontes (SIL OFL 1.1).
+
+## [app v1.16.0] - 2026-10-09
+
+Só a app.
+
+### Added
+
+- **Níveis.** "Nível 3 · Leitor atento": sete níveis com nomes ligados à
+  leitura (Folheador, Leitor, Leitor atento, Bibliófilo, Letrado, Erudito,
+  Dicionário vivo), contados pelos acertos totais (0, 10, 25, 50, 100, 200,
+  400). Medem o que se aprendeu e não o quanto se joga, e nunca descem: errar
+  faz parte da repetição espaçada. No ecrã inicial, a linha de estatísticas
+  passa a mostrar o nível, as palavras que já sabes (acertadas pelo menos três
+  vezes seguidas), os dias seguidos, os pontos e quanto falta para o nível
+  seguinte. No jogo, o topo mostra o nível em vez dos pontos, e uma resposta
+  que faz subir diz-o numa linha ("Subiste ao nível 4: Bibliófilo.").
 
 ## [app v1.15.3] - 2026-10-06
 
@@ -1947,4 +2028,13 @@ entradas revistas à mão.
   palavra e dump TEI), Wikcionário (JSONL do wiktextract), VOC da CPLP,
   wordnet PT (N-Triples e TSV), Hunspell do Natura, Tatoeba, Leipzig.
 - **Expansão de afixos Hunspell** (`affix.py`): SFX, PFX, produto cruzado,
-  bandeiras de continuação, condições com
+  bandeiras de continuação, condições com classes de caracteres, e strip do
+  lema inteiro para formas supletivas. É o que produz a tabela `forms`, e é o
+  que faz `couberam` chegar a `caber`.
+- **Fusão** com as regras da secção 5.2 do plano: o VOC decide a lista de
+  lemas, a grafia e a classe gramatical; aceções de fontes diferentes nunca se
+  fundem; conflitos ficam num relatório em vez de se resolverem em silêncio.
+- **Escrita do `dicionario.db`** com o esquema da secção 6.1, índices, FTS5
+  com `content=lemmas`, tabela `meta` com versão e data, e checksum sha256 ao
+  lado do ficheiro.
+- **Validação** em duas famílias: integridade (chaves, proveniência
