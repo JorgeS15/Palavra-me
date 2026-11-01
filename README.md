@@ -1,11 +1,19 @@
 # Palavra-me
 
+<img width="1024" height="500" alt="recurso-grafico-1024x500" src="https://github.com/user-attachments/assets/e4e9276c-ebc3-4ec6-a410-2de1d5db6ef6" />
+
+
 **Um dicionário de português que se lembra das palavras que aprendeste.**
+
+Disponível na [Google Play Store!](https://play.google.com/store/apps/details?id=pt.jorges15.palavrame&pcampaignid=web_share)
 
 Estás a ler um livro, encontras uma palavra que não conheces, e procura-la.
 Vês o significado, os sinónimos, frases onde ela aparece — e ela fica guardada
 na tua coleção, com o livro e a frase onde a encontraste. Da próxima vez que
 abrires a app, está lá, à espera de ser revista.
+
+<img width="2560" height="1440" alt="computador-1" src="https://github.com/user-attachments/assets/4d1299e9-e3e3-4f57-9392-8e91ecb21793" />
+
 
 O nome vem da forma enclítica portuguesa — *lembra-me*, *ensina-me*. Nomeia o
 gesto, não o objeto.
