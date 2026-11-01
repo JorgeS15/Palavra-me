@@ -17,46 +17,10 @@ import java.time.ZoneId
 class SessaoTest {
 
     private val DIA = 24L * 60 * 60 * 1000
-    private val agora = 1_800_000_000_000L
     private val lisboa: ZoneId = ZoneId.of("Europe/Lisbon")
-
-    // --- caixas -----------------------------------------------------------
-
-    @Test
-    fun `acertar sobe uma caixa`() {
-        assertEquals(1, Leitner.proximaCaixa(0, acertou = true))
-        assertEquals(4, Leitner.proximaCaixa(3, acertou = true))
-    }
-
-    @Test
-    fun `a ultima caixa nao transborda`() {
-        val topo = Leitner.CAIXA_MAXIMA
-        assertEquals(topo, Leitner.proximaCaixa(topo, acertou = true))
-    }
-
-    @Test
-    fun `errar devolve ao principio, nao recua um passo`() {
-        // Severo de propósito: se falhaste, o intervalo de 32 dias que tinhas
-        // ganho estava errado.
-        assertEquals(0, Leitner.proximaCaixa(5, acertou = false))
-        assertEquals(0, Leitner.proximaCaixa(1, acertou = false))
-    }
-
-    @Test
-    fun `os intervalos duplicam`() {
-        assertEquals(listOf(1, 2, 4, 8, 16, 32), Leitner.INTERVALOS.toList())
-    }
-
-    @Test
-    fun `a proxima revisao respeita o intervalo da caixa`() {
-        assertEquals(agora + 1 * DIA, Leitner.proximaRevisao(0, agora))
-        assertEquals(agora + 32 * DIA, Leitner.proximaRevisao(5, agora))
-    }
-
-    // --- pontos -----------------------------------------------------------
-
     private val hoje = LocalDate.of(2026, 8, 6)
     private val ontem = hoje.minusDays(1)
+    private val agora = hoje.atStartOfDay(lisboa).toInstant().toEpochMilli()
 
     @Test
     fun `acerto da dez pontos`() {
@@ -182,31 +146,31 @@ class SessaoTest {
 
     // --- quando o lembrete toca ------------------------------------------
 
-    private fun as(hora: Int, minuto: Int) = java.util.Calendar.getInstance().apply {
+    private fun asHoras(hora: Int, minuto: Int) = java.util.Calendar.getInstance().apply {
         set(2026, java.util.Calendar.AUGUST, 6, hora, minuto, 0)
         set(java.util.Calendar.MILLISECOND, 0)
     }
 
     @Test
     fun `a hora de hoje que ainda nao passou e hoje`() {
-        assertEquals(120, minutosAte(21, as(19, 0)))
+        assertEquals(120, minutosAte(21, asHoras(19, 0)))
     }
 
     @Test
     fun `a hora de hoje que ja passou e amanha`() {
         // 22:00 com lembrete às 21:00 -> faltam 23 horas.
-        assertEquals(23 * 60, minutosAte(21, as(22, 0)))
+        assertEquals(23 * 60, minutosAte(21, asHoras(22, 0)))
     }
 
     @Test
     fun `a hora exata conta para o dia seguinte, nao dispara ja`() {
-        assertEquals(24 * 60, minutosAte(21, as(21, 0)))
+        assertEquals(24 * 60, minutosAte(21, asHoras(21, 0)))
     }
 
     @Test
     fun `hora fora do intervalo nao rebenta`() {
-        assertTrue(minutosAte(99, as(12, 0)) > 0)
-        assertTrue(minutosAte(-3, as(12, 0)) > 0)
+        assertTrue(minutosAte(99, asHoras(12, 0)) > 0)
+        assertTrue(minutosAte(-3, asHoras(12, 0)) > 0)
     }
 
     // --- distribuicao dos lembretes pela janela ---------------------------

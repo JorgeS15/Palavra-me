@@ -249,20 +249,29 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
     }
 
     /** Sugestões enquanto se escreve. Prefixo sobre a forma normalizada. */
-    fun sugerir(prefixo: String, limite: Int = 12): List<String> {
+    fun sugerir(prefixo: String, limite: Int = 12): List<Sugestao> {
         val chave = Texto.normalizar(prefixo)
         if (chave.length < 2) return emptyList()
         val sql = """
-            SELECT l.lemma
+            SELECT l.lemma, l.pos
             FROM lemmas l
             WHERE l.normalized GLOB ?
             ORDER BY (l.frequency_rank IS NULL), l.frequency_rank, l.lemma
             LIMIT ?
         """
         return db.rawQuery(sql, arrayOf("$chave*", limite.toString())).use { c ->
-            buildList { while (c.moveToNext()) add(c.getString(0)) }
+            buildList { while (c.moveToNext()) add(Sugestao(c.getString(0), c.getString(1) ?: "")) }
         }
     }
+
+    /**
+     * Os "Querias dizer", cada um com a primeira definição: no ecrã de palavra
+     * não encontrada, ver o significado ajuda a escolher a certa.
+     */
+    fun parecidasComDefinicao(escrito: String, limite: Int = 6): List<Parecida> =
+        parecidas(escrito, limite).map { l ->
+            Parecida(l, candidataDeJogo(l)?.second?.firstOrNull())
+        }
 
     /**
      * A entrada de um lema pela grafia exata.
@@ -399,13 +408,18 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
 
     private fun relacionadas(lemmaId: Long): List<Relacionada> {
         val sql = """
-            SELECT l.lemma, y.relation
+            SELECT l.lemma, y.relation,
+                   EXISTS (SELECT 1 FROM senses s WHERE s.lemma_id = l.id)
             FROM synonyms y JOIN lemmas l ON l.id = y.synonym_id
             WHERE y.lemma_id = ?
             ORDER BY y.relation, l.lemma LIMIT 40
         """
         return db.rawQuery(sql, arrayOf(lemmaId.toString())).use { c ->
-            buildList { while (c.moveToNext()) add(Relacionada(c.getString(0), c.getString(1))) }
+            buildList {
+                while (c.moveToNext()) {
+                    add(Relacionada(c.getString(0), c.getString(1), c.getInt(2) == 1))
+                }
+            }
         }
     }
 

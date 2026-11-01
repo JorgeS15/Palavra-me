@@ -16,12 +16,64 @@ __pycache__/
 .venv/
 venv/
 
-# Android (F2 em diante)
+# Android (F2 em diante). Tudo aqui, na raiz, sem depender do
+# android/.gitignore: se esse faltar ou não for lido, nada grande escapa.
 android/.gradle/
 android/build/
+android/app/build/
+android/**/build/
+android/.idea/
 android/local.properties
+android/keystore.properties
+*.jks
+*.keystore
 *.apk
 *.aab
+# O dicionário (empacotado nos assets ou solto): reconstrói-se com o pipeline.
+*.db
+*.db.gz
+android/app/src/main/assets/dicionario.versao
+# A saída das builds de lançamento: o APK, o AAB e o bundle desempacotado,
+# que traz o dicionário inteiro (~200 MB) lá dentro.
+android/app/release/
+android/app/debug/
 
 # Sistema
 .DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# --- fora do repositório público, mas mantidos em disco -------------------
+#
+# Ficam na tua pasta; simplesmente não sobem. Não os apagues.
+
+# O briefing original. É o teu documento de trabalho, menciona decisões que
+# entretanto mudaram (o Priberam, o VOC) e não é o que alguém deve ler
+# primeiro sobre o projeto.
+plano-palavra-me.md
+
+# A documentação de trabalho fica toda fora: registo de licenças, desenho do
+# jogo, rascunhos de emails a instituições, guias de arranque. É material de
+# quem constrói, e o `docs/emails.md` é mesmo correspondência privada.
+#
+# A atribuição das fontes não depende disto e continua cumprida onde tem de
+# estar: no ecrã "Fontes e licenças" da app, e na tabela `sources` dentro da
+# própria base de dados, que viaja com ela.
+docs/
+
+# As entregas do design (protótipos HTML, capturas e os zips de onde vieram).
+# São material de trabalho com vários MB cada; o que delas interessa já está
+# no código.
+Palavra-me app redesign*/
+*.zip
+
+# O vídeo da loja: grande e binário, vive na Play Console.
+*.mp4
+*.mov
+
+# Rascunhos e notas pessoais. A descrição da loja que conta está em
+# loja/descricao.md; os comandos estão no pipeline/README.md.
+/descricao.txt
+pipeline/commands.txt
+pipeline/palavrame/commands.txt

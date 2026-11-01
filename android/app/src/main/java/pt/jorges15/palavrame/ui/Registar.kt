@@ -1,18 +1,29 @@
 package pt.jorges15.palavrame.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import pt.jorges15.palavrame.data.PalavraGuardada
+import pt.jorges15.palavrame.ui.theme.Cores
+import pt.jorges15.palavrame.ui.theme.Estilo
 // `Livro` vive no PesquisaViewModel, no mesmo pacote — sem import.
 
 /**
- * O diálogo de registo. **Tudo é opcional menos a palavra**: quem está a
+ * A folha de registo (e de edição). **Tudo é opcional menos a palavra**: quem está a
  * meio de um livro não deve ter de preencher burocracia para guardar uma
  * palavra. O livro e a frase são o que dá valor à coleção mais tarde, mas
  * exigi-los travaria o gesto que a app existe para tornar fácil.
@@ -21,9 +32,9 @@ import pt.jorges15.palavrame.data.PalavraGuardada
  * insinuava que os restantes eram obrigatórios. O aviso vive aqui em cima,
  * onde não estorva ninguém.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DialogoRegistar(
+fun FolhaRegistar(
     lemma: String,
     livrosAnteriores: List<Livro> = emptyList(),
     /** Não nulo = estamos a editar um registo que já existe. */
@@ -90,112 +101,209 @@ fun DialogoRegistar(
     // O campo do significado próprio só faz sentido quando a palavra não tem
     // uma no dicionário — ou quando já lá escreveste uma e a estás a editar.
     val mostrarSignificado = pedirSignificado || !existente?.significado.isNullOrBlank()
-    var listaAberta by remember { mutableStateOf(false) }
+    // Um livro que não está entre os chips (um novo, ou um antigo que já saiu
+    // da lista) escreve-se à mão, no "+ Outro".
+    val chips = livrosAnteriores.take(6)
+    var escreverOutro by rememberSaveable(lemma) {
+        mutableStateOf(
+            livroInicial.isNotBlank() &&
+                chips.none { it.titulo.equals(livroInicial.trim(), ignoreCase = true) }
+        )
+    }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = aoCancelar,
-        title = {
-            Text(if (existente == null) "Registar \"$lemma\"" else "Editar \"$lemma\"")
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = Cores.card,
+        contentColor = Cores.ink,
+        scrimColor = Cores.scrim,
+        tonalElevation = 0.dp,
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(top = 10.dp, bottom = 6.dp)
+                    .size(36.dp, 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Cores.line)
+            )
         },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Primeiro, quando é pedido: numa palavra que falta ao
-                // dicionário, o significado é o que mais interessa guardar.
-                if (mostrarSignificado) {
-                    OutlinedTextField(
-                        value = significado, onValueChange = { significado = it },
-                        label = { Text("Significado") },
-                        supportingText = {
-                            Text("Esta palavra não tem definição no dicionário. "
-                                + "Escreve o que ela quer dizer, se souberes.")
-                        },
-                        minLines = 2, modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                ExposedDropdownMenuBox(
-                    expanded = listaAberta && livrosAnteriores.isNotEmpty(),
-                    onExpandedChange = { listaAberta = it },
-                ) {
-                    OutlinedTextField(
-                        value = livro,
-                        onValueChange = { mudarLivro(it) },
-                        label = { Text("Livro") },
-                        singleLine = true,
-                        trailingIcon = {
-                            if (livrosAnteriores.isNotEmpty()) {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = listaAberta)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryEditable),
-                    )
-                    ExposedDropdownMenu(
-                        expanded = listaAberta && livrosAnteriores.isNotEmpty(),
-                        onDismissRequest = { listaAberta = false },
-                    ) {
-                        livrosAnteriores.forEach { anterior ->
-                            DropdownMenuItem(
-                                text = { Text(anterior.titulo) },
-                                onClick = {
-                                    // Escolher um livro da lista é dizer qual
-                                    // é: o autor passa a ser o desse livro
-                                    // (ou nenhum, se não tiver), sempre.
-                                    livro = anterior.titulo
-                                    autor = anterior.autor.orEmpty()
-                                    autorAutomatico = autor
-                                    listaAberta = false
-                                },
-                            )
-                        }
-                    }
-                }
-                OutlinedTextField(
-                    value = autor, onValueChange = { autor = it },
-                    label = { Text("Autor") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = pagina,
-                    onValueChange = { novo -> pagina = novo.filter { it.isDigit() } },
-                    label = { Text("Página") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = frase, onValueChange = { frase = it },
-                    label = { Text("A frase onde a encontraste") },
-                    minLines = 2, modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = nota, onValueChange = { nota = it },
-                    label = { Text("Nota") },
-                    modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column {
+                Overline(if (existente == null) "Registar" else "Editar", cor = Cores.accentInk)
+                Spacer(Modifier.height(4.dp))
+                Text(lemma, style = Estilo.lemaFolha, color = Cores.ink)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Só a palavra é obrigatória. O resto ajuda-te a lembrar.",
+                    style = Estilo.ajuda,
+                    color = Cores.ink2,
                 )
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                aoGuardar(
-                    // `copy` quando existe, para preservar o id, a data de
-                    // registo e o progresso de revisão — editar as notas de
-                    // uma palavra não é registá-la de novo.
-                    (existente ?: PalavraGuardada(lemma = lemma)).copy(
-                        // TEXTO, não id: a coleção sobrevive a uma
-                        // substituição do dicionario.db.
-                        lemma = lemma,
-                        livro = livro.ifBlank { null },
-                        autor = autor.ifBlank { null },
-                        page = pagina.toIntOrNull(),
-                        frase = frase.ifBlank { null },
-                        note = nota.ifBlank { null },
-                        significado = significado.ifBlank { null },
+
+            // Primeiro, quando é pedido: numa palavra que falta ao dicionário,
+            // o significado é o que mais interessa guardar.
+            if (mostrarSignificado) {
+                Column {
+                    CampoFormulario(
+                        "Significado", significado, { significado = it },
+                        linhas = 2, borda = Cores.accent,
                     )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Esta palavra não tem definição no dicionário. "
+                            + "Escreve o que ela quer dizer, se souberes.",
+                        style = Estilo.ajuda,
+                        color = Cores.ink2,
+                    )
+                }
+            }
+
+            Column {
+                Text("Livro", style = Estilo.rotulo, color = Cores.ink2)
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    chips.forEach { anterior ->
+                        ChipLivro(
+                            anterior.titulo,
+                            cor = corDoLivro(anterior.titulo),
+                            ativo = !escreverOutro &&
+                                livro.trim().equals(anterior.titulo, ignoreCase = true),
+                            aoTocar = {
+                                // Escolher um livro é dizer qual é: o autor passa
+                                // a ser o desse livro (ou nenhum), sempre.
+                                escreverOutro = false
+                                livro = anterior.titulo
+                                autor = anterior.autor.orEmpty()
+                                autorAutomatico = autor
+                            },
+                        )
+                    }
+                    ChipLivro(
+                        "Sem livro",
+                        cor = Cores.ink3,
+                        ativo = !escreverOutro && livro.isBlank(),
+                        aoTocar = {
+                            escreverOutro = false
+                            livro = ""
+                            if (autor == autorAutomatico) autor = ""
+                            autorAutomatico = autor
+                        },
+                    )
+                    ChipLivro(
+                        "+ Outro",
+                        cor = null,
+                        ativo = escreverOutro,
+                        aoTocar = {
+                            if (!escreverOutro) {
+                                escreverOutro = true
+                                mudarLivro("")
+                            }
+                        },
+                    )
+                }
+                if (escreverOutro) {
+                    Spacer(Modifier.height(10.dp))
+                    CampoFormulario(
+                        null, livro, { mudarLivro(it) },
+                        placeholder = "Título do livro",
+                        capitalizacao = KeyboardCapitalization.Words,
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CampoFormulario(
+                    "Autor", autor, { autor = it },
+                    modifier = Modifier.weight(1f),
+                    capitalizacao = KeyboardCapitalization.Words,
                 )
-            }) { Text("Guardar") }
-        },
-        dismissButton = { TextButton(onClick = aoCancelar) { Text("Cancelar") } },
-    )
+                CampoFormulario(
+                    "Página", pagina,
+                    { novo -> pagina = novo.filter { it.isDigit() }.take(5) },
+                    modifier = Modifier.width(86.dp),
+                    numerico = true,
+                )
+            }
+            CampoFormulario(
+                "A frase onde a encontraste", frase, { frase = it },
+                linhas = 3, italico = true,
+            )
+            CampoFormulario("Nota", nota, { nota = it }, placeholder = "Para ti")
+
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = aoCancelar,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+                ) { Text("Cancelar", style = Estilo.botao) }
+                BotaoPrincipal(
+                    "Guardar",
+                    aoTocar = {
+                        aoGuardar(
+                            // `copy` quando existe, para preservar o id, a data de
+                            // registo e o progresso de revisão: editar as notas de
+                            // uma palavra não é registá-la de novo.
+                            (existente ?: PalavraGuardada(lemma = lemma)).copy(
+                                // TEXTO, não id: a coleção sobrevive a uma
+                                // substituição do dicionario.db.
+                                lemma = lemma,
+                                livro = livro.trim().ifBlank { null },
+                                autor = autor.trim().ifBlank { null },
+                                page = pagina.toIntOrNull(),
+                                frase = frase.trim().ifBlank { null },
+                                note = nota.trim().ifBlank { null },
+                                significado = significado.trim().ifBlank { null },
+                            )
+                        )
+                    },
+                    modifier = Modifier.weight(2f),
+                    altura = 52.dp,
+                )
+            }
+        }
+    }
+}
+
+/** Um chip de livro: mini-lombada com a cor do livro e o título. */
+@Composable
+private fun ChipLivro(titulo: String, cor: Color?, ativo: Boolean, aoTocar: () -> Unit) {
+    val forma = RoundedCornerShape(percent = 50)
+    Row(
+        Modifier
+            .height(38.dp)
+            .clip(forma)
+            .background(if (ativo) Cores.ink else Cores.bg)
+            .then(if (ativo) Modifier else Modifier.border(1.5.dp, Cores.line, forma))
+            .clickable(onClick = aoTocar)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (cor != null) {
+            Lombada(cor, 9.dp, 14.dp)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            titulo,
+            style = Estilo.chipLivro,
+            color = if (ativo) Cores.bg else Cores.ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
+    }
 }

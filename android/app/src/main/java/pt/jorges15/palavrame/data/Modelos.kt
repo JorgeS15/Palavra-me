@@ -45,7 +45,17 @@ data class Exemplo(
     val acecaoId: Long?,
 )
 
-data class Relacionada(val lemma: String, val relacao: String)
+/**
+ * Uma palavra relacionada. `temDefinicao` diz se abri-la leva a algum lado:
+ * as que não têm aceção nenhuma mostram-se mais apagadas.
+ */
+data class Relacionada(val lemma: String, val relacao: String, val temDefinicao: Boolean = true)
+
+/** Uma sugestão enquanto se escreve: o lema e a classe, para a lista. */
+data class Sugestao(val lemma: String, val pos: String)
+
+/** Um "Querias dizer": o lema e a primeira definição, se houver. */
+data class Parecida(val lemma: String, val definicao: String?)
 
 /** Uma entrada completa, pronta a mostrar. */
 data class Entrada(

@@ -16,18 +16,20 @@ import pt.jorges15.palavrame.data.Candidato
 import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
 import pt.jorges15.palavrame.data.PalavraGuardada
+import pt.jorges15.palavrame.data.Parecida
+import pt.jorges15.palavrame.data.Sugestao
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.data.UtilizadorDb
 import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
 
 data class EstadoPesquisa(
     val texto: String = "",
-    val sugestoes: List<String> = emptyList(),
+    val sugestoes: List<Sugestao> = emptyList(),
     val candidatos: List<Candidato> = emptyList(),
     val entrada: Entrada? = null,
     val procurou: Boolean = false,
-    /** "Querias dizer…?" — só preenchido quando a pesquisa não encontrou nada. */
-    val parecidas: List<String> = emptyList(),
+    /** "Querias dizer", com a primeira definição de cada uma. */
+    val parecidas: List<Parecida> = emptyList(),
 )
 
 /** Um livro já na coleção, com o autor que lhe ficou associado (se algum). */
@@ -118,7 +120,7 @@ class PesquisaViewModel(
             delay(350)
             val parecidas = withContext(Dispatchers.IO) {
                 val d = dicionario ?: return@withContext emptyList()
-                if (d.procurar(texto).isNotEmpty()) emptyList() else d.parecidas(texto)
+                if (d.procurar(texto).isNotEmpty()) emptyList() else d.parecidasComDefinicao(texto)
             }
             if (_estado.value.texto == texto && !_estado.value.procurou) {
                 _estado.value = _estado.value.copy(parecidas = parecidas)
@@ -164,7 +166,7 @@ class PesquisaViewModel(
             // Nada encontrado: palavras parecidas, para o caso de ser um erro
             // de escrita, antes de oferecer registá-la como nova.
             val parecidas = if (candidatos.isEmpty()) {
-                withContext(Dispatchers.IO) { dicionario?.parecidas(texto).orEmpty() }
+                withContext(Dispatchers.IO) { dicionario?.parecidasComDefinicao(texto).orEmpty() }
             } else emptyList()
 
             empilhar(entrada)

@@ -5,21 +5,28 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
@@ -29,27 +36,24 @@ import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.Tema
 import pt.jorges15.palavrame.jogo.Lembrete
 import pt.jorges15.palavrame.jogo.horasDosLembretes
+import pt.jorges15.palavrame.ui.theme.Cores
+import pt.jorges15.palavrame.ui.theme.Estilo
 
 /**
- * Definições: tema, estado do dicionário, e a informação sobre a app.
- *
- * O rodapé do ecrã principal ficou só com a versão da app — os números do
- * dicionário são coisa que se consulta uma vez e não precisa de ocupar
- * espaço permanente na frente de quem está a ler.
+ * Definições: tema, lembretes, cópia da coleção, contributos e a informação
+ * sobre a app. Cada secção é um grupo em cartão, com o título em destaque.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EcraDefinicoes(
     preferencias: Preferencias,
     aoAbrirLicencas: () -> Unit,
-    aoVoltar: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") aoVoltar: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as PalavrameApp
     val ambito = rememberCoroutineScope()
     val tema by preferencias.tema.collectAsState()
 
-    var aInstalar by remember { mutableStateOf(false) }
     var mensagemBackup by remember { mutableStateOf<String?>(null) }
 
     val exportador = rememberLauncherForActivityResult(
@@ -93,167 +97,143 @@ fun EcraDefinicoes(
         }
     }
     var mensagem by remember { mutableStateOf<String?>(null) }
-    // Recalcula-se depois de instalar: é o que faz a opção desaparecer
-    // quando já não há nada de novo para instalar.
-    var haNovoNoApk by remember { mutableStateOf(app.temDicionarioEmpacotado()) }
 
-    // Submissão de palavras em falta — sem rede: a app entrega a lista ao
+    // Submissão de palavras em falta, sem rede: a app entrega a lista ao
     // email (é o email que envia; a app continua sem permissão de Internet).
     var mensagemFalta by remember { mutableStateOf<String?>(null) }
     var mostrarSubmissao by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Definições") },
-                navigationIcon = {
-                    IconButton(onClick = aoVoltar) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
+    Scaffold(containerColor = Cores.bg) { padding ->
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp),
+        ) {
+            Text("Definições", style = Estilo.tituloEcra, color = Cores.ink)
+
+            Seccao("Tema")
+            // As três opções numa linha. "Como o telemóvel" encurta-se para
+            // "Sistema": não cabia, e ao lado de "Claro" e "Escuro" percebe-se.
+            Segmentado(
+                Tema.entries.map { if (it == Tema.SISTEMA) "Sistema" else it.etiqueta },
+                selecionado = Tema.entries.indexOf(tema),
+                aoEscolher = { preferencias.definirTema(Tema.entries[it]) },
+                icones = Tema.entries.map {
+                    when (it) {
+                        Tema.SISTEMA -> Icons.Rounded.Contrast
+                        Tema.CLARO -> Icons.Rounded.LightMode
+                        Tema.ESCURO -> Icons.Rounded.DarkMode
                     }
                 },
+                modifier = Modifier.fillMaxWidth(),
             )
-        }
-    ) { padding ->
-        Column(
-            Modifier.padding(padding).verticalScroll(rememberScrollState()),
-        ) {
-            Seccao("Temas")
-            // Botões segmentados: as três opções numa linha só, em vez de uma
-            // lista de rádios empilhados que ocupava o triplo do espaço. No
-            // segmento, "Como o telemóvel" encurta-se para "Sistema" — não
-            // cabia, e ali ao lado de "Claro"/"Escuro" percebe-se na mesma.
-            SingleChoiceSegmentedButtonRow(
-                Modifier.fillMaxWidth().padding(16.dp, 4.dp),
-            ) {
-                Tema.entries.forEachIndexed { i, opcao ->
-                    SegmentedButton(
-                        selected = tema == opcao,
-                        onClick = { preferencias.definirTema(opcao) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = i, count = Tema.entries.size,
-                        ),
-                    ) {
-                        Text(if (opcao == Tema.SISTEMA) "Sistema" else opcao.etiqueta)
-                    }
-                }
-            }
 
             Seccao("Rever")
-            SeccaoJogo(preferencias)
+            GrupoCartao { SeccaoJogo(preferencias) }
 
             Seccao("As minhas palavras")
-            Text(
-                "A coleção é a única coisa nesta app que não se reconstrói. "
-                    + "O dicionário volta sempre do ficheiro; as palavras que "
-                    + "registaste, não.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(16.dp, 4.dp),
-            )
-            Row(
-                Modifier.padding(16.dp, 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedButton(onClick = { exportador.launch(Backup.nomeSugerido()) }) {
-                    Text("Exportar cópia")
+            GrupoCartao {
+                Column(Modifier.padding(18.dp)) {
+                    Text(
+                        "Faz uma cópia de segurança das tuas palavras, para não as "
+                            + "perderes se mudares de telemóvel.",
+                        style = Estilo.ajuda,
+                        color = Cores.ink2,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    // Um por linha: lado a lado, num telemóvel estreito ou com a
+                    // letra aumentada, o texto dos botões ficava cortado.
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        BotaoContornado(
+                            "Exportar cópia",
+                            { exportador.launch(Backup.nomeSugerido()) },
+                            icone = Icons.Rounded.Upload,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        BotaoContornado(
+                            "Importar cópia",
+                            // Aceita qualquer tipo: há gestores de ficheiros que
+                            // não atribuem application/json a um .json, e nesses
+                            // o seletor mostrava a cópia a cinzento.
+                            { importador.launch(arrayOf("*/*")) },
+                            icone = Icons.Rounded.Download,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    mensagemBackup?.let {
+                        Spacer(Modifier.height(10.dp))
+                        Text(it, style = Estilo.ajuda, color = Cores.ink)
+                    }
                 }
-                OutlinedButton(
-                    // Aceita qualquer tipo: há gestores de ficheiros que não
-                    // atribuem application/json a um .json, e nesses o
-                    // seletor mostrava a cópia a cinzento.
-                    onClick = { importador.launch(arrayOf("*/*")) }
-                ) {
-                    Text("Importar cópia")
-                }
-            }
-            mensagemBackup?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
-                )
             }
 
             Seccao("Contribuir")
-            Text(
-                "Contribui com novas palavras para o dicionário.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(16.dp, 4.dp),
-            )
-            OutlinedButton(
-                onClick = { mostrarSubmissao = true },
-                modifier = Modifier.padding(16.dp, 8.dp),
-            ) { Text("Submeter por mail") }
-            mensagemFalta?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
+            GrupoCartao {
+                LinhaGrupo(
+                    "Submeter por mail",
+                    subtitulo = "Contribui com novas palavras para o dicionário.",
+                    aoTocar = { mostrarSubmissao = true },
+                    direita = { Chevron() },
                 )
+                mensagemFalta?.let {
+                    Text(
+                        it, style = Estilo.ajuda, color = Cores.err,
+                        modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
+                    )
+                }
             }
 
             Seccao("Sobre")
-            Linha("Versão da app", BuildConfig.VERSION_NAME)
-            // O dicionário e as licenças passam para um ecrã só deles: são
-            // informação que se consulta uma vez, e a ocupar espaço aqui
-            // faziam as Definições parecerem uma ficha técnica.
-            Row(
-                Modifier.fillMaxWidth()
-                    .clickable(onClick = aoAbrirLicencas)
-                    .padding(16.dp, 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
+            GrupoCartao {
+                LinhaGrupo(
+                    "Versão da app",
+                    direita = {
+                        Text(BuildConfig.VERSION_NAME, style = Estilo.texto, color = Cores.ink2)
+                    },
+                )
+                DivisoriaGrupo()
+                // O dicionário e as licenças têm um ecrã só deles: são
+                // informação que se consulta uma vez.
+                LinhaGrupo(
                     "Dicionário e licenças",
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyLarge,
+                    aoTocar = aoAbrirLicencas,
+                    direita = { Chevron() },
                 )
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
+                DivisoriaGrupo()
+                LinhaGrupo(
+                    "Contactar por email",
+                    subtitulo = "Sugestões, problemas ou ajuda.",
+                    aoTocar = {
+                        // Espaço para a mensagem em cima; a versão da app e a
+                        // data do dicionário vão no fundo, para saber de que
+                        // build veio o contacto (como na submissão de palavras).
+                        val intent = intentEmail(
+                            para = CONTACTO_EMAIL,
+                            assunto = "Palavra-me: contacto",
+                            corpo = "\n\n" + linhaVersao(
+                                BuildConfig.VERSION_NAME, app.dicionario?.construidoEm,
+                            ),
+                        )
+                        mensagem = try {
+                            context.startActivity(intent); null
+                        } catch (e: Exception) {
+                            "Não encontrei uma app de email neste telemóvel."
+                        }
+                    },
+                    direita = { Chevron() },
                 )
-            }
-
-            Seccao("Contacto")
-            Text(
-                "Sugestões, problemas ou ajuda.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(16.dp, 4.dp),
-            )
-            OutlinedButton(
-                onClick = {
-                    // Espaço para a mensagem em cima; a versão da app e a data
-                    // do dicionário vão no fundo, para saber de que build veio
-                    // o contacto (como na submissão de palavras).
-                    val intent = intentEmail(
-                        para = CONTACTO_EMAIL,
-                        assunto = "Palavra-me: contacto",
-                        corpo = "\n\n" + linhaVersao(
-                            BuildConfig.VERSION_NAME, app.dicionario?.construidoEm,
-                        ),
+                mensagem?.let {
+                    Text(
+                        it, style = Estilo.ajuda, color = Cores.err,
+                        modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
                     )
-                    mensagem = try {
-                        context.startActivity(intent); null
-                    } catch (e: Exception) {
-                        "Não encontrei uma app de email neste telemóvel."
-                    }
-                },
-                modifier = Modifier.padding(16.dp, 8.dp),
-            ) { Text("Contactar por email") }
-            mensagem?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
-                )
+                }
             }
 
             Seccao("Avançado")
-            SeccaoDesenvolvedor(preferencias)
-            Spacer(Modifier.height(24.dp))
+            GrupoCartao { SeccaoDesenvolvedor(preferencias) }
         }
     }
 
@@ -281,17 +261,13 @@ fun EcraDefinicoes(
     }
 }
 
-
-
 /**
  * Dicionário e licenças.
  *
- * Vive fora das Definições porque é informação de consulta, não de escolha:
- * ninguém vem aqui todos os dias. Mas tem de existir e ser fácil de
- * encontrar — a base deriva de fontes com atribuição obrigatória, e o ecrã
- * de fontes é o que cumpre essa obrigação (plano, F5).
+ * Vive fora das Definições porque é informação de consulta, não de escolha.
+ * Mas tem de existir e ser fácil de encontrar: a base deriva de fontes com
+ * atribuição obrigatória, e este ecrã é o que cumpre essa obrigação (plano, F5).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EcraLicencas(aoVoltar: () -> Unit) {
     val context = LocalContext.current
@@ -301,33 +277,36 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
     var mensagem by remember { mutableStateOf<String?>(null) }
     var haNovoNoApk by remember { mutableStateOf(app.temDicionarioEmpacotado()) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Dicionário e licenças") },
-                navigationIcon = {
-                    IconButton(onClick = aoVoltar) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar")
-                    }
-                },
-            )
-        }
-    ) { padding ->
-        Column(Modifier.padding(padding).verticalScroll(rememberScrollState())) {
-            Seccao("Dicionário")
-            val d = app.dicionario
-            Linha("Construído em", d?.construidoEm?.take(10) ?: "—")
-            Linha("Lemas", d?.totalLemas?.let { "%,d".format(it) } ?: "—")
-            Linha("Aceções", d?.totalAcecoes?.let { "%,d".format(it) } ?: "—")
-            Linha("Formas flexionadas", d?.totalFormas?.let { "%,d".format(it) } ?: "—")
-            Linha("Exemplos", d?.totalExemplos?.let { "%,d".format(it) } ?: "—")
+    Scaffold(containerColor = Cores.bg) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            BarraVoltar(aoVoltar)
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 28.dp),
+            ) {
+                Text("Dicionário e licenças", style = Estilo.tituloEcra, color = Cores.ink)
 
-            if (haNovoNoApk) {
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.padding(horizontal = 16.dp)) {
-                    Button(
-                        enabled = !aInstalar,
-                        onClick = {
+                Seccao("Dicionário")
+                val d = app.dicionario
+                GrupoCartao {
+                    Linha("Construído em", d?.construidoEm?.take(10) ?: "-")
+                    DivisoriaGrupo()
+                    Linha("Lemas", d?.totalLemas?.let { "%,d".format(it) } ?: "-")
+                    DivisoriaGrupo()
+                    Linha("Aceções", d?.totalAcecoes?.let { "%,d".format(it) } ?: "-")
+                    DivisoriaGrupo()
+                    Linha("Formas flexionadas", d?.totalFormas?.let { "%,d".format(it) } ?: "-")
+                    DivisoriaGrupo()
+                    Linha("Exemplos", d?.totalExemplos?.let { "%,d".format(it) } ?: "-")
+                }
+
+                if (haNovoNoApk) {
+                    Spacer(Modifier.height(12.dp))
+                    BotaoPrincipal(
+                        if (aInstalar) "A instalar…" else "Instalar o dicionário da app",
+                        {
                             aInstalar = true
                             ambito.launch {
                                 mensagem = when (val r = app.instalarDicionarioEmpacotado()) {
@@ -339,39 +318,43 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
                                 haNovoNoApk = app.temDicionarioEmpacotado()
                             }
                         },
-                    ) {
-                        Text(if (aInstalar) "A instalar…" else "Instalar o dicionário da app")
-                    }
-                }
-            }
-            mensagem?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(16.dp, 8.dp),
-                )
-            }
-
-            Seccao("Fontes")
-            app.dicionario?.fontes()?.forEach { fonte ->
-                Column(Modifier.padding(16.dp, 4.dp)) {
-                    Text(fonte.nome, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        fonte.licenca,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        ativo = !aInstalar,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-            }
-            Text(
-                "A base de dados deriva destas fontes e é distribuída sob "
-                    + "CC BY-SA, como elas exigem.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(16.dp, 8.dp),
-            )
+                mensagem?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = Estilo.ajuda, color = Cores.ink)
+                }
 
-            Spacer(Modifier.height(24.dp))
+                Seccao("Fontes")
+                val fontes = app.dicionario?.fontes().orEmpty()
+                if (fontes.isNotEmpty()) {
+                    GrupoCartao {
+                        fontes.forEachIndexed { i, fonte ->
+                            if (i > 0) DivisoriaGrupo()
+                            LinhaGrupo(fonte.nome, subtitulo = fonte.licenca)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "A base de dados deriva destas fontes e é distribuída sob "
+                        + "CC BY-SA, como elas exigem.",
+                    style = Estilo.ajuda,
+                    color = Cores.ink2,
+                )
+
+                // As letras vão dentro da app, sem descarregar nada. A licença
+                // OFL pede que o texto dela as acompanhe: está nos assets
+                // (licencas/OFL-*.txt) e no NOTICE do repositório.
+                Seccao("Tipografia")
+                GrupoCartao {
+                    LinhaGrupo("Literata", subtitulo = "SIL Open Font License 1.1")
+                    DivisoriaGrupo()
+                    LinhaGrupo("Instrument Sans", subtitulo = "SIL Open Font License 1.1")
+                }
+            }
         }
     }
 }
@@ -381,8 +364,8 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
  *
  * A permissão de notificações é pedida **aqui**, no momento em que se liga o
  * modo, e não ao arrancar a app. Quem nunca ligar os lembretes nunca vê o
- * pedido — que é a diferença entre uma app que pergunta quando precisa e uma
- * que pergunta por precaução.
+ * pedido: é a diferença entre uma app que pergunta quando precisa e uma que
+ * pergunta por precaução.
  */
 @Composable
 private fun SeccaoJogo(preferencias: Preferencias) {
@@ -404,23 +387,12 @@ private fun SeccaoJogo(preferencias: Preferencias) {
         if (concedida) reagendar()
     }
 
-    Row(
-        Modifier.fillMaxWidth().padding(16.dp, 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("Lembretes", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Uma palavra da tua coleção, para responderes numa pausa. "
-                    + "Se não houver nada a rever, não te incomoda.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Switch(
-            checked = ligado,
-            onCheckedChange = { querLigar ->
+    LinhaGrupo(
+        "Lembretes",
+        subtitulo = "Uma palavra da tua coleção, para responderes numa pausa. "
+            + "Se não houver nada a rever, não te incomoda.",
+        direita = {
+            SwitchPalavra(ligado) { querLigar ->
                 if (!querLigar) {
                     preferencias.definirJogoLigado(false)
                     Lembrete.cancelar(context)
@@ -430,68 +402,80 @@ private fun SeccaoJogo(preferencias: Preferencias) {
                 } else {
                     pedido.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                 }
-            },
-        )
-    }
+            }
+        },
+    )
 
     if (!ligado) return
 
-    Row(
-        Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Por dia", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        IconButton(
-            enabled = quantos > 1,
-            onClick = { preferencias.definirQuantosPorDia(quantos - 1); reagendar() },
-        ) { Icon(Icons.Default.Remove, "Menos um") }
-        Text(quantos.toString(), style = MaterialTheme.typography.titleMedium)
-        IconButton(
-            enabled = quantos < Preferencias.MAX_POR_DIA,
-            onClick = { preferencias.definirQuantosPorDia(quantos + 1); reagendar() },
-        ) { Icon(Icons.Default.Add, "Mais um") }
-    }
-
-    Row(Modifier.fillMaxWidth().padding(16.dp, 4.dp)) {
-        Text("Entre as", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        TextButton(onClick = { aEscolher = Extremo.INICIO }) { Text("%02d:00".format(inicio)) }
-        Text("e as", Modifier.padding(top = 14.dp), style = MaterialTheme.typography.bodyMedium)
-        TextButton(onClick = { aEscolher = Extremo.FIM }) { Text("%02d:00".format(fim)) }
-    }
-
-    // Mostrar as horas calculadas evita a pergunta óbvia — "3 entre as 8h e
-    // as 22h dá a que horas?" — e torna a regra visível em vez de mágica.
-    Text(
-        "Vais receber " + horasDosLembretes(quantos, inicio, fim)
-            .joinToString(", ") { "%02dh".format(it) } + ".",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.outline,
-        modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp),
+    DivisoriaGrupo()
+    LinhaGrupo(
+        "Por dia",
+        direita = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BotaoPasso(Icons.Rounded.Remove, "Menos um", quantos > 1) {
+                    preferencias.definirQuantosPorDia(quantos - 1); reagendar()
+                }
+                Text(
+                    quantos.toString(),
+                    style = Estilo.numeroEstat.copy(fontSize = 20.sp),
+                    color = Cores.ink,
+                    modifier = Modifier.widthIn(min = 36.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                BotaoPasso(Icons.Rounded.Add, "Mais um", quantos < Preferencias.MAX_POR_DIA) {
+                    preferencias.definirQuantosPorDia(quantos + 1); reagendar()
+                }
+            }
+        },
     )
-
+    DivisoriaGrupo()
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Entre as", style = Estilo.controlo.copy(fontSize = 16.sp), color = Cores.ink)
+            Spacer(Modifier.width(8.dp))
+            ChipHora(inicio) { aEscolher = Extremo.INICIO }
+            Spacer(Modifier.width(8.dp))
+            Text("e as", style = Estilo.controlo.copy(fontSize = 16.sp), color = Cores.ink)
+            Spacer(Modifier.width(8.dp))
+            ChipHora(fim) { aEscolher = Extremo.FIM }
+        }
+        Spacer(Modifier.height(10.dp))
+        // Mostrar as horas calculadas evita a pergunta óbvia ("3 entre as 8h e
+        // as 22h dá a que horas?") e torna a regra visível em vez de mágica.
+        Text(
+            "Vais receber " + horasDosLembretes(quantos, inicio, fim)
+                .joinToString(", ") { "%02dh".format(it) } + ".",
+            style = Estilo.ajuda,
+            color = Cores.ink2,
+        )
+    }
+    DivisoriaGrupo()
     // Empurrão à bateria. Em muitos telemóveis (Xiaomi, Samsung, Huawei...) o
     // sistema mata o trabalho em segundo plano e os lembretes não chegam. Não
-    // se pede a permissão de isenção — é restrita na Play Store; abrem-se as
-    // definições da app, onde a bateria se põe em "Sem restrições".
-    Text(
-        "Não recebes os lembretes? O telemóvel pode estar a poupar bateria à "
-            + "custa da app. Nas definições da app, põe a bateria em "
-            + "\"Sem restrições\".",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.outline,
-        modifier = Modifier.padding(16.dp, 4.dp, 16.dp, 0.dp),
-    )
-    TextButton(
-        onClick = {
-            context.startActivity(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", context.packageName, null),
+    // se pede a permissão de isenção, que é restrita na Play Store; abrem-se
+    // as definições da app, onde a bateria se põe em "Sem restrições".
+    Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 6.dp)) {
+        Text(
+            "Não recebes os lembretes? O telemóvel pode estar a poupar bateria à "
+                + "custa da app. Nas definições da app, põe a bateria em "
+                + "\"Sem restrições\".",
+            style = Estilo.ajuda,
+            color = Cores.ink2,
+        )
+        TextButton(
+            onClick = {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    )
                 )
-            )
-        },
-        modifier = Modifier.padding(start = 8.dp),
-    ) { Text("Abrir definições da app") }
+            },
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
+            colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+        ) { Text("Abrir definições da app", style = Estilo.controloForte) }
+    }
 
     aEscolher?.let { extremo ->
         EscolherHora(
@@ -510,13 +494,49 @@ private fun SeccaoJogo(preferencias: Preferencias) {
     }
 }
 
+/** Um botão do contador: 38 de lado, fundo afundado. */
+@Composable
+private fun BotaoPasso(
+    icone: androidx.compose.ui.graphics.vector.ImageVector,
+    descricao: String,
+    ativo: Boolean,
+    aoTocar: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(38.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Cores.sunk)
+            .clickable(enabled = ativo, onClick = aoTocar),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icone, descricao, tint = if (ativo) Cores.ink else Cores.ink3, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** A hora de um extremo da janela, num chip afundado que abre o seletor. */
+@Composable
+private fun ChipHora(hora: Int, aoTocar: () -> Unit) {
+    Text(
+        "%02d:00".format(hora),
+        style = Estilo.controloForte,
+        color = Cores.ink,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Cores.sunk)
+            .clickable(onClick = aoTocar)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
+}
+
 private enum class Extremo { INICIO, FIM }
 
 @Composable
 private fun EscolherHora(atual: Int, aoFechar: () -> Unit, aoEscolher: (Int) -> Unit) {
     AlertDialog(
         onDismissRequest = aoFechar,
-        title = { Text("A que horas?") },
+        containerColor = Cores.card,
+        title = { Text("A que horas?", style = Estilo.grupoTitulo, color = Cores.ink) },
         text = {
             Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                 (0..23).forEach { h ->
@@ -526,14 +546,22 @@ private fun EscolherHora(atual: Int, aoFechar: () -> Unit, aoEscolher: (Int) -> 
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = h == atual, onClick = null)
+                        RadioButton(
+                            selected = h == atual, onClick = null,
+                            colors = RadioButtonDefaults.colors(selectedColor = Cores.accent),
+                        )
                         Spacer(Modifier.width(12.dp))
-                        Text("%02d:00".format(h))
+                        Text("%02d:00".format(h), style = Estilo.texto, color = Cores.ink)
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = aoFechar) { Text("Fechar") } },
+        confirmButton = {
+            TextButton(
+                onClick = aoFechar,
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+            ) { Text("Fechar", style = Estilo.controloForte) }
+        },
     )
 }
 
@@ -547,51 +575,30 @@ private fun EscolherHora(atual: Int, aoFechar: () -> Unit, aoEscolher: (Int) -> 
 @Composable
 private fun SeccaoDesenvolvedor(preferencias: Preferencias) {
     val ligado by preferencias.modoDesenvolvedor.collectAsState()
-    Row(
-        Modifier.fillMaxWidth().padding(16.dp, 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text("Modo desenvolvedor", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Mostra de que fonte veio cada definição e permite rever "
-                    + "palavras que ainda não estão vencidas.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Switch(
-            checked = ligado,
-            onCheckedChange = preferencias::definirModoDesenvolvedor,
-        )
-    }
+    LinhaGrupo(
+        "Modo desenvolvedor",
+        subtitulo = "Mostra de que fonte veio cada definição e permite rever "
+            + "palavras que ainda não estão vencidas.",
+        direita = { SwitchPalavra(ligado, preferencias::definirModoDesenvolvedor) },
+    )
 }
 
+/** O título de uma secção: sobretítulo em destaque, por cima do grupo. */
 @Composable
 private fun Seccao(titulo: String) {
-    Text(
+    Overline(
         titulo,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(16.dp, 20.dp, 16.dp, 8.dp),
+        cor = Cores.accentInk,
+        modifier = Modifier.padding(start = 4.dp, top = 26.dp, bottom = 10.dp),
     )
-    HorizontalDivider()
 }
 
 @Composable
 private fun Linha(etiqueta: String, valor: String) {
-    Row(
-        Modifier.fillMaxWidth().padding(16.dp, 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(etiqueta, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Text(
-            valor,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline,
-        )
-    }
+    LinhaGrupo(
+        etiqueta,
+        direita = { Text(valor, style = Estilo.texto, color = Cores.ink2) },
+    )
 }
 
 // --- submissão de palavras em falta ---------------------------------------
@@ -622,7 +629,8 @@ private fun DialogoSubmeterFaltas(
 
     AlertDialog(
         onDismissRequest = aoFechar,
-        title = { Text("Submeter palavras em falta") },
+        containerColor = Cores.card,
+        title = { Text("Submeter palavras em falta", style = Estilo.grupoTitulo, color = Cores.ink) },
         text = {
             val lista = faltas
             when {
@@ -646,13 +654,13 @@ private fun DialogoSubmeterFaltas(
                             )
                             Spacer(Modifier.width(8.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(f.lemma, style = MaterialTheme.typography.bodyLarge)
+                                Text(f.lemma, style = Estilo.linhaLema.copy(fontSize = 17.sp), color = Cores.ink)
                                 Text(
                                     if (f.tipo == TipoFalta.NAO_ENCONTRADA)
                                         "não está no dicionário"
                                     else "sem significado",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline,
+                                    style = Estilo.meta,
+                                    color = Cores.ink3,
                                 )
                             }
                         }

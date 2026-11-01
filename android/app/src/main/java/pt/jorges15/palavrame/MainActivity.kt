@@ -9,6 +9,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bookmarks
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +23,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -30,12 +39,17 @@ import pt.jorges15.palavrame.ui.EcraJogo
 import pt.jorges15.palavrame.ui.EcraLicencas
 import pt.jorges15.palavrame.ui.EcraPesquisa
 import pt.jorges15.palavrame.ui.PesquisaViewModel
+import pt.jorges15.palavrame.ui.BotaoPrincipal
+import pt.jorges15.palavrame.ui.Logotipo
+import pt.jorges15.palavrame.ui.theme.Cores
+import pt.jorges15.palavrame.ui.theme.Estilo
 import pt.jorges15.palavrame.ui.theme.TemaPalavrame
 
 private enum class Ecra { PESQUISA, COLECAO, DEFINICOES, LICENCAS, JOGO }
 
 class MainActivity : ComponentActivity() {
 
+    @OptIn(ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         // A partir do Android 15 o sistema desenha as barras por cima da app
         // quer se peça quer não. Declará-lo é o que faz os `Scaffold`
@@ -79,6 +93,10 @@ class MainActivity : ComponentActivity() {
                 var ecra by rememberSaveable {
                     mutableStateOf(if (daNotificacao) Ecra.JOGO else Ecra.PESQUISA)
                 }
+                // O livro tocado na estante do ecrã inicial: a coleção abre já
+                // nele e depois esquece-o (volta a nulo), para a visita seguinte
+                // pelo separador abrir como sempre.
+                var livroPedido by rememberSaveable { mutableStateOf<String?>(null) }
 
                 // Retroceder num subecrã volta à pesquisa (das licenças, às
                 // definições); só na pesquisa é que o retroceder do sistema
@@ -110,43 +128,74 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LarguraDeLeitura {
-                when (ecra) {
-                    Ecra.COLECAO -> {
-                        val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
-                        EcraColecao(
-                            vm,
-                            desenvolvedor = desenvolvedor,
-                            aoVoltar = { ecra = Ecra.PESQUISA },
-                        )
+                val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
+                // O Rever é um ecrã inteiro, com o seu "×"; as licenças são um
+                // subecrã das definições. Nos outros três há a barra de baixo.
+                val comBarra = ecra == Ecra.PESQUISA || ecra == Ecra.COLECAO ||
+                    ecra == Ecra.DEFINICOES
+
+                Scaffold(
+                    containerColor = Cores.bg,
+                    // Os ecrãs de dentro tratam das barras do sistema; este só
+                    // reserva o espaço da barra de navegação.
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                    bottomBar = {
+                        if (comBarra) {
+                            BarraNavegacao(
+                                atual = ecra,
+                                aoEscolher = { destino ->
+                                    // Tocar outra vez em Procurar volta ao início.
+                                    if (destino == Ecra.PESQUISA && ecra == Ecra.PESQUISA) vm.limpar()
+                                    ecra = destino
+                                },
+                            )
+                        }
+                    },
+                ) { p ->
+                    Box(Modifier.padding(p).consumeWindowInsets(p)) {
+                        LarguraDeLeitura {
+                            when (ecra) {
+                                Ecra.COLECAO -> EcraColecao(
+                                    vm,
+                                    desenvolvedor = desenvolvedor,
+                                    aoVoltar = { ecra = Ecra.PESQUISA },
+                                    aoAbrirPalavra = { lema ->
+                                        vm.procurar(lema)
+                                        ecra = Ecra.PESQUISA
+                                    },
+                                    livroInicial = livroPedido,
+                                    aoUsarLivroInicial = { livroPedido = null },
+                                )
+                                Ecra.DEFINICOES -> EcraDefinicoes(
+                                    preferencias,
+                                    aoAbrirLicencas = { ecra = Ecra.LICENCAS },
+                                    aoVoltar = { ecra = Ecra.PESQUISA },
+                                )
+                                Ecra.LICENCAS -> EcraLicencas(aoVoltar = { ecra = Ecra.DEFINICOES })
+                                Ecra.JOGO -> {
+                                    // A chave leva o modo dentro: sem isso, ligar o Modo
+                                    // Desenvolvedor e voltar ao jogo reaproveitava o
+                                    // ViewModel antigo e o modo só fazia efeito depois
+                                    // de fechar a app.
+                                    val jogo: JogoViewModel = viewModel(
+                                        key = "jogo-$desenvolvedor-$lemaDaNotificacao",
+                                        factory = fabricaJogo(app, desenvolvedor, lemaDaNotificacao),
+                                    )
+                                    EcraJogo(jogo, aoVoltar = { ecra = Ecra.PESQUISA })
+                                }
+                                Ecra.PESQUISA -> EcraPesquisa(
+                                    vm,
+                                    preferencias,
+                                    aoAbrirColecao = { ecra = Ecra.COLECAO },
+                                    aoAbrirJogo = { ecra = Ecra.JOGO },
+                                    aoAbrirLivro = { titulo ->
+                                        livroPedido = titulo
+                                        ecra = Ecra.COLECAO
+                                    },
+                                )
+                            }
+                        }
                     }
-                    Ecra.DEFINICOES -> EcraDefinicoes(
-                        preferencias,
-                        aoAbrirLicencas = { ecra = Ecra.LICENCAS },
-                        aoVoltar = { ecra = Ecra.PESQUISA },
-                    )
-                    Ecra.LICENCAS -> EcraLicencas(aoVoltar = { ecra = Ecra.DEFINICOES })
-                    Ecra.JOGO -> {
-                        val treinoLivre by preferencias.modoDesenvolvedor
-                            .collectAsState()
-                        // A chave leva o modo dentro: sem isso, ligar o Modo
-                        // Desenvolvedor e voltar ao jogo reaproveitava o
-                        // ViewModel antigo e o modo só fazia efeito depois
-                        // de fechar a app.
-                        val jogo: JogoViewModel = viewModel(
-                            key = "jogo-$treinoLivre-$lemaDaNotificacao",
-                            factory = fabricaJogo(app, treinoLivre, lemaDaNotificacao),
-                        )
-                        EcraJogo(jogo, aoVoltar = { ecra = Ecra.PESQUISA })
-                    }
-                    Ecra.PESQUISA -> EcraPesquisa(
-                        vm,
-                        preferencias,
-                        aoAbrirColecao = { ecra = Ecra.COLECAO },
-                        aoAbrirDefinicoes = { ecra = Ecra.DEFINICOES },
-                        aoAbrirJogo = { ecra = Ecra.JOGO },
-                    )
-                }
                 }
             }
         }
@@ -180,6 +229,56 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Os três destinos da barra de baixo. */
+private data class Destino(val ecra: Ecra, val rotulo: String, val icone: ImageVector)
+
+private val DESTINOS = listOf(
+    Destino(Ecra.PESQUISA, "Procurar", Icons.Rounded.Search),
+    Destino(Ecra.COLECAO, "Coleção", Icons.Rounded.Bookmarks),
+    Destino(Ecra.DEFINICOES, "Definições", Icons.Rounded.Tune),
+)
+
+/**
+ * A navegação inferior: Procurar, Coleção, Definições. Fundo de papel, uma
+ * linha fina em cima, e a pílula do destino ativo em accentSoft.
+ */
+@Composable
+private fun BarraNavegacao(atual: Ecra, aoEscolher: (Ecra) -> Unit) {
+    val linha = Cores.line
+    NavigationBar(
+        containerColor = Cores.bg,
+        tonalElevation = 0.dp,
+        modifier = Modifier.drawBehind {
+            drawLine(linha, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx())
+        },
+    ) {
+        DESTINOS.forEach { d ->
+            val ativo = d.ecra == atual
+            NavigationBarItem(
+                selected = ativo,
+                onClick = { aoEscolher(d.ecra) },
+                icon = { Icon(d.icone, null) },
+                label = {
+                    Text(
+                        d.rotulo,
+                        style = Estilo.meta.copy(
+                            fontSize = 12.sp,
+                            fontWeight = if (ativo) FontWeight.Bold else FontWeight.Medium,
+                        ),
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Cores.accentInk,
+                    selectedTextColor = Cores.ink,
+                    indicatorColor = Cores.accentSoft,
+                    unselectedIconColor = Cores.ink2,
+                    unselectedTextColor = Cores.ink2,
+                ),
+            )
+        }
+    }
+}
+
 /**
  * Limita a largura do conteúdo a uma coluna de leitura.
  *
@@ -191,7 +290,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun LarguraDeLeitura(conteudo: @Composable () -> Unit) {
     Box(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        Modifier.fillMaxSize().background(Cores.bg),
         contentAlignment = Alignment.TopCenter,
     ) {
         Box(Modifier.fillMaxHeight().widthIn(max = 720.dp).fillMaxWidth()) {
@@ -237,40 +336,41 @@ private fun EcraInstalarDicionario(app: PalavrameApp, aoFicarPronto: () -> Unit)
         }
     }
 
-    Surface(Modifier.fillMaxSize()) {
+    Surface(Modifier.fillMaxSize(), color = Cores.bg) {
         Column(
-            Modifier.fillMaxSize().padding(32.dp),
+            Modifier.fillMaxSize().systemBarsPadding().padding(32.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Palavra-me", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(8.dp))
+            Logotipo()
+            Spacer(Modifier.height(12.dp))
             Text(
                 if (app.dicionario != null) "A atualizar o dicionário."
                 else "A preparar o dicionário.",
-                style = MaterialTheme.typography.titleMedium,
+                style = Estilo.corpo,
+                color = Cores.ink,
             )
             Spacer(Modifier.height(24.dp))
 
             if (aCopiar) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = Cores.accent)
                 Spacer(Modifier.height(16.dp))
                 Text(
                     "São 200 MB. Demora alguns segundos e só acontece uma vez.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = Estilo.texto,
+                    color = Cores.ink2,
                 )
             } else {
                 Text(
                     "Se preferires, podes escolher tu o ficheiro do dicionário.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = Estilo.texto,
+                    color = Cores.ink2,
                 )
                 Spacer(Modifier.height(24.dp))
-                Button(onClick = { seletor.launch(arrayOf("*/*")) }) {
-                    Text("Escolher o ficheiro")
-                }
+                BotaoPrincipal("Escolher o ficheiro", { seletor.launch(arrayOf("*/*")) })
                 erro?.let {
                     Spacer(Modifier.height(16.dp))
-                    Text(it, color = MaterialTheme.colorScheme.error)
+                    Text(it, style = Estilo.texto, color = Cores.err)
                 }
             }
         }

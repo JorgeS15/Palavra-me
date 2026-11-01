@@ -1,49 +1,57 @@
 package pt.jorges15.palavrame.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import pt.jorges15.palavrame.BuildConfig
-import pt.jorges15.palavrame.data.*
-import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
-import pt.jorges15.palavrame.jogo.Niveis
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import pt.jorges15.palavrame.data.*
+import pt.jorges15.palavrame.jogo.Niveis
+import pt.jorges15.palavrame.ui.theme.Cores
+import pt.jorges15.palavrame.ui.theme.Estilo
+import java.time.LocalDate
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EcraPesquisa(
     vm: PesquisaViewModel,
     preferencias: Preferencias,
     aoAbrirColecao: () -> Unit,
-    aoAbrirDefinicoes: () -> Unit,
     aoAbrirJogo: () -> Unit = {},
+    /** Abre a coleção já no livro tocado na estante. */
+    aoAbrirLivro: (String) -> Unit = { aoAbrirColecao() },
 ) {
     val estado by vm.estado.collectAsState()
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
@@ -55,157 +63,66 @@ fun EcraPesquisa(
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val fraseSugerida by vm.fraseSugerida.collectAsState()
-    // Guarda-se o lema (não a Entrada) e em `rememberSaveable`: o diálogo de
-    // registo aberto sobrevive a rodar o telemóvel, com o que já lá escreveste.
+    // Guarda-se o lema (não a Entrada) e em `rememberSaveable`: a folha de
+    // registo aberta sobrevive a rodar o telemóvel, com o que já lá escreveste.
     var lemaARegistar by rememberSaveable { mutableStateOf<String?>(null) }
-    // Liga o campo do significado próprio no diálogo, para palavras que não
+    // Liga o campo do significado próprio na folha, para palavras que não
     // estão no dicionário ou que lá estão sem definição.
     var pedirSignificadoNoRegisto by rememberSaveable { mutableStateOf(false) }
-    // Para avisar, ao registar uma palavra em falta, que pode ser submetida.
     val estadoSnackbar = remember { SnackbarHostState() }
     val ambito = rememberCoroutineScope()
 
-    // Ao abrir uma palavra — por pesquisa, sugestão, candidato ou sinónimo —
-    // fecha-se o teclado. Duas razões: a definição não deve ser vista com o
-    // teclado por cima, e com o teclado aberto o primeiro "retroceder" fechava
-    // só o teclado em vez de voltar à palavra anterior.
+    // Ao abrir uma palavra (por pesquisa, sugestão, candidato ou sinónimo)
+    // fecha-se o teclado: a definição não deve ser vista com o teclado por
+    // cima, e com ele aberto o primeiro "retroceder" fechava só o teclado.
     LaunchedEffect(estado.entrada?.lemmaId) {
         if (estado.entrada != null) focus.clearFocus()
     }
 
-    // Retroceder anda palavra a palavra pelo histórico. Com uma palavra
-    // aberta e sem histórico, fecha-a; a meio de escrever uma pesquisa nova,
-    // volta à palavra que estava aberta ou, se não havia, limpa a caixa. Só no
-    // ecrã inicial vazio é que o "retroceder" do sistema sai da app.
-    BackHandler(enabled = estado.entrada != null || estado.texto.isNotEmpty()) {
+    // Da palavra: anda palavra a palavra pelo histórico; sem histórico, volta
+    // à lista de candidatos se a havia, senão ao início. Da "não encontrada":
+    // volta ao campo com o termo escrito, para o corrigir. A meio de escrever:
+    // limpa. Só no início vazio é que o "retroceder" do sistema sai da app.
+    val voltar: () -> Unit = {
         when {
-            vm.voltarEntrada() -> Unit
-            estado.entrada != null -> vm.fecharEntrada()
+            estado.entrada != null -> when {
+                vm.voltarEntrada() -> Unit
+                estado.candidatos.size > 1 -> vm.fecharEntrada()
+                else -> vm.limpar()
+            }
+            estado.candidatos.isNotEmpty() -> vm.limpar()
+            estado.procurou -> vm.escrever(estado.texto)
             else -> vm.limpar()
         }
     }
+    BackHandler(
+        enabled = estado.entrada != null || estado.texto.isNotEmpty() || estado.procurou,
+        onBack = voltar,
+    )
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    // O nome da app é o gesto que ela nomeia — merece o
-                    // peso de um título, não o de uma etiqueta.
-                    Text(
-                        "Palavra-me",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = aoAbrirDefinicoes) {
-                        Icon(Icons.Default.Settings, "Definições")
-                    }
-                },
-                actions = {
-                    // Rever à mão é do Modo Desenvolvedor.
-                    //
-                    // Para quem lê, o jogo vem pelo lembrete: chega, responde-se,
-                    // acabou. Um botão permanente convidava a sessões de estudo,
-                    // que é o contrário do que esta app é. Perder um lembrete
-                    // não perde nada — a palavra continua vencida e volta no
-                    // lembrete seguinte.
-                    if (desenvolvedor && guardados.size >= MINIMO_PARA_JOGAR) {
-                        IconButton(onClick = aoAbrirJogo) {
-                            Icon(Icons.Default.School, "Rever")
-                        }
-                    }
-                    // Sem contador em cima do marcador: cortava contra a
-                    // margem do ecrã e dizia o que já está dito em dois
-                    // sítios — na linha de estatísticas aqui abaixo e no
-                    // topo do ecrã da coleção.
-                    IconButton(onClick = aoAbrirColecao) {
-                        Icon(Icons.Default.Bookmark, "As minhas palavras")
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(estadoSnackbar) },
+        containerColor = Cores.bg,
+        snackbarHost = { AnfitriaoSnackbar(estadoSnackbar) },
     ) { padding ->
-        Column(Modifier.padding(padding).padding(horizontal = 16.dp)) {
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            val entrada = estado.entrada
+            when {
+                entrada != null -> VistaEntrada(
+                    entrada,
+                    guardada = palavras.firstOrNull { it.lemma == entrada.lemma },
+                    desenvolvedor = desenvolvedor,
+                    aoVoltar = voltar,
+                    aoRegistar = {
+                        lemaARegistar = entrada.lemma
+                        // Sem aceções: pede-se o significado ao registar.
+                        pedirSignificadoNoRegisto = entrada.acecoes.isEmpty()
+                    },
+                    aoPartilhar = { partilharEntrada(context, entrada) },
+                    aoSeguir = { vm.procurar(it) },
+                )
 
-            OutlinedTextField(
-                value = estado.texto,
-                onValueChange = vm::escrever,
-                label = { Text("Procurar uma palavra") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = {
-                    if (estado.texto.isNotEmpty()) {
-                        IconButton(onClick = { vm.limpar() }) {
-                            Icon(Icons.Default.Close, "Limpar")
-                        }
-                    }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                // Fecha o teclado ao procurar: senão fica a tapar o botão de
-                // registar, mesmo em baixo, logo a seguir à definição.
-                keyboardActions = KeyboardActions(onSearch = {
-                    vm.procurar()
-                    focus.clearFocus()
-                }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Box(Modifier.weight(1f)) {
-              when {
-                estado.entrada != null ->
-                    VistaEntrada(
-                        estado.entrada!!,
-                        jaGuardada = estado.entrada!!.lemma in guardados,
-                        significadoProprio = palavras
-                            .firstOrNull { it.lemma == estado.entrada!!.lemma }?.significado,
-                        desenvolvedor = desenvolvedor,
-                        aoRegistar = {
-                            lemaARegistar = it.lemma
-                            // Sem aceções: pede-se o significado ao registar.
-                            pedirSignificadoNoRegisto = it.acecoes.isEmpty()
-                        },
-                        aoPartilhar = { partilharEntrada(context, it) },
-                        aoSeguir = { vm.procurar(it) },
-                    )
-
-                estado.candidatos.isNotEmpty() -> ListaCandidatos(estado.candidatos, vm::abrir)
-
-                estado.sugestoes.isNotEmpty() ->
-                    LazyColumn {
-                        items(estado.sugestoes) { s ->
-                            ListItem(
-                                headlineContent = { Text(s) },
-                                modifier = Modifier.clickable { vm.procurar(s) },
-                            )
-                            HorizontalDivider()
-                        }
-                    }
-
-                // A meio da escrita, sem nada que comece pelo que está
-                // escrito: provavelmente um erro. As parecidas aparecem logo,
-                // sem ser preciso carregar em procurar.
-                !estado.procurou && estado.parecidas.isNotEmpty() ->
-                    LazyColumn {
-                        item {
-                            Text(
-                                "Querias dizer:",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(estado.parecidas) { s ->
-                            ListItem(
-                                headlineContent = { Text(s) },
-                                modifier = Modifier.clickable { vm.procurar(s) },
-                            )
-                            HorizontalDivider()
-                        }
-                    }
+                estado.candidatos.isNotEmpty() ->
+                    ListaCandidatos(estado.candidatos, aoVoltar = voltar, aoEscolher = vm::abrir)
 
                 estado.procurou -> {
                     val termo = Texto.paraRegisto(estado.texto)
@@ -213,6 +130,7 @@ fun EcraPesquisa(
                     NaoEncontrada(
                         termo = termo,
                         parecidas = estado.parecidas,
+                        aoVoltar = voltar,
                         aoEscolherParecida = { vm.procurar(it) },
                         significadoProprio = guardada?.significado,
                         jaGuardada = guardada != null,
@@ -223,29 +141,33 @@ fun EcraPesquisa(
                     )
                 }
 
-                else -> EcraInicial(
-                    recentes = palavras.take(12),
-                    total = palavras.size,
-                    // "Que já sabes": acertadas pelo menos três vezes seguidas.
-                    sabidas = palavras.count { it.mastery >= Niveis.CAIXA_SABIDA },
+                else -> Inicio(
+                    estado = estado,
+                    palavras = palavras,
                     progresso = progresso,
-                    // "N por rever" é do Modo Desenvolvedor, como o botão de
-                    // rever: para quem lê, o jogo vem só pelo lembrete.
+                    // "N por rever" é do Modo Desenvolvedor: para quem lê, o
+                    // jogo vem só pelo lembrete.
                     porRever = if (desenvolvedor) porRever else 0,
+                    aoEscrever = vm::escrever,
+                    aoProcurar = { termo ->
+                        vm.procurar(termo)
+                        focus.clearFocus()
+                    },
+                    aoLimpar = vm::limpar,
                     aoRever = aoAbrirJogo,
-                    aoEscolher = { vm.procurar(it) },
+                    aoAbrirColecao = aoAbrirColecao,
+                    aoAbrirLivro = aoAbrirLivro,
                 )
-              }
             }
-
-            Rodape()
         }
     }
 
     lemaARegistar?.let { lema ->
-        DialogoRegistar(
+        val existente = palavras.firstOrNull { it.lemma == lema }
+        FolhaRegistar(
             lemma = lema,
             livrosAnteriores = livros,
+            existente = existente,
             fraseInicial = fraseSugerida,
             pedirSignificado = pedirSignificadoNoRegisto,
             aoCancelar = {
@@ -254,16 +176,21 @@ fun EcraPesquisa(
             aoGuardar = { palavra ->
                 // Guarda-se antes de limpar: é o que decide se vale a pena
                 // lembrar que esta palavra pode ser proposta ao dicionário.
-                val eraFalta = pedirSignificadoNoRegisto
-                vm.registar(palavra); lemaARegistar = null
+                val eraFalta = pedirSignificadoNoRegisto && existente == null
+                if (existente != null) vm.atualizar(palavra) else vm.registar(palavra)
+                lemaARegistar = null
                 pedirSignificadoNoRegisto = false; vm.limparContexto()
-                if (eraFalta) {
+                if (existente == null) {
                     ambito.launch {
-                        estadoSnackbar.showSnackbar(
-                            "Palavra registada. Podes propô-la ao dicionário em "
-                                + "Definições, Contribuir.",
-                            duration = SnackbarDuration.Long,
-                        )
+                        if (eraFalta) {
+                            estadoSnackbar.showSnackbar(
+                                "Palavra registada. Podes propô-la ao dicionário em "
+                                    + "Definições, Contribuir.",
+                                duration = SnackbarDuration.Long,
+                            )
+                        } else {
+                            estadoSnackbar.showSnackbar("\"${palavra.lemma}\" está na tua coleção.")
+                        }
                     }
                 }
             },
@@ -271,221 +198,739 @@ fun EcraPesquisa(
     }
 }
 
+// --- início ------------------------------------------------------------------
+
+/**
+ * O ecrã antes de se procurar seja o que for: a pergunta, o campo e, por
+ * baixo, o que a coleção já tem. Uma app que abre vazia só se abre quando já
+ * se sabe o que se quer; mostrar a estante e as últimas palavras convida a
+ * voltar a elas.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ListaCandidatos(candidatos: List<Candidato>, aoEscolher: (Candidato) -> Unit) {
-    // "cantada" pode ser substantivo ou particípio de "cantar": mostram-se
-    // todos os candidatos, ordenados por frequência (plano, secção 9).
-    Text(
-        "Mais do que uma palavra corresponde:",
-        style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.padding(vertical = 8.dp),
-    )
-    LazyColumn {
-        items(candidatos) { c ->
-            ListItem(
-                headlineContent = { Text(c.lemma, fontWeight = FontWeight.Medium) },
-                supportingContent = {
-                    val via = c.viaForma?.let { " · via $it" } ?: ""
-                    Text(rotuloPos(c.pos) + via)
-                },
-                modifier = Modifier.clickable { aoEscolher(c) },
+private fun Inicio(
+    estado: EstadoPesquisa,
+    palavras: List<PalavraGuardada>,
+    progresso: Progresso?,
+    porRever: Int,
+    aoEscrever: (String) -> Unit,
+    aoProcurar: (String) -> Unit,
+    aoLimpar: () -> Unit,
+    aoRever: () -> Unit,
+    aoAbrirColecao: () -> Unit,
+    aoAbrirLivro: (String) -> Unit,
+) {
+    val sequencia = sequenciaAtiva(progresso)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 28.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Logotipo()
+            Spacer(Modifier.weight(1f))
+            if (sequencia >= 1) {
+                Pilula(
+                    if (sequencia == 1) "1 dia" else "$sequencia dias",
+                    fundo = Cores.accentSoft,
+                    cor = Cores.accentInk,
+                    icone = Icons.Rounded.LocalFireDepartment,
+                )
+            }
+        }
+        Spacer(Modifier.height(22.dp))
+        Text(
+            buildAnnotatedString {
+                append("O que encontraste ")
+                withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = Cores.accent)) {
+                    append("hoje")
+                }
+                append("?")
+            },
+            style = Estilo.pergunta,
+            color = Cores.ink,
+        )
+        Spacer(Modifier.height(22.dp))
+        CampoPesquisa(
+            texto = estado.texto,
+            aoMudar = aoEscrever,
+            aoProcurar = { if (estado.texto.isNotBlank()) aoProcurar(estado.texto) },
+            aoLimpar = aoLimpar,
+        )
+
+        if (estado.texto.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            CartaoSugestoes(estado, aoProcurar)
+        } else if (palavras.isEmpty()) {
+            Spacer(Modifier.height(28.dp))
+            Text(
+                "Encontraste uma palavra que não conheces?",
+                style = Estilo.grupoTitulo,
+                color = Cores.ink,
             )
-            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Escreve-a acima. Ou seleciona-a no teu leitor de e-books e "
+                    + "escolhe Palavra-me. Nem precisas de a copiar.",
+                style = Estilo.texto.copy(lineHeight = 1.45.em),
+                color = Cores.ink2,
+            )
+        } else {
+            // O cartão de progresso só depois da primeira resposta: antes seriam
+            // zeros a insinuar que se está atrasado em alguma coisa.
+            val respostas = (progresso?.acertos ?: 0) + (progresso?.erros ?: 0)
+            if (progresso != null && respostas > 0) {
+                Spacer(Modifier.height(22.dp))
+                CartaoProgresso(
+                    progresso = progresso,
+                    total = palavras.size,
+                    // "Que já sabes": acertadas pelo menos três vezes seguidas.
+                    sabidas = palavras.count { it.mastery >= Niveis.CAIXA_SABIDA },
+                    sequencia = sequencia,
+                    porRever = porRever,
+                    aoRever = aoRever,
+                )
+            }
+
+            val estante = remember(palavras) { estanteDe(palavras) }
+            if (estante.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Overline("Na tua estante", Modifier.weight(1f))
+                    Text(
+                        "Ver coleção",
+                        style = Estilo.controloForte.copy(fontSize = 14.sp),
+                        color = Cores.accentInk,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = aoAbrirColecao)
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    estante.forEach { livro ->
+                        Column(
+                            Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { aoAbrirLivro(livro.titulo) }
+                                .padding(bottom = 4.dp, top = 4.dp, end = 4.dp),
+                        ) {
+                            CapaLivro(livro.titulo, livro.autor)
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Cores.ink)) {
+                                        append(livro.quantas.toString())
+                                    }
+                                    append(if (livro.quantas == 1) " palavra" else " palavras")
+                                },
+                                style = Estilo.ajuda,
+                                color = Cores.ink2,
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Overline("Últimas registadas")
+            Spacer(Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                palavras.take(8).forEach { palavra ->
+                    TextoMarcado(
+                        palavra.lemma,
+                        Estilo.recente,
+                        marcador = Cores.accentSoft,
+                        de = 0.68f,
+                        ate = 0.94f,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { aoProcurar(palavra.lemma) },
+                    )
+                }
+            }
         }
     }
 }
+
+/**
+ * O cartão por baixo do campo enquanto se escreve: até cinco começos, ou o
+ * "Querias dizer" quando nada começa pelo que está escrito, e no fim a linha
+ * que procura o que lá está.
+ */
+@Composable
+private fun CartaoSugestoes(estado: EstadoPesquisa, aoProcurar: (String) -> Unit) {
+    val forma = RoundedCornerShape(18.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .background(Cores.card)
+            .border(1.dp, Cores.line, forma),
+    ) {
+        if (estado.sugestoes.isNotEmpty()) {
+            estado.sugestoes.take(5).forEach { s ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { aoProcurar(s.lemma) }
+                        .padding(horizontal = 18.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        s.lemma, style = Estilo.sugestao, color = Cores.ink,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (s.pos.isNotBlank() && s.pos != "desconhecido") {
+                        Spacer(Modifier.width(12.dp))
+                        Text(rotuloPos(s.pos), style = Estilo.dominio, color = Cores.ink2)
+                    }
+                }
+                DivisoriaGrupo()
+            }
+        } else if (!estado.procurou && estado.parecidas.isNotEmpty()) {
+            // Nada começa pelo que está escrito: provavelmente um erro. As
+            // parecidas aparecem logo, sem ser preciso carregar em procurar.
+            Overline("Querias dizer", Modifier.padding(start = 18.dp, top = 14.dp, bottom = 4.dp))
+            estado.parecidas.forEach { p ->
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { aoProcurar(p.lemma) }
+                        .padding(horizontal = 18.dp, vertical = 11.dp),
+                ) {
+                    Text(p.lemma, style = Estilo.sugestao, color = Cores.ink)
+                    p.definicao?.let {
+                        Text(
+                            it, style = Estilo.ajuda, color = Cores.ink2,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                DivisoriaGrupo()
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { aoProcurar(estado.texto) }
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.ArrowForward, null,
+                tint = Cores.accentInk, modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Procurar \"${estado.texto.trim()}\"",
+                style = Estilo.controloForte,
+                color = Cores.accentInk,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Um livro da estante: o título, o autor que lhe ficou e quantas palavras tem. */
+private data class LivroNaEstante(val titulo: String, val autor: String?, val quantas: Int)
+
+/** Os livros da coleção, o mais recente primeiro (a lista vem por data). */
+private fun estanteDe(palavras: List<PalavraGuardada>): List<LivroNaEstante> =
+    palavras.filter { !it.livro.isNullOrBlank() }
+        .groupBy { it.livro!!.trim() }
+        .map { (titulo, lista) ->
+            LivroNaEstante(
+                titulo,
+                lista.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
+                lista.size,
+            )
+        }
+        .take(12)
+
+/**
+ * A sequência que ainda conta: se o último dia jogado foi hoje ou ontem. Uma
+ * sequência de há uma semana já se partiu, mesmo que a base ainda a guarde.
+ */
+private fun sequenciaAtiva(p: Progresso?): Int {
+    val dia = p?.ultimoDia ?: return 0
+    val hoje = LocalDate.now()
+    return if (dia == hoje.toString() || dia == hoje.minusDays(1).toString()) p.sequencia else 0
+}
+
+/**
+ * O que a coleção já rendeu: o nível, a barra até ao seguinte e três números.
+ * Cores invertidas, para se distinguir do resto sem gritar.
+ */
+@Composable
+private fun CartaoProgresso(
+    progresso: Progresso,
+    total: Int,
+    sabidas: Int,
+    sequencia: Int,
+    porRever: Int,
+    aoRever: () -> Unit,
+) {
+    val nivel = Niveis.para(progresso.acertos)
+    val seguinte = Niveis.seguinte(progresso.acertos)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Cores.invBg)
+            .padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "NÍVEL ${nivel.numero}",
+                    style = Estilo.overline.copy(fontSize = 11.sp),
+                    color = Cores.invMuted,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(nivel.nome, style = Estilo.nivel, color = Cores.invInk)
+            }
+            Text(
+                if (progresso.pontos == 1) "1 ponto" else "${progresso.pontos} pontos",
+                style = Estilo.ajuda,
+                color = Cores.invMuted,
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        val fracao = seguinte?.let {
+            ((progresso.acertos - nivel.desde).toFloat() / (it.desde - nivel.desde))
+                .coerceIn(0f, 1f)
+        } ?: 1f
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Cores.invTrack)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(fracao)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Cores.invFill)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (seguinte == null) {
+                buildAnnotatedString { append("Chegaste ao último nível.") }
+            } else {
+                val faltam = seguinte.desde - progresso.acertos
+                buildAnnotatedString {
+                    append(if (faltam == 1) "Falta 1 acerto para " else "Faltam $faltam acertos para ")
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Cores.invInk)) {
+                        append(seguinte.nome)
+                    }
+                }
+            },
+            style = Estilo.meta.copy(fontSize = 12.5.sp),
+            color = Cores.invMuted,
+        )
+        Spacer(Modifier.height(14.dp))
+        HorizontalDivider(color = Cores.invTrack, thickness = 1.dp)
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Estatistica(total, if (total == 1) "palavra" else "palavras", Modifier.weight(1f))
+            Estatistica(sabidas, "que já sabes", Modifier.weight(1f))
+            Estatistica(sequencia, if (sequencia == 1) "dia seguido" else "dias seguidos", Modifier.weight(1f))
+        }
+        // Rever à mão é do Modo Desenvolvedor. Para quem lê, o jogo vem pelo
+        // lembrete: chega, responde-se, acabou.
+        if (porRever > 0) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Cores.invFill)
+                    .clickable(onClick = aoRever)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (porRever == 1) "1 palavra por rever" else "$porRever palavras por rever",
+                    style = Estilo.controloForte,
+                    color = Cores.invCtaInk,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "DEV",
+                    style = Estilo.rotulo.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                    color = Cores.invCtaInk.copy(alpha = 0.7f),
+                )
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Cores.invCtaInk)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Estatistica(numero: Int, rotulo: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(numero.toString(), style = Estilo.numeroEstat, color = Cores.invInk)
+        Text(rotulo, style = Estilo.meta, color = Cores.invMuted)
+    }
+}
+
+// --- candidatos ----------------------------------------------------------------
+
+@Composable
+private fun ListaCandidatos(
+    candidatos: List<Candidato>,
+    aoVoltar: () -> Unit,
+    aoEscolher: (Candidato) -> Unit,
+) {
+    // "cantada" pode ser substantivo ou particípio de "cantar": mostram-se
+    // todos os candidatos, ordenados por frequência (plano, secção 9).
+    Column(Modifier.fillMaxSize()) {
+        BarraVoltar(aoVoltar)
+        LazyColumn(contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)) {
+            item {
+                Overline("Mais do que uma palavra corresponde")
+                Spacer(Modifier.height(10.dp))
+            }
+            items(candidatos) { c ->
+                DivisoriaGrupo()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { aoEscolher(c) }
+                        .padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(c.lemma, style = Estilo.linhaLema, color = Cores.ink)
+                        val via = c.viaForma?.let { " · via $it" } ?: ""
+                        val classe = c.pos.takeIf { it.isNotBlank() && it != "desconhecido" }
+                            ?.let(::rotuloPos).orEmpty()
+                        if (classe.isNotEmpty() || via.isNotEmpty()) {
+                            Text(
+                                (classe + via).removePrefix(" · "),
+                                style = Estilo.dominio,
+                                color = Cores.ink2,
+                            )
+                        }
+                    }
+                    Chevron()
+                }
+            }
+        }
+    }
+}
+
+// --- palavra -----------------------------------------------------------------
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun VistaEntrada(
     entrada: Entrada,
-    jaGuardada: Boolean,
-    significadoProprio: String?,
+    guardada: PalavraGuardada?,
     desenvolvedor: Boolean,
-    aoRegistar: (Entrada) -> Unit,
-    aoPartilhar: (Entrada) -> Unit,
+    aoVoltar: () -> Unit,
+    aoRegistar: () -> Unit,
+    aoPartilhar: () -> Unit,
     aoSeguir: (String) -> Unit,
 ) {
-  // Column + LazyColumn com peso: o texto rola, mas o botão de registar fica
-  // sempre em baixo. Registar é o gesto central da app; numa entrada com sete
-  // aceções, o botão não pode desaparecer ao rolar.
-  Column(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.weight(1f)) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(entrada.lemma, style = MaterialTheme.typography.headlineMedium)
-                    val sub = listOfNotNull(
-                        entrada.pos.takeIf { it.isNotBlank() && it != "desconhecido" }
-                            ?.let(::rotuloPos),
-                        entrada.silabas,
-                    )
-                    if (sub.isNotEmpty()) {
-                        Text(sub.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+    val significadoProprio = guardada?.significado?.takeIf { it.isNotBlank() }
+    // Coluna + lista com peso: o texto rola, mas a barra de registar fica
+    // sempre em baixo. Registar é o gesto central da app; numa entrada com
+    // sete aceções, o botão não pode desaparecer ao rolar.
+    Column(Modifier.fillMaxSize()) {
+        BarraVoltar(
+            aoVoltar,
+            direita = {
+                // Partilhar leva o significado para fora da app, sem rede.
+                IconButton(onClick = aoPartilhar, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.Rounded.Share, "Partilhar", tint = Cores.ink)
+                }
+            },
+        )
+        LazyColumn(
+            Modifier.weight(1f),
+            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 28.dp),
+        ) {
+            item {
+                TextoMarcado(entrada.lemma, Estilo.lema)
+                val classe = entrada.pos.takeIf { it.isNotBlank() && it != "desconhecido" }
+                    ?.let(::rotuloPos)
+                if (classe != null || entrada.silabas != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        classe?.let { Text(it, style = Estilo.classe, color = Cores.ink2) }
+                        if (classe != null && entrada.silabas != null) {
+                            Text("  ·  ", style = Estilo.texto, color = Cores.ink3)
+                        }
+                        entrada.silabas?.let {
+                            Text(
+                                it,
+                                style = Estilo.texto.copy(fontSize = 14.sp, letterSpacing = 0.06.em),
+                                color = Cores.ink2,
+                            )
+                        }
                     }
                 }
-                // Partilhar leva o significado para fora da app — a peça que
-                // faltava para uma palavra bonita chegar a outra pessoa, sem
-                // rede e sem servidor.
-                IconButton(onClick = { aoPartilhar(entrada) }) {
-                    Icon(Icons.Default.Share, "Partilhar")
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-        }
-
-        // O significado que o próprio escreveu fica sempre visível, tenha a
-        // palavra definição ou não. É a garantia de que o teu contributo não
-        // se perde quando a palavra entra no dicionário numa versão seguinte:
-        // a coleção nunca é tocada, e o que escreveste continua aqui, ao lado
-        // da definição oficial.
-        significadoProprio?.let { meu ->
-            item {
-                Column(Modifier.padding(bottom = 16.dp)) {
-                    Text(
-                        "O teu significado",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(meu, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        }
-
-        if (entrada.acecoes.isEmpty()) {
-            item {
-                // Sem definição, os sinónimos deixam de ser um extra no fim
-                // da entrada e passam a ser a resposta. Para quem encontra
-                // uma palavra a meio de um romance, "o mesmo que sonolento"
-                // resolve tão bem como uma definição — e é frequentemente
-                // tudo o que as fontes abertas têm sobre a palavra.
-                val sinonimos = entrada.relacionadas.filter { it.relacao == "sinonimo" }
-                if (sinonimos.isEmpty()) {
-                    if (significadoProprio == null) {
-                        Aviso("Está no dicionário, mas sem significado atribuído.")
+                if (guardada != null) {
+                    Spacer(Modifier.height(14.dp))
+                    val partes = buildList {
+                        add("Na tua coleção")
+                        guardada.livro?.takeIf { it.isNotBlank() }?.let { add(it) }
+                        guardada.page?.let { add("p. $it") }
                     }
-                } else {
-                    Column(Modifier.padding(vertical = 12.dp)) {
+                    Pilula(
+                        partes.joinToString(" · "),
+                        fundo = Cores.okSoft,
+                        cor = Cores.ok,
+                        icone = Icons.Rounded.Bookmark,
+                    )
+                }
+                Spacer(Modifier.height(22.dp))
+            }
+
+            // O significado que o próprio escreveu fica sempre visível, tenha
+            // a palavra definição ou não: o teu contributo não se perde quando
+            // a palavra entra no dicionário numa versão seguinte.
+            significadoProprio?.let { meu ->
+                item {
+                    Overline("O teu significado")
+                    Spacer(Modifier.height(6.dp))
+                    Text(meu, style = Estilo.acecao, color = Cores.ink)
+                    Spacer(Modifier.height(22.dp))
+                }
+            }
+
+            if (entrada.acecoes.isEmpty()) {
+                item {
+                    // Sem definição, os sinónimos passam a ser a resposta. Para
+                    // quem encontra a palavra a meio de um romance, "o mesmo que
+                    // sonolento" resolve tão bem como uma definição.
+                    val sinonimos = entrada.relacionadas.filter { it.relacao == "sinonimo" }
+                    if (sinonimos.isEmpty()) {
+                        if (significadoProprio == null) {
+                            Text(
+                                "Está no dicionário, mas sem significado atribuído.",
+                                style = Estilo.corpo,
+                                color = Cores.ink2,
+                            )
+                            Spacer(Modifier.height(22.dp))
+                        }
+                    } else {
                         Text(
                             "Sem definição, mas é o mesmo que:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline,
+                            style = Estilo.corpo,
+                            color = Cores.ink2,
                         )
-                        Spacer(Modifier.height(8.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            sinonimos.take(8).forEach { rel ->
-                                SuggestionChip(
-                                    onClick = { aoSeguir(rel.lemma) },
-                                    label = { Text(rel.lemma) },
-                                )
-                            }
+                        Spacer(Modifier.height(12.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            sinonimos.take(8).forEach { ChipRelacao(it, aoSeguir) }
                         }
+                        Spacer(Modifier.height(22.dp))
                     }
                 }
             }
-        }
 
-        items(entrada.acecoes) { acecao ->
-            Column(Modifier.padding(bottom = 16.dp)) {
-                Row {
-                    Text("${acecao.ord}. ", style = MaterialTheme.typography.bodyLarge)
-                    Column {
+            items(entrada.acecoes) { acecao ->
+                Row(Modifier.padding(bottom = 16.dp)) {
+                    Text(
+                        "${acecao.ord}",
+                        style = Estilo.numeroAcecao,
+                        color = Cores.accent,
+                        modifier = Modifier.width(26.dp).padding(top = 2.dp),
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
                         if (acecao.dominios.isNotEmpty()) {
                             Text(
-                                acecao.dominios.joinToString(" "),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontStyle = FontStyle.Italic,
+                                acecao.dominios.joinToString(", "),
+                                style = Estilo.dominio,
+                                color = Cores.ink2,
                             )
                         }
-                        Text(acecao.definicao, style = MaterialTheme.typography.bodyLarge)
-                        // A proveniência de cada aceção é ferramenta de
-                        // quem constrói a base, não informação de quem lê
-                        // um livro. A obrigação de atribuição das obras
-                        // cumpre-se no ecrã "Fontes e licenças".
+                        Text(acecao.definicao, style = Estilo.acecao, color = Cores.ink)
+                        // A proveniência de cada aceção é ferramenta de quem
+                        // constrói a base; a atribuição cumpre-se no ecrã de
+                        // licenças.
                         if (desenvolvedor) {
-                            Text(
-                                acecao.fonte,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
+                            Text(acecao.fonte, style = Estilo.meta, color = Cores.ink3)
                         }
                         entrada.exemplosDe(acecao).forEach {
-                            LinhaExemplo(it, desenvolvedor)
+                            Spacer(Modifier.height(10.dp))
+                            CaixaExemplo(it, desenvolvedor)
                         }
+                    }
+                }
+            }
+
+            val soltos = entrada.exemplosSoltos
+            if (soltos.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(6.dp))
+                    Overline("Exemplos de uso")
+                    Spacer(Modifier.height(10.dp))
+                }
+                items(soltos) {
+                    CaixaExemplo(it, desenvolvedor)
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+
+            if (entrada.relacionadas.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    entrada.relacionadas.groupBy { it.relacao }.forEach { (relacao, lista) ->
+                        Overline(rotuloRelacao(relacao))
+                        Spacer(Modifier.height(10.dp))
+                        // Tocáveis: um sinónimo é uma palavra que também se
+                        // pode não conhecer.
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            lista.forEach { ChipRelacao(it, aoSeguir) }
+                        }
+                        Spacer(Modifier.height(20.dp))
                     }
                 }
             }
         }
 
-        val soltos = entrada.exemplosSoltos
-        if (soltos.isNotEmpty()) {
-            item {
-                Text(
-                    "Exemplos de uso",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+        // A barra de registo, sempre visível. Já registada: diz que está e
+        // deixa editar; por registar: o botão que a app existe para tornar fácil.
+        HorizontalDivider(color = Cores.line, thickness = 1.dp)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(Cores.bg)
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (guardada != null) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Cores.okSoft),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Check, null, tint = Cores.ok, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Registada", style = Estilo.botao, color = Cores.ok)
+                }
+                Spacer(Modifier.width(10.dp))
+                BotaoContornado(
+                    "Editar", aoRegistar,
+                    icone = Icons.Rounded.EditNote,
+                    altura = 54.dp,
+                )
+            } else {
+                BotaoPrincipal(
+                    "Registar", aoRegistar,
+                    icone = Icons.Rounded.BookmarkAdd,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            items(soltos) { LinhaExemplo(it) }
         }
+    }
+}
 
-        if (entrada.relacionadas.isNotEmpty()) {
-            item {
-                Column(Modifier.padding(top = 16.dp, bottom = 24.dp)) {
-                    entrada.relacionadas.groupBy { it.relacao }.forEach { (relacao, lista) ->
-                        Text(
-                            rotuloRelacao(relacao),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        // Tocáveis: um sinónimo é uma palavra que também se
-                        // pode não conhecer, e ter de a copiar para a caixa
-                        // de pesquisa era um passo a mais no meio da leitura.
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            lista.forEach { rel ->
-                                SuggestionChip(
-                                    onClick = { aoSeguir(rel.lemma) },
-                                    label = { Text(rel.lemma) },
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
+/**
+ * Uma palavra relacionada. As que têm definição levam a borda de destaque; as
+ * que não têm ficam apagadas, mas continuam tocáveis: podem ter sinónimos.
+ */
+@Composable
+private fun ChipRelacao(rel: Relacionada, aoSeguir: (String) -> Unit) {
+    val forma = RoundedCornerShape(percent = 50)
+    Text(
+        rel.lemma,
+        style = Estilo.chipLivro.copy(fontSize = 15.5.sp),
+        color = if (rel.temDefinicao) Cores.accentInk else Cores.ink2,
+        modifier = Modifier
+            .clip(forma)
+            .background(Cores.card)
+            .border(1.5.dp, if (rel.temDefinicao) Cores.accent else Cores.line, forma)
+            .clickable { aoSeguir(rel.lemma) }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    )
+}
+
+/**
+ * Um exemplo de uso: caixa afundada com uma barra de destaque à esquerda.
+ * Um exemplo gerado por LLM diz sempre que o é, na base e na interface, sem
+ * exceções (plano, instrução 8).
+ */
+@Composable
+private fun CaixaExemplo(exemplo: Exemplo, desenvolvedor: Boolean) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Cores.sunk),
+    ) {
+        Box(Modifier.width(4.dp).fillMaxHeight().background(Cores.accent))
+        Column(Modifier.padding(start = 16.dp, end = 18.dp, top = 14.dp, bottom = 14.dp)) {
+            Text(exemplo.frase, style = Estilo.citacao, color = Cores.ink)
+            Spacer(Modifier.height(6.dp))
+            // A fonte da frase fica sempre: o Tatoeba distribui em CC BY com
+            // atribuição por frase (ver docs/fontes.md). A referência interna
+            // só no Modo Desenvolvedor.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (exemplo.gerado) {
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = "exemplo gerado",
+                        tint = Cores.accentInk,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
                 }
+                Text(
+                    buildString {
+                        append(exemplo.fonte)
+                        if (desenvolvedor) {
+                            exemplo.referencia?.let { append(" · ").append(it) }
+                        }
+                        if (exemplo.gerado) append(" · gerado")
+                    },
+                    style = Estilo.meta,
+                    color = Cores.ink2,
+                )
             }
         }
     }
-
-    // A barra de registo, sempre visível. Já registada: informa em vez de
-    // duplicar; por registar: o botão que a app existe para tornar fácil.
-    HorizontalDivider()
-    Box(Modifier.fillMaxWidth().padding(16.dp, 12.dp)) {
-        if (jaGuardada) {
-            AssistChip(
-                onClick = {},
-                enabled = false,
-                label = { Text("Registada") },
-                leadingIcon = { Icon(Icons.Default.Bookmark, null) },
-            )
-        } else {
-            FilledTonalButton(
-                onClick = { aoRegistar(entrada) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.BookmarkBorder, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Registar")
-            }
-        }
-    }
-  }
 }
 
 /**
  * Manda o significado para fora da app, como texto simples.
  *
- * Sem rede: é o intent de partilha do Android, que entrega a qualquer app —
- * mensagens, notas, email. O texto leva a palavra, a classe, as primeiras
+ * Sem rede: é o intent de partilha do Android, que entrega a qualquer app
+ * (mensagens, notas, email). O texto leva a palavra, a classe, as primeiras
  * aceções e a assinatura da app.
  */
 private fun partilharEntrada(context: android.content.Context, entrada: Entrada) {
@@ -528,258 +973,134 @@ private fun partilharEntrada(context: android.content.Context, entrada: Entrada)
     context.startActivity(escolha)
 }
 
-/**
- * O ecrã antes de se procurar seja o que for.
- *
- * Estava vazio, e uma app que abre vazia é uma app que só se abre quando já
- * se sabe o que se quer. Mostrar a coleção recente transforma-a em algo que
- * se abre para rever — que é meio propósito do projeto.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun EcraInicial(
-    recentes: List<PalavraGuardada>,
-    total: Int,
-    sabidas: Int,
-    progresso: Progresso?,
-    porRever: Int,
-    aoRever: () -> Unit,
-    aoEscolher: (String) -> Unit,
-) {
-    if (recentes.isEmpty()) {
-        Column(Modifier.fillMaxWidth().padding(top = 48.dp)) {
-            Text(
-                "Encontraste uma palavra que não conheces?",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Escreve-a acima. Ou seleciona-a no teu leitor de e-books e "
-                    + "escolhe Palavra-me. Nem precisas de a copiar.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-        return
-    }
-
-    Column(Modifier.padding(top = 24.dp)) {
-        // A deixa para rever, só quando há mesmo algo vencido. Toca para jogar.
-        if (porRever > 0) {
-            Text(
-                if (porRever == 1) "1 palavra por rever" else "$porRever palavras por rever",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(onClick = aoRever).padding(bottom = 12.dp),
-            )
-        }
-        Estatisticas(total, sabidas, progresso)
-        Text(
-            if (total > recentes.size) "As últimas que registaste (de $total)"
-            else "As que registaste",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Spacer(Modifier.height(12.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            recentes.forEach { palavra ->
-                SuggestionChip(
-                    onClick = { aoEscolher(palavra.lemma) },
-                    label = { Text(palavra.lemma) },
-                )
-            }
-        }
-    }
-}
+// --- não encontrada ------------------------------------------------------------
 
 /**
- * Uma linha com o que a coleção já rendeu.
+ * Palavra não encontrada, mas não um beco sem saída.
  *
- * Deliberadamente uma linha e em letra miúda. A app abre-se para procurar
- * uma palavra a meio de um livro; os números são para se olhar de passagem,
- * não para tomarem conta do ecrã.
- *
- * Só aparece quando já houve jogo — antes disso seriam quatro zeros a
- * ocupar espaço e a insinuar que se está atrasado em alguma coisa.
+ * Primeiro a hipótese de erro de escrita, que se resolve com um toque. Depois
+ * a de registar a palavra mesmo assim, com o significado do próprio: a coleção
+ * guarda o `lemma` como texto, por isso uma palavra fora do dicionário cabe lá
+ * tão bem como as outras.
  */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Estatisticas(total: Int, sabidas: Int, progresso: Progresso?) {
-    val respostas = (progresso?.acertos ?: 0) + (progresso?.erros ?: 0)
-    if (progresso == null || respostas == 0) return
-
-    // O nível à frente (número e nome), depois o que diz mais sobre o que se
-    // aprendeu, e os pontos em último: deixaram de ser o número principal.
-    val nivel = Niveis.para(progresso.acertos)
-    val seguinte = Niveis.seguinte(progresso.acertos)
-    Column(Modifier.padding(bottom = 20.dp)) {
-        Text(
-            nivel.rotulo,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        val partes = buildList {
-            add("$total palavras")
-            if (sabidas > 0) add("$sabidas que já sabes")
-            if (progresso.sequencia > 1) add("${progresso.sequencia} dias seguidos")
-            add("${progresso.pontos} pontos")
-        }
-        Text(
-            partes.joinToString("  ·  "),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.outline,
-        )
-        seguinte?.let {
-            val faltam = it.desde - progresso.acertos
-            Text(
-                if (faltam == 1) "Falta 1 acerto para o nível ${it.numero}"
-                else "Faltam $faltam acertos para o nível ${it.numero}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-    }
-}
-
-@Composable
-private fun LinhaExemplo(exemplo: Exemplo, desenvolvedor: Boolean = false) {
-    // Um exemplo gerado por LLM diz sempre que o é — na base e na interface,
-    // sem exceções (plano, instrução 8).
-    Row(Modifier.padding(top = 6.dp)) {
-        if (exemplo.gerado) {
-            Icon(
-                Icons.Default.AutoAwesome,
-                contentDescription = "exemplo gerado",
-                modifier = Modifier.size(14.dp).padding(end = 4.dp),
-                tint = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-        Column {
-            Text(
-                exemplo.frase,
-                style = MaterialTheme.typography.bodyMedium,
-                fontStyle = FontStyle.Italic,
-            )
-            // A fonte da frase fica sempre — o Tatoeba distribui em CC BY
-            // com atribuição **por frase**, e isso é obrigação, não estilo
-            // (ver docs/fontes.md). O que sai é a referência interna, do
-            // género `por-pt_web_2015_1M:282349`, que não diz nada a
-            // ninguém e fazia a entrada parecer uma ficha técnica.
-            Text(
-                buildString {
-                    append(exemplo.fonte)
-                    if (desenvolvedor) {
-                        exemplo.referencia?.let { append(" · ").append(it) }
-                    }
-                    if (exemplo.gerado) append(" · gerado")
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-    }
-}
-
-/**
- * Versões da app e do dicionário, em letra miúda.
- *
- * Parece detalhe, mas resolve uma dúvida real: depois de reconstruir a base
- * é preciso saber se a que está no telemóvel é a nova. Sem isto, a única
- * forma era procurar uma palavra e adivinhar pelo resultado.
- */
-/** Só a versão da app. O estado do dicionário vive nas Definições. */
-@Composable
-private fun Rodape() {
-    Text(
-        "Palavra-me ${BuildConfig.VERSION_NAME}",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.outline,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        textAlign = TextAlign.Center,
-    )
-}
-
-/**
- * Palavra não encontrada — mas não um beco sem saída.
- *
- * A app é para ler literatura, e a literatura tem palavras que faltam a todas
- * as fontes abertas. Em vez de "não encontrei", oferece-se registá-la mesmo
- * assim, com o significado do próprio: a coleção guarda o `lemma` como texto,
- * por isso uma palavra fora do dicionário cabe lá tão bem como as outras. Se
- * já foi registada com um significado, mostra-se esse significado aqui.
- */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NaoEncontrada(
     termo: String,
-    /** "Querias dizer…?": palavras a uma ou duas letras de distância. */
-    parecidas: List<String>,
+    parecidas: List<Parecida>,
+    aoVoltar: () -> Unit,
     aoEscolherParecida: (String) -> Unit,
     significadoProprio: String?,
     jaGuardada: Boolean,
     aoRegistar: () -> Unit,
 ) {
-    Column(
-        Modifier.padding(vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            if (termo.isBlank()) "Não encontrei essa palavra."
-            else "\"$termo\" não está no dicionário.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        // Primeiro a hipótese de erro de escrita: é o caso mais comum, e
-        // resolve-se com um toque, sem registar nada.
-        if (parecidas.isNotEmpty()) {
-            Column {
+    Column(Modifier.fillMaxSize()) {
+        BarraVoltar(aoVoltar)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 28.dp),
+        ) {
+            if (termo.isNotBlank()) {
+                Overline("Procuraste")
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "Querias dizer:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline,
+                    termo,
+                    style = Estilo.termo,
+                    color = Cores.ink,
+                    modifier = Modifier
+                        .sublinhadoOndulado(Cores.err)
+                        .padding(bottom = 12.dp),
                 )
-                Spacer(Modifier.height(4.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    parecidas.forEach { p ->
-                        SuggestionChip(
-                            onClick = { aoEscolherParecida(p) },
-                            label = { Text(p) },
-                        )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Não está no dicionário. Pode ser só um erro de escrita.",
+                    style = Estilo.corpo,
+                    color = Cores.ink2,
+                )
+            } else {
+                Text("Não encontrei essa palavra.", style = Estilo.corpo, color = Cores.ink2)
+            }
+
+            if (parecidas.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                Overline("Querias dizer")
+                Spacer(Modifier.height(10.dp))
+                parecidas.forEach { p ->
+                    val forma = RoundedCornerShape(18.dp)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
+                            .clip(forma)
+                            .border(1.5.dp, Cores.accent, forma)
+                            .clickable { aoEscolherParecida(p.lemma) }
+                            .padding(horizontal = 18.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(p.lemma, style = Estilo.parecida, color = Cores.ink)
+                            p.definicao?.let {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    it,
+                                    style = Estilo.texto.copy(fontSize = 14.5.sp, lineHeight = 1.4.em),
+                                    color = Cores.ink2,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Cores.accent)
                     }
                 }
             }
-        }
-        significadoProprio?.let {
-            Column {
-                Text(
-                    "O teu significado",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(it, style = MaterialTheme.typography.bodyLarge)
+
+            significadoProprio?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(22.dp))
+                Overline("O teu significado")
+                Spacer(Modifier.height(6.dp))
+                Text(it, style = Estilo.acecao, color = Cores.ink)
             }
-        }
-        if (termo.isNotBlank()) {
-            if (jaGuardada) {
-                AssistChip(
-                    onClick = {},
-                    enabled = false,
-                    label = { Text("Já está na tua coleção") },
-                    leadingIcon = { Icon(Icons.Default.Bookmark, null) },
-                )
-            } else {
-                Text(
-                    "Podes registá-la mesmo assim, e escrever o que ela quer "
-                        + "dizer, se souberes.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-                FilledTonalButton(onClick = aoRegistar) {
-                    Icon(Icons.Default.BookmarkBorder, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Registar \"$termo\"")
+
+            if (termo.isNotBlank()) {
+                Spacer(Modifier.height(22.dp))
+                if (jaGuardada) {
+                    Pilula(
+                        "Já está na tua coleção",
+                        fundo = Cores.okSoft,
+                        cor = Cores.ok,
+                        icone = Icons.Rounded.Bookmark,
+                    )
+                } else {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Cores.sunk)
+                            .padding(18.dp),
+                    ) {
+                        Text(
+                            "Registar mesmo assim",
+                            style = Estilo.botao,
+                            color = Cores.ink,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Podes guardá-la na tua coleção e escrever o que quer "
+                                + "dizer, se souberes.",
+                            style = Estilo.texto.copy(fontSize = 14.sp, lineHeight = 1.45.em),
+                            color = Cores.ink2,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        BotaoContornado(
+                            "Registar \"$termo\"", aoRegistar,
+                            icone = Icons.Rounded.BookmarkAdd,
+                            cor = Cores.ink,
+                            borda = Cores.ink,
+                        )
+                    }
                 }
             }
         }
@@ -788,8 +1109,8 @@ private fun NaoEncontrada(
 
 /**
  * Rótulo em português, acentuado, para uma relação que a base guarda por slug
- * ASCII (`sinonimo`, `hiperonimo`…). É uma app de português: o que aparece no
- * ecrã leva os acentos, ainda que o slug interno não os tenha.
+ * ASCII (`sinonimo`, `hiperonimo`...). É uma app de português: o que aparece
+ * no ecrã leva os acentos, ainda que o slug interno não os tenha.
  */
 private fun rotuloRelacao(relacao: String): String = when (relacao) {
     "sinonimo" -> "Sinónimos"
@@ -797,14 +1118,4 @@ private fun rotuloRelacao(relacao: String): String = when (relacao) {
     "hiperonimo" -> "Hiperónimos"
     "hiponimo" -> "Hipónimos"
     else -> relacao.replaceFirstChar { it.uppercase() }
-}
-
-@Composable
-private fun Aviso(texto: String) {
-    Text(
-        texto,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.outline,
-        modifier = Modifier.padding(vertical = 24.dp),
-    )
 }

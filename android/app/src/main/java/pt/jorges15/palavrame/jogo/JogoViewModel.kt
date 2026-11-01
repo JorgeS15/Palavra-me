@@ -42,6 +42,8 @@ sealed interface EstadoJogo {
         val entrada: Entrada? = null,
         val livro: String? = null,
         val frase: String? = null,
+        val autor: String? = null,
+        val pagina: Int? = null,
         val ganho: Int = 0,
         /** A parte do ganho que veio do bónus de sequência (0 se não houve). */
         val bonus: Int = 0,
@@ -213,6 +215,8 @@ class JogoViewModel(
                 entrada = resultado.entrada,
                 livro = todas[lemma]?.livro,
                 frase = todas[lemma]?.frase,
+                autor = todas[lemma]?.autor,
+                pagina = todas[lemma]?.page,
                 ganho = resultado.ganho,
                 bonus = resultado.avanco.bonus,
                 total = resultado.avanco.pontuacao.pontos,

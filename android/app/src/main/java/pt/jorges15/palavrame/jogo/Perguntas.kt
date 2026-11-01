@@ -15,6 +15,8 @@ data class Candidata(
     val definicao: String,
     val livro: String? = null,
     val frase: String? = null,
+    val autor: String? = null,
+    val page: Int? = null,
 )
 
 data class Pergunta(
@@ -104,7 +106,7 @@ object Perguntas {
             val pedaco = a.trimEnd('.', ';', ',', ' ')
             if (pedaco.isEmpty()) continue
             if (juntas.isEmpty()) {
-                juntas.append(pedaco)
+                juntas.append(maiusculaInicial(pedaco))
             } else {
                 // "Magro; pálido; amortecido." e não "Magro. Pálido.
                 // Amortecido." nem "Magro Pálido Amortecido": são sentidos

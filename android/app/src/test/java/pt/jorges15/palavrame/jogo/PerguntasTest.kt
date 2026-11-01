@@ -113,8 +113,8 @@ class PerguntasTest {
 
     @Test
     fun `sigla a meio nao perde as maiusculas`() {
-        val d = Perguntas.definicaoParaJogo(listOf("Sigla.", "ADN nuclear."))
-        assertEquals("Sigla; ADN nuclear.", d)
+        val d = Perguntas.definicaoParaJogo(listOf("Sigla.", "ADN nuclear e que se transmite."))
+        assertEquals("Sigla; ADN nuclear e que se transmite.", d)
     }
 
     @Test

@@ -56,6 +56,8 @@ fun candidata(dicionario: Dicionario?, p: PalavraGuardada): Candidata? {
         definicao = definicao,
         livro = p.livro,
         frase = p.frase,
+        autor = p.autor,
+        page = p.page,
     )
 }
 
