@@ -61,5 +61,20 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!--
+          A imagem de "Partilhar palavra": grava-se na cache (partilha/) e
+          entrega-se à app escolhida por este provider, só com leitura e só
+          para essa partilha. Não abre nada mais da app.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.partilha"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/partilha_paths" />
+        </provider>
     </application>
 </manifest>

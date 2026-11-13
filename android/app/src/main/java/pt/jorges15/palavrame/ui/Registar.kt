@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
@@ -100,7 +101,15 @@ fun FolhaRegistar(
     var significado by rememberSaveable(lemma) { mutableStateOf(existente?.significado.orEmpty()) }
     // O campo do significado próprio só faz sentido quando a palavra não tem
     // uma no dicionário — ou quando já lá escreveste uma e a estás a editar.
-    val mostrarSignificado = pedirSignificado || !existente?.significado.isNullOrBlank()
+    //
+    // Numa palavra com definição, o campo existe na mesma, mas recolhido: o
+    // dicionário pode ter só o sentido antigo, e não aquele em que a palavra
+    // aparece no livro ("rebarbativo" só tinha o de 1913, ligado à gordura,
+    // e a leitora tinha-a lido no sentido de antipático). Abre-se com um
+    // toque, ou já aberto se houver um significado escrito antes.
+    var significadoAberto by rememberSaveable(lemma) {
+        mutableStateOf(pedirSignificado || !existente?.significado.isNullOrBlank())
+    }
     // Um livro que não está entre os chips (um novo, ou um antigo que já saiu
     // da lista) escreve-se à mão, no "+ Outro".
     val chips = livrosAnteriores.take(6)
@@ -150,7 +159,7 @@ fun FolhaRegistar(
 
             // Primeiro, quando é pedido: numa palavra que falta ao dicionário,
             // o significado é o que mais interessa guardar.
-            if (mostrarSignificado) {
+            if (pedirSignificado) {
                 Column {
                     CampoFormulario(
                         "Significado", significado, { significado = it },
@@ -239,6 +248,38 @@ fun FolhaRegistar(
                 "A frase onde a encontraste", frase, { frase = it },
                 linhas = 3, italico = true,
             )
+
+            // O teu significado, numa palavra que o dicionário já define.
+            if (!pedirSignificado) {
+                if (significadoAberto) {
+                    Column {
+                        CampoFormulario(
+                            "O teu significado", significado, { significado = it },
+                            linhas = 2,
+                            placeholder = "O sentido em que a encontraste",
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Aparece por cima das definições do dicionário. Se lhe "
+                                + "faltar este sentido, podes propô-lo em Definições, "
+                                + "Contribuir.",
+                            style = Estilo.ajuda,
+                            color = Cores.ink2,
+                        )
+                    }
+                } else {
+                    Text(
+                        "+ Encontraste-a noutro sentido? Escreve o teu significado",
+                        style = Estilo.controloForte.copy(fontSize = 14.sp),
+                        color = Cores.accentInk,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { significadoAberto = true }
+                            .padding(vertical = 8.dp, horizontal = 2.dp),
+                    )
+                }
+            }
+
             CampoFormulario("Nota", nota, { nota = it }, placeholder = "Para ti")
 
             Row(

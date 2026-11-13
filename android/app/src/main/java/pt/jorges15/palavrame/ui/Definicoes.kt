@@ -6,7 +6,16 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +42,13 @@ import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.ResultadoImportacao
 import pt.jorges15.palavrame.data.Backup
 import pt.jorges15.palavrame.data.Preferencias
+import pt.jorges15.palavrame.data.LetraId
+import pt.jorges15.palavrame.data.PaletaId
 import pt.jorges15.palavrame.data.Tema
+import pt.jorges15.palavrame.ui.theme.CoresPalavra
+import pt.jorges15.palavrame.ui.theme.LocalModoEscuro
+import pt.jorges15.palavrame.ui.theme.Paletas
+import pt.jorges15.palavrame.ui.theme.estilosDe
 import pt.jorges15.palavrame.jogo.Lembrete
 import pt.jorges15.palavrame.jogo.horasDosLembretes
 import pt.jorges15.palavrame.ui.theme.Cores
@@ -113,22 +128,8 @@ fun EcraDefinicoes(
         ) {
             Text("Definições", style = Estilo.tituloEcra, color = Cores.ink)
 
-            Seccao("Tema")
-            // As três opções numa linha. "Como o telemóvel" encurta-se para
-            // "Sistema": não cabia, e ao lado de "Claro" e "Escuro" percebe-se.
-            Segmentado(
-                Tema.entries.map { if (it == Tema.SISTEMA) "Sistema" else it.etiqueta },
-                selecionado = Tema.entries.indexOf(tema),
-                aoEscolher = { preferencias.definirTema(Tema.entries[it]) },
-                icones = Tema.entries.map {
-                    when (it) {
-                        Tema.SISTEMA -> Icons.Rounded.Contrast
-                        Tema.CLARO -> Icons.Rounded.LightMode
-                        Tema.ESCURO -> Icons.Rounded.DarkMode
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Seccao("Aspeto")
+            SeccaoAspeto(preferencias, tema)
 
             Seccao("Rever")
             GrupoCartao { SeccaoJogo(preferencias) }
@@ -194,6 +195,18 @@ fun EcraDefinicoes(
                     },
                 )
                 DivisoriaGrupo()
+                // Abre a página da app na Play Store (como o pedido à 5.ª
+                // palavra). Quem avalia por aqui deixa de receber esse pedido.
+                LinhaGrupo(
+                    "Avaliar na Play Store",
+                    subtitulo = "Ajuda outros leitores a encontrar a app.",
+                    aoTocar = {
+                        abrirNaPlayStore(context)
+                        preferencias.terminarPedidosDeAvaliacao()
+                    },
+                    direita = { Chevron() },
+                )
+                DivisoriaGrupo()
                 // O dicionário e as licenças têm um ecrã só deles: são
                 // informação que se consulta uma vez.
                 LinhaGrupo(
@@ -257,6 +270,196 @@ fun EcraDefinicoes(
                     mensagemFalta = "Não encontrei uma app de email neste telemóvel."
                 }
             },
+        )
+    }
+}
+
+// --- aspeto --------------------------------------------------------------------
+
+/**
+ * Aspeto: o modo (Sistema, Claro, Escuro), as cores (cinco paletas) e a letra
+ * (quatro). Combinam-se livremente e aplicam-se na hora, a toda a app e às
+ * imagens de partilha, sem botão de guardar. Desenho em
+ * `design_handoff_temas_letras/`.
+ *
+ * Responde a duas queixas de quem usa a app: o tom "amarelado" e a serifa.
+ */
+@Composable
+private fun SeccaoAspeto(preferencias: Preferencias, tema: Tema) {
+    val paleta by preferencias.paleta.collectAsState()
+    val letra by preferencias.letra.collectAsState()
+    val escuro = LocalModoEscuro.current
+    val forma = RoundedCornerShape(20.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .background(Cores.card)
+            .border(1.dp, Cores.line, forma)
+            .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // O modo. "Como o telemóvel" encurta-se para "Sistema": não cabia, e
+        // ao lado de "Claro" e "Escuro" percebe-se.
+        Segmentado(
+            Tema.entries.map { if (it == Tema.SISTEMA) "Sistema" else it.etiqueta },
+            selecionado = Tema.entries.indexOf(tema),
+            aoEscolher = { preferencias.definirTema(Tema.entries[it]) },
+            icones = Tema.entries.map {
+                when (it) {
+                    Tema.SISTEMA -> Icons.Rounded.Contrast
+                    Tema.CLARO -> Icons.Rounded.LightMode
+                    Tema.ESCURO -> Icons.Rounded.DarkMode
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Column {
+            Text("Cores", style = Estilo.rotulo.copy(fontSize = 13.sp), color = Cores.ink2)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PaletaId.entries.forEach { id ->
+                    AmostraPaleta(
+                        nome = id.nome,
+                        // Cada amostra nas cores da sua paleta, no modo em uso.
+                        p = Paletas.de(id, escuro),
+                        ativa = id == paleta,
+                        aoTocar = { preferencias.definirPaleta(id) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        Column {
+            Text("Letra", style = Estilo.rotulo.copy(fontSize = 13.sp), color = Cores.ink2)
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LetraId.entries.forEach { id ->
+                    LinhaLetra(id, ativa = id == letra, aoTocar = { preferencias.definirLetra(id) })
+                }
+            }
+        }
+
+        Text(
+            "As cores e a letra aplicam-se a toda a app e às imagens de partilha.",
+            style = Estilo.ajuda.copy(fontSize = 12.5.sp, lineHeight = 1.45.em),
+            color = Cores.ink2,
+        )
+    }
+}
+
+/** Uma paleta: "Aa" com o marcador e a barra de destaque, nas cores dela. */
+@Composable
+private fun AmostraPaleta(
+    nome: String,
+    p: CoresPalavra,
+    ativa: Boolean,
+    aoTocar: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = aoTocar),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // A ativa leva um anel de 2 dp na cor do texto, afastado 2 dp; a
+        // inativa, o mesmo espaço sem anel (para não saltar de tamanho).
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (ativa) Modifier.border(2.dp, Cores.ink, RoundedCornerShape(16.dp))
+                    else Modifier
+                )
+                .padding(2.dp)
+        ) {
+            val forma = RoundedCornerShape(14.dp)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(forma)
+                    .background(p.bg)
+                    .then(if (ativa) Modifier else Modifier.border(1.dp, p.line, forma)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    "Aa",
+                    style = TextStyle(
+                        fontFamily = Estilo.leitura, fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = p.ink,
+                    modifier = Modifier
+                        .drawBehind {
+                            drawRect(
+                                p.mark,
+                                topLeft = Offset(0f, size.height * 0.58f),
+                                size = Size(size.width, size.height * 0.34f),
+                            )
+                        }
+                        .padding(horizontal = 3.dp),
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.size(22.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(p.accent))
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            nome,
+            style = Estilo.meta.copy(
+                fontSize = 11.5.sp,
+                fontWeight = if (ativa) FontWeight.Bold else FontWeight.Medium,
+            ),
+            color = if (ativa) Cores.ink else Cores.ink2,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Uma letra: "lôbrego" escrito nela, o nome, a descrição e o rádio. */
+@Composable
+private fun LinhaLetra(id: LetraId, ativa: Boolean, aoTocar: () -> Unit) {
+    val forma = RoundedCornerShape(14.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .background(if (ativa) Cores.accentSoft else Color.Transparent)
+            .border(1.5.dp, if (ativa) Cores.accent else Cores.line, forma)
+            .clickable(onClick = aoTocar)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "lôbrego",
+            style = TextStyle(
+                fontFamily = estilosDe(id).leitura, fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em,
+            ),
+            color = Cores.ink,
+            maxLines = 1,
+            modifier = Modifier.width(100.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(id.nome, style = Estilo.controloForte.copy(fontSize = 14.5.sp), color = Cores.ink)
+            Text(id.descricao, style = Estilo.ajuda.copy(fontSize = 12.5.sp), color = Cores.ink2)
+        }
+        Spacer(Modifier.width(8.dp))
+        // O rádio: anel grosso de destaque quando ativo, fino quando não.
+        Box(
+            Modifier
+                .size(20.dp)
+                .border(
+                    if (ativa) 6.dp else 2.dp,
+                    if (ativa) Cores.accent else Cores.line,
+                    CircleShape,
+                )
         )
     }
 }
@@ -353,6 +556,10 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
                     LinhaGrupo("Literata", subtitulo = "SIL Open Font License 1.1")
                     DivisoriaGrupo()
                     LinhaGrupo("Instrument Sans", subtitulo = "SIL Open Font License 1.1")
+                    DivisoriaGrupo()
+                    LinhaGrupo("Figtree", subtitulo = "SIL Open Font License 1.1")
+                    DivisoriaGrupo()
+                    LinhaGrupo("Atkinson Hyperlegible Next", subtitulo = "SIL Open Font License 1.1")
                 }
             }
         }
@@ -656,9 +863,7 @@ private fun DialogoSubmeterFaltas(
                             Column(Modifier.weight(1f)) {
                                 Text(f.lemma, style = Estilo.linhaLema.copy(fontSize = 17.sp), color = Cores.ink)
                                 Text(
-                                    if (f.tipo == TipoFalta.NAO_ENCONTRADA)
-                                        "não está no dicionário"
-                                    else "sem significado",
+                                    rotuloFalta(f.tipo),
                                     style = Estilo.meta,
                                     color = Cores.ink3,
                                 )

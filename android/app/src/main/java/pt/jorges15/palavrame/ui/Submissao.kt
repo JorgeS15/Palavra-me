@@ -30,8 +30,10 @@ internal fun linhaVersao(versaoApp: String, construidoEm: String?): String = bui
  *
  * Mesmas colunas: `lema,classe,definicao,nota`. A classe fica vazia (quem cura
  * decide-a); a definição leva o significado que o utilizador escreveu, se
- * escreveu, numa só linha; a nota distingue "não encontrada" de "sem
- * significado".
+ * escreveu, numa só linha; a nota distingue "não encontrada", "sem
+ * significado" e o sentido em falta. Esta última começa por "acrescenta", a
+ * marca que a curadoria usa para uma aceção que vai ao lado de outra de
+ * propósito: a linha cola-se tal como vem.
  */
 internal fun csvDeFalta(
     faltas: List<PalavraEmFalta>,
@@ -39,13 +41,23 @@ internal fun csvDeFalta(
 ): String = buildString {
     if (incluirCabecalho) append("lema,classe,definicao,nota\n")
     faltas.forEach { f ->
-        val nota = if (f.tipo == TipoFalta.NAO_ENCONTRADA) "não encontrada"
-                   else "sem significado"
+        val nota = when (f.tipo) {
+            TipoFalta.NAO_ENCONTRADA -> "não encontrada"
+            TipoFalta.SEM_SIGNIFICADO -> "sem significado"
+            TipoFalta.SENTIDO_EM_FALTA -> "acrescenta: sentido em falta"
+        }
         append(csvCampo(f.lemma)).append(',')
         append(',')                                   // classe: fica para quem cura
         append(csvCampo(numaLinha(f.significadoProprio.orEmpty()))).append(',')
         append(csvCampo(nota)).append('\n')
     }
+}
+
+/** Como cada caso se diz a uma pessoa: no email e na lista de seleção. */
+internal fun rotuloFalta(tipo: TipoFalta): String = when (tipo) {
+    TipoFalta.NAO_ENCONTRADA -> "não está no dicionário"
+    TipoFalta.SEM_SIGNIFICADO -> "sem significado"
+    TipoFalta.SENTIDO_EM_FALTA -> "falta este sentido"
 }
 
 /** Escapa um campo CSV à regra normal: aspas à volta e aspas duplicadas. */
@@ -80,10 +92,7 @@ internal fun corpoDeFalta(
 
     faltas.forEach { f ->
         append("• ").append(f.lemma)
-        append(
-            if (f.tipo == TipoFalta.NAO_ENCONTRADA) " (não está no dicionário)"
-            else " (sem significado)"
-        )
+        append(" (").append(rotuloFalta(f.tipo)).append(")")
         f.significadoProprio?.let { append(". Significado: ").append(numaLinha(it)) }
         append('\n')
     }

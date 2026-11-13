@@ -52,6 +52,19 @@ class SubmissaoTest {
     }
 
     @Test
+    fun `sentido em falta vai marcado como acrescento para a curadoria`() {
+        val rebarbativo = PalavraEmFalta(
+            "rebarbativo", "Antipático, desagradável.", TipoFalta.SENTIDO_EM_FALTA,
+        )
+        assertEquals(
+            "rebarbativo,,\"Antipático, desagradável.\",acrescenta: sentido em falta\n",
+            csvDeFalta(listOf(rebarbativo), incluirCabecalho = false),
+        )
+        val corpo = corpoDeFalta(listOf(rebarbativo), "1.18.0", null)
+        assertTrue(corpo.contains("• rebarbativo (falta este sentido). Significado: Antipático, desagradável."))
+    }
+
+    @Test
     fun `cabecalho so quando pedido`() {
         assertTrue(csvDeFalta(listOf(semSentido)).startsWith("lema,classe,definicao,nota\n"))
         assertTrue(csvDeFalta(listOf(semSentido), incluirCabecalho = false).startsWith("escangalhante"))

@@ -28,6 +28,35 @@ class Preferencias(context: Context) {
             ?.let { guardado -> Tema.entries.firstOrNull { it.name == guardado } }
             ?: Tema.SISTEMA
 
+    // --- aspeto: cores e letra ----------------------------------------------
+
+    /**
+     * A paleta de cores e a letra, escolhidas em Definições, Aspeto. Por
+     * omissão as do redesign (Papel e Literata): quem já usa a app não vê
+     * diferença até mudar.
+     */
+    private val _paleta = MutableStateFlow(
+        prefs.getString(CHAVE_PALETA, null)
+            ?.let { g -> PaletaId.entries.firstOrNull { it.name == g } } ?: PaletaId.PAPEL
+    )
+    val paleta: StateFlow<PaletaId> = _paleta.asStateFlow()
+
+    fun definirPaleta(nova: PaletaId) {
+        prefs.edit().putString(CHAVE_PALETA, nova.name).apply()
+        _paleta.value = nova
+    }
+
+    private val _letra = MutableStateFlow(
+        prefs.getString(CHAVE_LETRA, null)
+            ?.let { g -> LetraId.entries.firstOrNull { it.name == g } } ?: LetraId.LITERATA
+    )
+    val letra: StateFlow<LetraId> = _letra.asStateFlow()
+
+    fun definirLetra(nova: LetraId) {
+        prefs.edit().putString(CHAVE_LETRA, nova.name).apply()
+        _letra.value = nova
+    }
+
     // --- modo jogo --------------------------------------------------------
 
     /**
@@ -103,8 +132,45 @@ class Preferencias(context: Context) {
         _modoDesenvolvedor.value = ligado
     }
 
+    // --- pedido de avaliação ---------------------------------------------
+
+    /**
+     * O marco de palavras guardadas a que ainda não se pediu avaliação, ou
+     * nulo. Fica só neste telemóvel: não se conta nada a ninguém.
+     */
+    fun avaliacaoPorPedir(totalGuardadas: Int): Int? =
+        if (prefs.getBoolean(CHAVE_AVALIACAO_FIM, false)) null
+        else marcoDeAvaliacao(totalGuardadas, prefs.getInt(CHAVE_AVALIACAO, 0))
+
+    /**
+     * "Agora não" (ou fechar o diálogo): esse marco já não pergunta, mas o
+     * seguinte sim.
+     */
+    fun marcarAvaliacaoPedida(marco: Int) {
+        prefs.edit().putInt(CHAVE_AVALIACAO, marco).apply()
+    }
+
+    /** "Avaliar" ou "Não voltar a perguntar": nunca mais se pede. */
+    fun terminarPedidosDeAvaliacao() {
+        prefs.edit().putBoolean(CHAVE_AVALIACAO_FIM, true).apply()
+    }
+
+    // --- novidades da versão ------------------------------------------------
+
+    /** O código da versão cujas novidades já se mostraram (0 = nenhuma). */
+    fun versaoVista(): Int = prefs.getInt(CHAVE_VERSAO_VISTA, 0)
+
+    fun marcarVersaoVista(codigo: Int) {
+        prefs.edit().putInt(CHAVE_VERSAO_VISTA, codigo).apply()
+    }
+
     companion object {
+        private const val CHAVE_VERSAO_VISTA = "novidades_vistas_ate"
         private const val CHAVE_TEMA = "tema"
+        private const val CHAVE_PALETA = "paleta"
+        private const val CHAVE_LETRA = "letra"
+        private const val CHAVE_AVALIACAO = "avaliacao_pedida_ate"
+        private const val CHAVE_AVALIACAO_FIM = "avaliacao_terminada"
         private const val CHAVE_JOGO = "jogo_ligado"
         private const val CHAVE_QUANTOS = "jogo_quantos"
         private const val CHAVE_INICIO = "jogo_inicio"
@@ -127,10 +193,49 @@ class Preferencias(context: Context) {
 }
 
 /**
+ * Quando se pede uma avaliação: à 5.ª, 10.ª, 20.ª, 50.ª e 100.ª palavra
+ * guardada, uma vez cada, e só enquanto a pessoa não avaliou nem pediu para
+ * não voltar a perguntar ("Agora não" passa ao marco seguinte).
+ */
+val MARCOS_AVALIACAO = listOf(5, 10, 20, 50, 100)
+
+/**
+ * O marco a pedir agora, ou nulo. `jaPedido` é o maior marco já pedido.
+ *
+ * Usa ">=" e não "==": quem importa uma cópia com 70 palavras é perguntado
+ * uma vez, ao guardar a seguinte, e pelo marco mais alto, em vez de nunca.
+ */
+fun marcoDeAvaliacao(total: Int, jaPedido: Int): Int? {
+    val marco = MARCOS_AVALIACAO.lastOrNull { total >= it } ?: return null
+    return if (marco > jaPedido) marco else null
+}
+
+/**
  * Segue o telemóvel por omissão — é o que a maior parte das pessoas espera —
  * mas quem lê à noite pode querer o escuro sempre, e quem lê à luz do dia o
  * claro. Forçar é uma escolha legítima, não um capricho.
  */
+/** As paletas de cores (os valores estão em `ui/theme/Paletas.kt`). */
+enum class PaletaId(val nome: String) {
+    PAPEL("Papel"),
+    BRANCO("Branco"),
+    CADERNO("Caderno"),
+    SALVIA("Sálvia"),
+    LACRE("Lacre"),
+}
+
+/**
+ * A letra da app. "Leitura" é a do conteúdo (lemas, definições, títulos);
+ * "interface" a dos controlos. Na Literata são duas (Literata e Instrument
+ * Sans); nas outras, a mesma família faz as duas coisas.
+ */
+enum class LetraId(val nome: String, val descricao: String) {
+    LITERATA("Literata", "Serifa, para leitura longa"),
+    FIGTREE("Figtree", "Sem serifa, limpa e atual"),
+    ATKINSON("Atkinson Hyperlegible", "Feita para máxima legibilidade"),
+    SISTEMA("Do telemóvel", "A letra do sistema"),
+}
+
 enum class Tema(val etiqueta: String) {
     SISTEMA("Como o telemóvel"),
     CLARO("Claro"),

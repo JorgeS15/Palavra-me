@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,10 @@ import pt.jorges15.palavrame.ui.EcraJogo
 import pt.jorges15.palavrame.ui.EcraLicencas
 import pt.jorges15.palavrame.ui.EcraPesquisa
 import pt.jorges15.palavrame.ui.PesquisaViewModel
+import pt.jorges15.palavrame.ui.AcaoNovidade
+import pt.jorges15.palavrame.ui.DialogoNovidades
+import pt.jorges15.palavrame.ui.NOVIDADES
+import pt.jorges15.palavrame.ui.mostrarNovidades
 import pt.jorges15.palavrame.ui.BotaoPrincipal
 import pt.jorges15.palavrame.ui.Logotipo
 import pt.jorges15.palavrame.ui.theme.Cores
@@ -67,8 +72,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val tema by preferencias.tema.collectAsState()
+            val paleta by preferencias.paleta.collectAsState()
+            val letra by preferencias.letra.collectAsState()
 
-            TemaPalavrame(preferido = tema) {
+            TemaPalavrame(preferido = tema, paleta = paleta, letra = letra) {
                 // Falta instalar se nao ha base nenhuma, ou se a que veio no
                 // APK e diferente da instalada.
                 var temDicionario by remember {
@@ -97,6 +104,13 @@ class MainActivity : ComponentActivity() {
                 // nele e depois esquece-o (volta a nulo), para a visita seguinte
                 // pelo separador abrir como sempre.
                 var livroPedido by rememberSaveable { mutableStateOf<String?>(null) }
+                // A palavra aberta veio da Coleção: o "retroceder" da palavra
+                // leva de volta para lá, e não para o ecrã inicial.
+                var palavraDaColecao by rememberSaveable { mutableStateOf(false) }
+                // Guarda o estado de cada separador (a posição na lista, o
+                // filtro, os livros recolhidos) enquanto se está noutro: voltar
+                // à Coleção encontra-a como se deixou.
+                val estados = rememberSaveableStateHolder()
 
                 // Retroceder num subecrã volta à pesquisa (das licenças, às
                 // definições); só na pesquisa é que o retroceder do sistema
@@ -104,6 +118,7 @@ class MainActivity : ComponentActivity() {
                 // palavras (dentro do EcraPesquisa) e a saída normal tratarem
                 // disso.
                 BackHandler(enabled = ecra != Ecra.PESQUISA) {
+                    palavraDaColecao = false
                     ecra = if (ecra == Ecra.LICENCAS) Ecra.DEFINICOES else Ecra.PESQUISA
                 }
 
@@ -128,6 +143,42 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // As novidades desta versão, uma vez, ao abrir depois de uma
+                // atualização. Não interrompe quem chegou pelo lembrete do
+                // Rever ou com uma palavra do leitor: nesse caso fica para a
+                // próxima vez que a app se abrir normalmente (e por isso a
+                // versão só se marca como vista quando a nota aparece).
+                var novidadesAbertas by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    if (!primeiraCriacao || daNotificacao || textoRecebido() != null) {
+                        return@LaunchedEffect
+                    }
+                    val atual = BuildConfig.VERSION_CODE
+                    if (!mostrarNovidades(atual, preferencias.versaoVista(), foiAtualizacao())) {
+                        // Instalação nova (ou já vista): nada a mostrar, e as
+                        // notas desta versão ficam dadas como vistas.
+                        preferencias.marcarVersaoVista(atual)
+                        return@LaunchedEffect
+                    }
+                    preferencias.marcarVersaoVista(atual)
+                    novidadesAbertas = NOVIDADES[BuildConfig.VERSION_NAME] != null
+                }
+                if (novidadesAbertas) {
+                    NOVIDADES[BuildConfig.VERSION_NAME]?.let { notas ->
+                        DialogoNovidades(
+                            versao = BuildConfig.VERSION_NAME,
+                            novidades = notas,
+                            aoFechar = { novidadesAbertas = false },
+                            aoAgir = { acao ->
+                                novidadesAbertas = false
+                                when (acao) {
+                                    AcaoNovidade.ASPETO -> ecra = Ecra.DEFINICOES
+                                }
+                            },
+                        )
+                    }
+                }
+
                 val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
                 // O Rever é um ecrã inteiro, com o seu "×"; as licenças são um
                 // subecrã das definições. Nos outros três há a barra de baixo.
@@ -146,6 +197,8 @@ class MainActivity : ComponentActivity() {
                                 aoEscolher = { destino ->
                                     // Tocar outra vez em Procurar volta ao início.
                                     if (destino == Ecra.PESQUISA && ecra == Ecra.PESQUISA) vm.limpar()
+                                    // Mudar de separador à mão corta a ligação à Coleção.
+                                    palavraDaColecao = false
                                     ecra = destino
                                 },
                             )
@@ -154,14 +207,20 @@ class MainActivity : ComponentActivity() {
                 ) { p ->
                     Box(Modifier.padding(p).consumeWindowInsets(p)) {
                         LarguraDeLeitura {
+                          estados.SaveableStateProvider(ecra.name) {
                             when (ecra) {
                                 Ecra.COLECAO -> EcraColecao(
                                     vm,
                                     desenvolvedor = desenvolvedor,
                                     aoVoltar = { ecra = Ecra.PESQUISA },
                                     aoAbrirPalavra = { lema ->
-                                        vm.procurar(lema)
-                                        ecra = Ecra.PESQUISA
+                                        // Só se muda de ecrã com a palavra já
+                                        // pronta: senão via-se o início por um
+                                        // instante.
+                                        vm.procurar(lema) {
+                                            palavraDaColecao = true
+                                            ecra = Ecra.PESQUISA
+                                        }
                                     },
                                     livroInicial = livroPedido,
                                     aoUsarLivroInicial = { livroPedido = null },
@@ -192,13 +251,32 @@ class MainActivity : ComponentActivity() {
                                         livroPedido = titulo
                                         ecra = Ecra.COLECAO
                                     },
+                                    aoSairParaOrigem = if (palavraDaColecao) {
+                                        {
+                                            vm.limpar()
+                                            palavraDaColecao = false
+                                            ecra = Ecra.COLECAO
+                                        }
+                                    } else null,
                                 )
                             }
+                          }
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * A app foi atualizada (e não acabada de instalar)? O Android guarda as
+     * duas datas: numa instalação nova são iguais.
+     */
+    private fun foiAtualizacao(): Boolean = try {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        info.lastUpdateTime > info.firstInstallTime
+    } catch (e: Exception) {
+        false
     }
 
     private fun textoRecebido(): String? = when (intent?.action) {

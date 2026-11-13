@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Só a pasta das imagens de partilha, dentro da cache. Nada mais fica visível. -->
+<paths>
+    <cache-path name="partilha" path="partilha/" />
+</paths>

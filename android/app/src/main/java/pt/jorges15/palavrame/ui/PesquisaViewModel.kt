@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pt.jorges15.palavrame.data.Candidato
@@ -63,6 +65,19 @@ class PesquisaViewModel(
     val fraseSugerida: StateFlow<String?> = _fraseSugerida.asStateFlow()
 
     val palavrasGuardadas = utilizador.palavras().todas()
+
+    /**
+     * A coleção já carregada, para a Coleção não piscar vazia ao voltar a ela.
+     *
+     * Com `collectAsState(initial = emptyList())`, cada vez que o ecrã aparecia
+     * o primeiro instante era uma lista vazia, até a base responder (e a
+     * posição guardada da lista perdia-se, porque a lista vazia não tem para
+     * onde rolar). Aqui a lista fica guardada no ViewModel, que sobrevive à
+     * mudança de ecrã, e volta logo com o último valor. Nulo só no arranque,
+     * antes da primeira leitura: aí o ecrã ainda não mostra nada.
+     */
+    val colecao: StateFlow<List<PalavraGuardada>?> = palavrasGuardadas
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Alimenta a linha de estatísticas do ecrã inicial. */
     val progresso = utilizador.progresso().observar()
@@ -152,8 +167,15 @@ class PesquisaViewModel(
         _fraseSugerida.value = null
     }
 
-    /** Chamado pela pesquisa e também pelo PROCESS_TEXT vindo do e-book. */
-    fun procurar(texto: String = _estado.value.texto) {
+    /**
+     * Chamado pela pesquisa e também pelo PROCESS_TEXT vindo do e-book.
+     *
+     * `depois` corre quando o resultado já está no estado. Serve a quem abre
+     * uma palavra a partir de outro ecrã (a Coleção): só se muda para o
+     * separador Procurar nessa altura, senão o primeiro instante mostrava o
+     * ecrã inicial, ainda sem a palavra.
+     */
+    fun procurar(texto: String = _estado.value.texto, depois: () -> Unit = {}) {
         aEscrever?.cancel()   // a pesquisa substitui as sugestões da escrita
         viewModelScope.launch {
             val candidatos = withContext(Dispatchers.IO) {
@@ -178,6 +200,7 @@ class PesquisaViewModel(
                 procurou = true,
                 parecidas = parecidas,
             )
+            depois()
         }
     }
 
@@ -253,6 +276,16 @@ class PesquisaViewModel(
         viewModelScope.launch { utilizador.palavras().guardar(palavra) }
     }
 
+    /**
+     * A entrada do dicionário de uma palavra da coleção, para a partilhar como
+     * imagem: pela grafia exata e, se falhar, pelas formas (como a pesquisa).
+     * Nula se a palavra não está no dicionário.
+     */
+    suspend fun entradaPara(lemma: String): Entrada? = withContext(Dispatchers.IO) {
+        val d = dicionario ?: return@withContext null
+        d.entradaPorLema(lemma) ?: d.procurar(lemma).firstOrNull()?.let { d.entrada(it.lemmaId) }
+    }
+
     /** Lemas já na coleção — o botão precisa de saber se já lá está. */
     val lemasGuardados: Flow<Set<String>> =
         palavrasGuardadas.map { lista -> lista.map { it.lemma }.toSet() }
@@ -274,8 +307,17 @@ class PesquisaViewModel(
     }
 }
 
-/** Como uma palavra registada falha o dicionário. */
-enum class TipoFalta { NAO_ENCONTRADA, SEM_SIGNIFICADO }
+/**
+ * Como uma palavra registada falha o dicionário.
+ *
+ * `SENTIDO_EM_FALTA`: a palavra tem definição, mas o utilizador escreveu a
+ * sua, o que quer dizer que a encontrou num sentido que o dicionário não tem
+ * (o caso de "rebarbativo", que só tinha o sentido de 1913).
+ */
+enum class TipoFalta { NAO_ENCONTRADA, SEM_SIGNIFICADO, SENTIDO_EM_FALTA }
+
+/** O nome da fonte da curadoria na base (ver `sources/curadoria.py`). */
+private const val FONTE_CURADORIA = "Palavra-me"
 
 /** Uma palavra da coleção que o dicionário não cobre — candidata a submissão. */
 data class PalavraEmFalta(
@@ -286,8 +328,9 @@ data class PalavraEmFalta(
 
 /**
  * As palavras registadas que o dicionário não cobre: as que não existem lá de
- * todo, e as que existem mas sem significado atribuído. É o que se submete
- * para a curadoria — e distingue-se um caso do outro, como o Jorge pediu.
+ * todo, as que existem mas sem significado atribuído, e as que têm definição
+ * mas a que o utilizador juntou a sua (um sentido em falta). É o que se
+ * submete para a curadoria, e distingue-se cada caso, como o Jorge pediu.
  *
  * Corre em IO: percorre a coleção e consulta o dicionário por cada palavra.
  */
@@ -307,6 +350,13 @@ suspend fun palavrasEmFalta(
                 PalavraEmFalta(p.lemma, p.significado, TipoFalta.NAO_ENCONTRADA)
             entrada.acecoes.isEmpty() ->
                 PalavraEmFalta(p.lemma, p.significado, TipoFalta.SEM_SIGNIFICADO)
+            // Com definição e com o significado do próprio: falta um sentido.
+            // Se a curadoria já lhe acrescentou um, o pedido foi atendido (o
+            // significado do utilizador fica na coleção, mas deixa de se
+            // propor de novo a cada envio).
+            !p.significado.isNullOrBlank() &&
+                entrada.acecoes.none { it.fonte == FONTE_CURADORIA } ->
+                PalavraEmFalta(p.lemma, p.significado, TipoFalta.SENTIDO_EM_FALTA)
             else -> null
         }
     }

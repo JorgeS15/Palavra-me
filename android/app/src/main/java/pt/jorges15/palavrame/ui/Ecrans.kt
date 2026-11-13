@@ -52,11 +52,19 @@ fun EcraPesquisa(
     aoAbrirJogo: () -> Unit = {},
     /** Abre a coleção já no livro tocado na estante. */
     aoAbrirLivro: (String) -> Unit = { aoAbrirColecao() },
+    /**
+     * Não nulo quando a palavra aberta veio de outro ecrã (a Coleção): o
+     * "retroceder" leva de volta para lá em vez de ir para o início.
+     */
+    aoSairParaOrigem: (() -> Unit)? = null,
 ) {
     val estado by vm.estado.collectAsState()
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
     val guardados by vm.lemasGuardados.collectAsState(initial = emptySet())
-    val palavras by vm.palavrasGuardadas.collectAsState(initial = emptyList())
+    // Do ViewModel, já carregada: voltar a este ecrã não pisca vazio (ver
+    // `PesquisaViewModel.colecao`). Nula só antes da primeira leitura.
+    val carregadas by vm.colecao.collectAsState()
+    val palavras = carregadas.orEmpty()
     val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
     val porRever by vm.porRever.collectAsState(initial = 0)
     val progresso by vm.progresso.collectAsState(initial = null)
@@ -71,6 +79,10 @@ fun EcraPesquisa(
     var pedirSignificadoNoRegisto by rememberSaveable { mutableStateOf(false) }
     val estadoSnackbar = remember { SnackbarHostState() }
     val ambito = rememberCoroutineScope()
+    // O marco (5, 10, 20, 50 ou 100 palavras) a pedir avaliação agora, ou nulo.
+    var marcoAvaliacao by rememberSaveable { mutableStateOf<Int?>(null) }
+    // A palavra a partilhar como imagem, com o ecrã de partilha aberto.
+    var aPartilhar by remember { mutableStateOf<DadosPartilha?>(null) }
 
     // Ao abrir uma palavra (por pesquisa, sugestão, candidato ou sinónimo)
     // fecha-se o teclado: a definição não deve ser vista com o teclado por
@@ -83,13 +95,17 @@ fun EcraPesquisa(
     // à lista de candidatos se a havia, senão ao início. Da "não encontrada":
     // volta ao campo com o termo escrito, para o corrigir. A meio de escrever:
     // limpa. Só no início vazio é que o "retroceder" do sistema sai da app.
+    //
+    // Se a palavra foi aberta a partir da Coleção, acabado o histórico volta-se
+    // à Coleção (`aoSairParaOrigem`), e não ao início: é de lá que se veio.
     val voltar: () -> Unit = {
         when {
-            estado.entrada != null -> when {
-                vm.voltarEntrada() -> Unit
-                estado.candidatos.size > 1 -> vm.fecharEntrada()
-                else -> vm.limpar()
-            }
+            estado.entrada != null && vm.voltarEntrada() -> Unit
+            estado.entrada != null && estado.candidatos.size > 1 -> vm.fecharEntrada()
+            aoSairParaOrigem != null &&
+                (estado.entrada != null || estado.candidatos.isNotEmpty() || estado.procurou) ->
+                aoSairParaOrigem()
+            estado.entrada != null -> vm.limpar()
             estado.candidatos.isNotEmpty() -> vm.limpar()
             estado.procurou -> vm.escrever(estado.texto)
             else -> vm.limpar()
@@ -117,7 +133,11 @@ fun EcraPesquisa(
                         // Sem aceções: pede-se o significado ao registar.
                         pedirSignificadoNoRegisto = entrada.acecoes.isEmpty()
                     },
-                    aoPartilhar = { partilharEntrada(context, entrada) },
+                    aoPartilhar = {
+                        aPartilhar = dadosPartilha(
+                            entrada, palavras.firstOrNull { it.lemma == entrada.lemma },
+                        )
+                    },
                     aoSeguir = { vm.procurar(it) },
                 )
 
@@ -144,6 +164,7 @@ fun EcraPesquisa(
                 else -> Inicio(
                     estado = estado,
                     palavras = palavras,
+                    aCarregar = carregadas == null,
                     progresso = progresso,
                     // "N por rever" é do Modo Desenvolvedor: para quem lê, o
                     // jogo vem só pelo lembrete.
@@ -160,6 +181,28 @@ fun EcraPesquisa(
                 )
             }
         }
+    }
+
+    aPartilhar?.let { dados ->
+        val entrada = estado.entrada
+        DialogoPartilhar(
+            dados,
+            aoFechar = { aPartilhar = null },
+            aoPartilharTexto = entrada?.let { e -> { partilharEntrada(context, e) } },
+        )
+    }
+
+    marcoAvaliacao?.let { marco ->
+        DialogoAvaliar(
+            marco,
+            // "Agora não": o marco já ficou marcado ao abrir; o seguinte pergunta.
+            aoAdiar = { marcoAvaliacao = null },
+            // "Avaliar" e "Não voltar a perguntar": acabou de vez.
+            aoTerminar = {
+                preferencias.terminarPedidosDeAvaliacao()
+                marcoAvaliacao = null
+            },
+        )
     }
 
     lemaARegistar?.let { lema ->
@@ -179,6 +222,15 @@ fun EcraPesquisa(
                 val eraFalta = pedirSignificadoNoRegisto && existente == null
                 if (existente != null) vm.atualizar(palavra) else vm.registar(palavra)
                 lemaARegistar = null
+                // Palavra nova: se chegou à 5.ª ou à 50.ª, pede-se uma
+                // avaliação, uma vez por marco. Marca-se logo como pedida,
+                // aceite ou não: perguntar outra vez seria insistir.
+                if (existente == null) {
+                    preferencias.avaliacaoPorPedir(palavras.size + 1)?.let { marco ->
+                        preferencias.marcarAvaliacaoPedida(marco)
+                        marcoAvaliacao = marco
+                    }
+                }
                 pedirSignificadoNoRegisto = false; vm.limparContexto()
                 if (existente == null) {
                     ambito.launch {
@@ -198,6 +250,89 @@ fun EcraPesquisa(
     }
 }
 
+// --- pedido de avaliação -------------------------------------------------------
+
+/**
+ * Pede uma avaliação na Play Store, à 5.ª, 10.ª, 20.ª, 50.ª e 100.ª palavra.
+ *
+ * Três saídas: "Avaliar" (abre a loja e nunca mais pergunta), "Agora não"
+ * (pergunta no marco seguinte; fechar o diálogo conta como isto) e "Não
+ * voltar a perguntar".
+ *
+ * Sem a biblioteca de avaliação da Google: abre-se a página da app na Play
+ * Store, como um link. É mais um passo para quem avalia, mas a app continua
+ * sem código fechado nem dependências (e pode ir para o F-Droid).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DialogoAvaliar(marco: Int, aoAdiar: () -> Unit, aoTerminar: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = aoAdiar,
+        containerColor = Cores.card,
+        title = {
+            Text(
+                "Já guardaste $marco palavras",
+                style = Estilo.grupoTitulo.copy(fontSize = 22.sp),
+                color = Cores.ink,
+            )
+        },
+        text = {
+            Text(
+                "Se estás a gostar do Palavra-me, uma avaliação na Play Store ajuda "
+                    + "outros leitores a encontrá-lo. Leva um minuto.",
+                style = Estilo.texto.copy(lineHeight = 1.45.em),
+                color = Cores.ink2,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { abrirNaPlayStore(context); aoTerminar() },
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+            ) { Text("Avaliar", style = Estilo.controloForte) }
+        },
+        dismissButton = {
+            // Duas saídas na mesma linha (quebra se não couber).
+            FlowRow(horizontalArrangement = Arrangement.End) {
+                TextButton(
+                    onClick = aoTerminar,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink3),
+                ) { Text("Não voltar a perguntar", style = Estilo.controlo) }
+                TextButton(
+                    onClick = aoAdiar,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+                ) { Text("Agora não", style = Estilo.controloForte) }
+            }
+        },
+    )
+}
+
+/**
+ * A página da app na Play Store: primeiro na própria app da loja; sem ela
+ * (um telemóvel sem Play Store), no browser.
+ */
+internal fun abrirNaPlayStore(context: android.content.Context) {
+    val pacote = context.packageName
+    val naLoja = android.content.Intent(
+        android.content.Intent.ACTION_VIEW,
+        android.net.Uri.parse("market://details?id=$pacote"),
+    ).apply { setPackage("com.android.vending") }
+    try {
+        context.startActivity(naLoja)
+    } catch (e: android.content.ActivityNotFoundException) {
+        try {
+            context.startActivity(
+                android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://play.google.com/store/apps/details?id=$pacote"),
+                )
+            )
+        } catch (_: android.content.ActivityNotFoundException) {
+            // Nem loja nem browser: não há nada a fazer, e não vale um erro.
+        }
+    }
+}
+
 // --- início ------------------------------------------------------------------
 
 /**
@@ -211,6 +346,8 @@ fun EcraPesquisa(
 private fun Inicio(
     estado: EstadoPesquisa,
     palavras: List<PalavraGuardada>,
+    /** Antes da primeira leitura da coleção: não se mostra o convite de "vazia". */
+    aCarregar: Boolean,
     progresso: Progresso?,
     porRever: Int,
     aoEscrever: (String) -> Unit,
@@ -265,6 +402,8 @@ private fun Inicio(
         if (estado.texto.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
             CartaoSugestoes(estado, aoProcurar)
+        } else if (aCarregar) {
+            // Um instante no arranque: nada abaixo do campo ainda.
         } else if (palavras.isEmpty()) {
             Spacer(Modifier.height(28.dp))
             Text(

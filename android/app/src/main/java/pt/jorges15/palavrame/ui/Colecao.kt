@@ -12,6 +12,7 @@ import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,7 +51,11 @@ fun EcraColecao(
     /** Avisa que o livro inicial já foi aplicado, para não se repetir. */
     aoUsarLivroInicial: () -> Unit = {},
 ) {
-    val palavras by vm.palavrasGuardadas.collectAsState(initial = emptyList())
+    // Nulo só antes da primeira leitura da base (no arranque da app): aí não
+    // se desenha a lista, em vez de a mostrar vazia por um instante.
+    val carregadas by vm.colecao.collectAsState()
+    val palavras = carregadas.orEmpty()
+    val aCarregar = carregadas == null
     var agruparPorLivro by rememberSaveable { mutableStateOf(true) }
     var porData by rememberSaveable { mutableStateOf(true) }
     var filtro by rememberSaveable { mutableStateOf("") }
@@ -97,6 +102,10 @@ fun EcraColecao(
         }
     }
 
+    // Partilhar como imagem: as definições vêm do dicionário no momento.
+    var aPartilhar by remember { mutableStateOf<DadosPartilha?>(null) }
+    aPartilhar?.let { DialogoPartilhar(it, aoFechar = { aPartilhar = null }) }
+
     aEditar?.let { palavra ->
         FolhaRegistar(
             lemma = palavra.lemma,
@@ -120,7 +129,7 @@ fun EcraColecao(
                 Text("As minhas palavras", style = Estilo.tituloEcra, color = Cores.ink)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    buildString {
+                    if (aCarregar) "" else buildString {
                         append(if (palavras.size == 1) "1 palavra" else "${palavras.size} palavras")
                         if (nLivros > 0) {
                             append(" · ")
@@ -132,7 +141,9 @@ fun EcraColecao(
                 )
             }
 
-            if (palavras.isEmpty()) {
+            if (aCarregar) {
+                // Só no arranque, um instante: nada a mostrar ainda.
+            } else if (palavras.isEmpty()) {
                 Text(
                     "Ainda não registaste nenhuma palavra.\n\n" +
                         "Procura uma que tenhas encontrado a ler e toca em Registar.",
@@ -249,6 +260,11 @@ fun EcraColecao(
                                     aoProcurar = { aoAbrirPalavra(p.lemma) },
                                     aoEditar = { aEditar = p },
                                     aoApagar = { esquecerComAnular(p) },
+                                    aoPartilhar = {
+                                        ambito.launch {
+                                            aPartilhar = dadosPartilha(vm.entradaPara(p.lemma), p)
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -329,6 +345,7 @@ private fun LinhaPalavra(
     aoProcurar: () -> Unit,
     aoEditar: () -> Unit,
     aoApagar: () -> Unit,
+    aoPartilhar: () -> Unit,
 ) {
     val esteAno = remember { Calendar.getInstance().get(Calendar.YEAR) }
     val curto = remember { SimpleDateFormat("d MMM", Locale("pt", "PT")) }
@@ -386,6 +403,9 @@ private fun LinhaPalavra(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            IconButton(onClick = aoPartilhar, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Share, contentDescription = "Partilhar", tint = Cores.ink3)
             }
             IconButton(onClick = aoEditar, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.Rounded.EditNote, contentDescription = "Editar", tint = Cores.ink3)

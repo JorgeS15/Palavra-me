@@ -1,5 +1,72 @@
 # Changelog
 
+## [app v1.19.0] - 2026-11-11
+
+Só a app.
+
+### Added
+
+- **Aspeto: cores e letra à escolha.** Em Definições, a secção "Tema" passa
+  a "Aspeto", com três escolhas que se combinam livremente e se aplicam na
+  hora, sem reiniciar:
+  - o **modo**: Sistema, Claro ou Escuro (como antes);
+  - as **cores**: cinco paletas, cada uma em claro e escuro. Papel (a
+    original, quente, com o marcador amarelo), Branco (neutra), Caderno
+    (azul), Sálvia (verde) e Lacre (carmim);
+  - a **letra**: Literata (serifa, a original), Figtree (sem serifa),
+    Atkinson Hyperlegible (feita para máxima legibilidade) e "Do telemóvel"
+    (a letra do sistema).
+
+- **Nota de novidades.** Ao abrir a app pela primeira vez depois de uma
+  atualização, uma nota curta com o que mudou e, quando há sítio para isso,
+  um botão que leva lá ("Ver o Aspeto"). Uma vez por versão, só nas versões
+  com notas escritas (em `ui/Novidades.kt`), nunca numa instalação nova, e
+  nunca a interromper quem abriu a app pelo lembrete ou com uma palavra do
+  leitor de e-books (aí fica para a abertura seguinte).
+
+## [app v1.18.1] - 2026-11-06
+
+Só a app.
+
+### Added
+
+- **Partilhar palavra como imagem.** O botão de partilhar da palavra (e um
+  novo em cada linha da Coleção) abre uma pré-visualização com a palavra (com
+  o marcador), a classe, até duas aceções (ou o significado do próprio, com o
+  rótulo "O meu significado"), a frase do livro com a capa, e a assinatura
+  "Palavra-me · Um dicionário para quem lê". Dois formatos, Stories
+  (1080 × 1920) e Publicação (1080 × 1350), nas cores da app ou na cor do
+  livro. A palavra ajusta-se à largura e, se for muito comprida, parte em duas
+  linhas numa fronteira de sílaba. A imagem é desenhada no telemóvel, sem
+  rede, e entregue à partilha do Android por um FileProvider (só a pasta
+  `partilha/` da cache). A partilha só com texto continua disponível.
+  Desenho em `design_handoff_partilhar_palavra/`.
+- **Pedido de avaliação** à 5.ª, 10.ª, 20.ª, 50.ª e 100.ª palavra guardada:
+  "Já guardaste 5 palavras", com três saídas. "Avaliar" abre a página da app
+  na Play Store (ou no browser, sem a loja) e não volta a perguntar; "Agora
+  não" pergunta no marco seguinte; "Não voltar a perguntar" acaba com os
+  pedidos. Sem a biblioteca de avaliação da Google: a app continua sem código
+  fechado nem dependências, e sem permissão de internet. A contagem fica só no
+  telemóvel. Quem importa uma cópia com muitas palavras é perguntado uma vez,
+  pelo marco mais alto.
+- **"Avaliar na Play Store" nas Definições**, em Sobre. Quem avalia por aí
+  deixa de receber o pedido dos marcos.
+
+### Fixed
+
+- **Retroceder de uma palavra aberta na Coleção volta à Coleção**, e não ao
+  ecrã inicial (pela seta ou pelo gesto do sistema). Se pelo meio se abriram
+  sinónimos, primeiro volta-se a esses, como dantes. A Coleção reaparece como
+  ficou: na mesma posição da lista, com o mesmo filtro e os mesmos livros
+  recolhidos.
+- **A Coleção e o ecrã inicial já não piscam vazios** ao voltar a eles. A
+  coleção fica carregada no ViewModel (que sobrevive à mudança de ecrã) em
+  vez de se pedir à base a cada visita, com uma lista vazia no primeiro
+  instante.
+- **Abrir uma palavra na Coleção já não mostra o ecrã inicial** por um
+  instante: a app só muda de separador quando a palavra está pronta.
+
+
 ## [app v1.17.1] - 2026-11-01
 
 Só a app.

@@ -12,8 +12,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -24,6 +26,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import pt.jorges15.palavrame.R
+import pt.jorges15.palavrame.data.LetraId
+import pt.jorges15.palavrame.data.PaletaId
 
 /*
  * O tema do redesign (v2): papel e tinta, um laranja-tijolo de destaque e um
@@ -66,59 +70,10 @@ data class CoresPalavra(
     val scrim: Color,
 )
 
-private val CoresClaras = CoresPalavra(
-    bg = Color(0xFFF4EEE3),
-    card = Color(0xFFFBF8F2),
-    sunk = Color(0xFFEBE3D5),
-    ink = Color(0xFF1E1A15),
-    ink2 = Color(0xFF5C5147),
-    ink3 = Color(0xFF76695D),
-    line = Color(0xFFDCD1C0),
-    accent = Color(0xFFB0502A),
-    accentInk = Color(0xFF8A3B1B),
-    accentSoft = Color(0xFFF2DCCB),
-    onAccent = Color(0xFFFFFFFF),
-    mark = Color(0xFFF6D77F),
-    ok = Color(0xFF2E6A46),
-    okSoft = Color(0xFFDDEBDF),
-    err = Color(0xFFA6321F),
-    errSoft = Color(0xFFF6DCD4),
-    invBg = Color(0xFF1E1A15),
-    invInk = Color(0xFFF4EEE3),
-    invMuted = Color(0xFFB9AD9E),
-    invTrack = Color(0xFF3B342B),
-    invFill = Color(0xFFF2C14E),
-    invCtaInk = Color(0xFF1E1A15),
-    scrim = Color(0x7314100A),          // rgba(20,16,10,.45)
-)
+val LocalCores = staticCompositionLocalOf { Paletas.PapelClaro }
 
-private val CoresEscuras = CoresPalavra(
-    bg = Color(0xFF14110D),
-    card = Color(0xFF1C1813),
-    sunk = Color(0xFF26201A),
-    ink = Color(0xFFF0E8DB),
-    ink2 = Color(0xFFC9BDAD),
-    ink3 = Color(0xFFA19483),
-    line = Color(0xFF382F27),
-    accent = Color(0xFFE58A5C),
-    accentInk = Color(0xFFF2A47E),
-    accentSoft = Color(0xFF3A2418),
-    onAccent = Color(0xFF1E120B),
-    mark = Color(0xFF5E4A14),
-    ok = Color(0xFF86C9A0),
-    okSoft = Color(0xFF1C3124),
-    err = Color(0xFFF08C76),
-    errSoft = Color(0xFF3A1E17),
-    invBg = Color(0xFFF0E8DB),
-    invInk = Color(0xFF1E1A15),
-    invMuted = Color(0xFF5C5147),
-    invTrack = Color(0xFFD6CBBB),
-    invFill = Color(0xFFB0502A),
-    invCtaInk = Color(0xFFFFFFFF),
-    scrim = Color(0x99000000),          // rgba(0,0,0,.6)
-)
-
-val LocalCores = staticCompositionLocalOf { CoresClaras }
+/** Se o modo em uso é o escuro (para as amostras de paleta das Definições). */
+val LocalModoEscuro = staticCompositionLocalOf { false }
 
 /** As cores do tema em uso: `Cores.accent`, `Cores.ink2`... */
 val Cores: CoresPalavra
@@ -186,16 +141,50 @@ val InstrumentSans = FontFamily(
     Font(R.font.instrument_sans_bold, FontWeight.Bold),
 )
 
-/** Os estilos de texto do redesign, pelo papel de cada um (sem cor). */
-object Estilo {
+val Figtree = FontFamily(
+    Font(R.font.figtree_regular, FontWeight.Normal),
+    Font(R.font.figtree_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.figtree_medium, FontWeight.Medium),
+    Font(R.font.figtree_medium_italic, FontWeight.Medium, FontStyle.Italic),
+    Font(R.font.figtree_semibold, FontWeight.SemiBold),
+    Font(R.font.figtree_semibold_italic, FontWeight.SemiBold, FontStyle.Italic),
+    Font(R.font.figtree_bold, FontWeight.Bold),
+)
+
+/**
+ * Atkinson Hyperlegible **Next** (2025), do Braille Institute: a original só
+ * tem normal e negrito, e a app usa também 500 e 600. Aparece no ecrã como
+ * "Atkinson Hyperlegible".
+ */
+val Atkinson = FontFamily(
+    Font(R.font.atkinson_regular, FontWeight.Normal),
+    Font(R.font.atkinson_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.atkinson_medium, FontWeight.Medium),
+    Font(R.font.atkinson_medium_italic, FontWeight.Medium, FontStyle.Italic),
+    Font(R.font.atkinson_semibold, FontWeight.SemiBold),
+    Font(R.font.atkinson_semibold_italic, FontWeight.SemiBold, FontStyle.Italic),
+    Font(R.font.atkinson_bold, FontWeight.Bold),
+)
+
+/**
+ * Os estilos de texto do redesign, pelo papel de cada um (sem cor), numa
+ * letra. `leitura` é a família do conteúdo (lemas, definições, títulos,
+ * números, citações); `controlos` a dos botões, rótulos e metadados. Os
+ * tamanhos, pesos e espaçamentos são os mesmos em todas as letras.
+ *
+ * Lê-se nos ecrãs com `Estilo.lema`, `Estilo.botao`, como antes: `Estilo` é
+ * agora o conjunto da letra escolhida em Definições, Aspeto.
+ */
+@Immutable
+class EstilosPalavra(val leitura: FontFamily, val controlos: FontFamily) {
     private fun lit(tam: Int, peso: FontWeight = FontWeight.Normal, italico: Boolean = false) =
         TextStyle(
-            fontFamily = Literata, fontSize = tam.sp, fontWeight = peso,
+            fontFamily = leitura, fontSize = tam.sp, fontWeight = peso,
             fontStyle = if (italico) FontStyle.Italic else FontStyle.Normal,
         )
 
     private fun sans(tam: Int, peso: FontWeight = FontWeight.Normal) =
-        TextStyle(fontFamily = InstrumentSans, fontSize = tam.sp, fontWeight = peso)
+        TextStyle(fontFamily = controlos, fontSize = tam.sp, fontWeight = peso)
 
     /** O lema na Palavra e no Rever: 50/1.05, 600, marcador por trás. */
     val lema = lit(50, FontWeight.SemiBold).copy(lineHeight = 1.05.em, letterSpacing = (-0.03).em)
@@ -207,7 +196,11 @@ object Estilo {
     val lemaFolha = lit(34, FontWeight.SemiBold).copy(lineHeight = 1.15.em, letterSpacing = (-0.02).em)
     /** O termo na Não encontrada. */
     val termo = lit(44, FontWeight.Medium).copy(lineHeight = 1.1.em, letterSpacing = (-0.02).em)
-    val logotipo = lit(22, FontWeight.SemiBold, italico = true)
+    /** O logótipo fica sempre em Literata itálico, seja qual for a letra. */
+    val logotipo = TextStyle(
+        fontFamily = Literata, fontSize = 22.sp,
+        fontWeight = FontWeight.SemiBold, fontStyle = FontStyle.Italic,
+    )
     val nivel = lit(28, FontWeight.Medium, italico = true).copy(lineHeight = 1.15.em)
     val numeroEstat = lit(24, FontWeight.Medium)
     val acecao = lit(17).copy(fontSize = 17.5.sp, lineHeight = 1.55.em)
@@ -240,29 +233,50 @@ object Estilo {
     val rotulo = sans(12, FontWeight.SemiBold)
 }
 
-private val tipografia = Typography().let { base ->
+private val EstilosLiterata = EstilosPalavra(Literata, InstrumentSans)
+private val EstilosFigtree = EstilosPalavra(Figtree, Figtree)
+private val EstilosAtkinson = EstilosPalavra(Atkinson, Atkinson)
+private val EstilosSistema = EstilosPalavra(FontFamily.Default, FontFamily.Default)
+
+/** Os estilos de uma letra. "Do telemóvel" é a do sistema, sem ficheiros. */
+fun estilosDe(letra: LetraId): EstilosPalavra = when (letra) {
+    LetraId.LITERATA -> EstilosLiterata
+    LetraId.FIGTREE -> EstilosFigtree
+    LetraId.ATKINSON -> EstilosAtkinson
+    LetraId.SISTEMA -> EstilosSistema
+}
+
+val LocalEstilos = staticCompositionLocalOf { EstilosLiterata }
+
+/** Os estilos da letra em uso: `Estilo.lema`, `Estilo.botao`... */
+val Estilo: EstilosPalavra
+    @Composable @ReadOnlyComposable get() = LocalEstilos.current
+
+private fun tipografia(e: EstilosPalavra) = Typography().let { base ->
     base.copy(
-        displayLarge = base.displayLarge.copy(fontFamily = Literata),
-        displayMedium = base.displayMedium.copy(fontFamily = Literata),
-        displaySmall = base.displaySmall.copy(fontFamily = Literata),
-        headlineLarge = base.headlineLarge.copy(fontFamily = Literata),
-        headlineMedium = base.headlineMedium.copy(fontFamily = Literata),
-        headlineSmall = base.headlineSmall.copy(fontFamily = Literata),
-        titleLarge = base.titleLarge.copy(fontFamily = Literata),
-        titleMedium = base.titleMedium.copy(fontFamily = InstrumentSans, fontWeight = FontWeight.SemiBold),
-        titleSmall = base.titleSmall.copy(fontFamily = InstrumentSans, fontWeight = FontWeight.SemiBold),
-        bodyLarge = base.bodyLarge.copy(fontFamily = Literata, fontSize = 17.sp, lineHeight = 26.sp),
-        bodyMedium = base.bodyMedium.copy(fontFamily = InstrumentSans),
-        bodySmall = base.bodySmall.copy(fontFamily = InstrumentSans),
-        labelLarge = base.labelLarge.copy(fontFamily = InstrumentSans),
-        labelMedium = base.labelMedium.copy(fontFamily = InstrumentSans),
-        labelSmall = base.labelSmall.copy(fontFamily = InstrumentSans),
+        displayLarge = base.displayLarge.copy(fontFamily = e.leitura),
+        displayMedium = base.displayMedium.copy(fontFamily = e.leitura),
+        displaySmall = base.displaySmall.copy(fontFamily = e.leitura),
+        headlineLarge = base.headlineLarge.copy(fontFamily = e.leitura),
+        headlineMedium = base.headlineMedium.copy(fontFamily = e.leitura),
+        headlineSmall = base.headlineSmall.copy(fontFamily = e.leitura),
+        titleLarge = base.titleLarge.copy(fontFamily = e.leitura),
+        titleMedium = base.titleMedium.copy(fontFamily = e.controlos, fontWeight = FontWeight.SemiBold),
+        titleSmall = base.titleSmall.copy(fontFamily = e.controlos, fontWeight = FontWeight.SemiBold),
+        bodyLarge = base.bodyLarge.copy(fontFamily = e.leitura, fontSize = 17.sp, lineHeight = 26.sp),
+        bodyMedium = base.bodyMedium.copy(fontFamily = e.controlos),
+        bodySmall = base.bodySmall.copy(fontFamily = e.controlos),
+        labelLarge = base.labelLarge.copy(fontFamily = e.controlos),
+        labelMedium = base.labelMedium.copy(fontFamily = e.controlos),
+        labelSmall = base.labelSmall.copy(fontFamily = e.controlos),
     )
 }
 
 @Composable
 fun TemaPalavrame(
     preferido: pt.jorges15.palavrame.data.Tema = pt.jorges15.palavrame.data.Tema.SISTEMA,
+    paleta: PaletaId = PaletaId.PAPEL,
+    letra: LetraId = LetraId.LITERATA,
     content: @Composable () -> Unit,
 ) {
     val escuroAtivo = when (preferido) {
@@ -270,7 +284,10 @@ fun TemaPalavrame(
         pt.jorges15.palavrame.data.Tema.CLARO -> false
         pt.jorges15.palavrame.data.Tema.ESCURO -> true
     }
-    val cores = if (escuroAtivo) CoresEscuras else CoresClaras
+    // A mudança de paleta ou de letra aplica-se na hora, sem reiniciar.
+    val cores = Paletas.de(paleta, escuroAtivo)
+    val estilos = estilosDe(letra)
+    val tipo = remember(estilos) { tipografia(estilos) }
 
     /*
      * As barras do sistema seguem o tema da app, não o do telemóvel.
@@ -287,14 +304,24 @@ fun TemaPalavrame(
                 isAppearanceLightStatusBars = !escuroAtivo
                 isAppearanceLightNavigationBars = !escuroAtivo
             }
+            // O fundo da janela segue a paleta: é o que se vê por trás do
+            // teclado e nas transições. (O do arranque, antes do Compose,
+            // fica no tom Papel do tema XML.)
+            janela.setBackgroundDrawable(
+                android.graphics.drawable.ColorDrawable(cores.bg.toArgb())
+            )
         }
     }
 
     // Sem cores dinâmicas do sistema: o papel e a tinta são a identidade da app.
-    CompositionLocalProvider(LocalCores provides cores) {
+    CompositionLocalProvider(
+        LocalCores provides cores,
+        LocalEstilos provides estilos,
+        LocalModoEscuro provides escuroAtivo,
+    ) {
         MaterialTheme(
             colorScheme = esquema(cores, escuroAtivo),
-            typography = tipografia,
+            typography = tipo,
             content = content,
         )
     }
