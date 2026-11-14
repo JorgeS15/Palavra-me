@@ -60,7 +60,7 @@ plano-palavra-me.md
 # A atribuição das fontes não depende disto e continua cumprida onde tem de
 # estar: no ecrã "Fontes e licenças" da app, e na tabela `sources` dentro da
 # própria base de dados, que viaja com ela.
-docs/
+# docs/
 
 # As entregas do design (protótipos HTML, capturas e os zips de onde vieram).
 # São material de trabalho com vários MB cada; o que delas interessa já está

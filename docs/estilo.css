@@ -1,0 +1,204 @@
+@font-face { font-family: "Literata"; src: url("fontes/literata-regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Literata"; src: url("fontes/literata-italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Literata"; src: url("fontes/literata-medium.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Literata"; src: url("fontes/literata-medium-italic.ttf") format("truetype"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Literata"; src: url("fontes/literata-semibold.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Literata"; src: url("fontes/literata-semibold-italic.ttf") format("truetype"); font-weight: 600; font-style: italic; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("fontes/instrument-sans-regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("fontes/instrument-sans-semibold.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+
+:root {
+  color-scheme: light;
+  --bg: #F4EEE3; --card: #FBF8F2; --sunk: #EBE3D5;
+  --ink: #1E1A15; --ink2: #5C5147; --ink3: #76695D; --line: #DCD1C0;
+  --accent: #B0502A; --accentInk: #8A3B1B; --accentSoft: #F2DCCB; --onAccent: #FFFFFF;
+  --mark: #F6D77F;
+  --invBg: #1E1A15; --invInk: #F4EEE3; --invMuted: #B9AD9E; --invLine: #3B342B; --invAccent: #F2C14E;
+  --ler: Literata, Georgia, "Times New Roman", serif;
+  --ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --bg: #14110D; --card: #1C1813; --sunk: #26201A;
+    --ink: #F0E8DB; --ink2: #C9BDAD; --ink3: #A19483; --line: #382F27;
+    --accent: #E58A5C; --accentInk: #F2A47E; --accentSoft: #3A2418; --onAccent: #1E120B;
+    --mark: #5E4A14;
+    --invBg: #F0E8DB; --invInk: #1E1A15; --invMuted: #5C5147; --invLine: #D6CBBB; --invAccent: #B0502A;
+    color-scheme: dark;
+  }
+  :root:not([data-tema="claro"]) .p-escuro { display: none; }
+  :root:not([data-tema="claro"]) .p-claro { display: block; }
+}
+:root[data-tema="escuro"] {
+    --bg: #14110D; --card: #1C1813; --sunk: #26201A;
+    --ink: #F0E8DB; --ink2: #C9BDAD; --ink3: #A19483; --line: #382F27;
+    --accent: #E58A5C; --accentInk: #F2A47E; --accentSoft: #3A2418; --onAccent: #1E120B;
+    --mark: #5E4A14;
+    --invBg: #F0E8DB; --invInk: #1E1A15; --invMuted: #5C5147; --invLine: #D6CBBB; --invAccent: #B0502A;
+    color-scheme: dark;
+}
+:root[data-tema="escuro"] .p-escuro { display: none; }
+:root[data-tema="escuro"] .p-claro { display: block; }
+/* Capturas: contrário da página, para fazer contraste. Página clara mostra a app escura. */
+.p-claro { display: none; }
+.p-escuro { display: block; }
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--ui); font-size: 17px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+a { color: var(--accentInk); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+img { max-width: 100%; display: block; }
+p { margin: 0 0 18px; text-wrap: pretty; }
+
+.marca {
+  background: linear-gradient(transparent 58%, var(--mark) 58%, var(--mark) 92%, transparent 92%);
+  padding: 0 .08em; margin: 0 -.04em;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.sobre { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink2); }
+
+.envolucro { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+
+/* Topo */
+.topo { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; }
+.logo { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; }
+.logo:hover { color: var(--ink); }
+.logo img { width: 36px; height: 36px; flex: none; }
+.logo span { font-family: var(--ler); font-style: italic; font-weight: 600; font-size: 22px; letter-spacing: -.01em; }
+.nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.nav a { font-size: 15px; font-weight: 600; color: var(--ink2); text-decoration: none; padding: 8px 12px; border-radius: 10px; }
+.nav a:hover { background: var(--sunk); color: var(--ink); }
+.nav a[aria-current="page"] { color: var(--ink); background: var(--sunk); }
+
+/* Comutador de tema */
+.direita { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.tema { display: flex; padding: 3px; border-radius: 12px; background: var(--sunk); }
+.tema button {
+  width: 36px; height: 32px; border: 0; border-radius: 9px; background: transparent; color: var(--ink2);
+  display: grid; place-items: center; cursor: pointer; padding: 0;
+}
+.tema button:hover { color: var(--ink); }
+.tema button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .14); }
+.tema svg { width: 18px; height: 18px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Botões */
+.accoes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 28px; }
+.botao {
+  display: inline-flex; align-items: center; gap: 8px; height: 50px; padding: 0 20px;
+  border-radius: 14px; background: var(--accent); color: var(--onAccent);
+  font-weight: 600; font-size: 16px; text-decoration: none;
+}
+.botao:hover { color: var(--onAccent); filter: brightness(1.07); }
+.botao.secundario { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+.botao.secundario:hover { background: var(--sunk); filter: none; }
+.botao svg { width: 20px; height: 20px; flex: none; }
+.botao.texto { background: transparent; color: var(--accentInk); padding: 0 8px; }
+.botao.texto:hover { color: var(--accent); filter: none; text-decoration: underline; }
+.botao.play { height: 56px; padding: 0 22px 0 18px; gap: 12px; }
+.botao.play small { display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .85; line-height: 1.1; }
+.botao.play b { display: block; font-size: 17px; line-height: 1.2; }
+.botao.play svg { width: 24px; height: 24px; }
+
+/* Início: herói */
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 56px; align-items: center; padding: 40px 0 96px; }
+.selo {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px;
+  border-radius: 999px; background: var(--accentSoft); color: var(--accentInk);
+  font-size: 13px; font-weight: 600;
+}
+.selo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.titulo {
+  font-family: var(--ler); font-weight: 500; font-size: clamp(44px, 6.4vw, 78px);
+  line-height: 1.02; letter-spacing: -.03em; margin: 20px 0 26px; text-wrap: balance;
+}
+.titulo em { color: var(--accent); font-weight: 500; }
+.intro { font-family: var(--ler); font-size: 19px; line-height: 1.6; max-width: 33em; margin: 0 0 30px; }
+.valores { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.valores li {
+  display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 11px; border-radius: 999px;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 14px; font-weight: 600; color: var(--ink2);
+}
+.valores li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+.telefones { position: relative; height: 660px; }
+.telefones .tel { position: absolute; width: 300px; filter: drop-shadow(0 28px 44px rgba(30, 20, 10, .22)); }
+.telefones .tel img { width: 100%; height: auto; }
+.telefones .frente { left: 0; top: 0; z-index: 2; }
+.telefones .tras { right: 0; top: 64px; transform: rotate(4deg); }
+
+/* Início: o nome, como verbete */
+.verbete { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 56px; padding: 80px 0; border-top: 1px solid var(--line); }
+.verbete h2 { font-family: var(--ler); font-weight: 600; font-size: clamp(44px, 5.4vw, 64px); line-height: 1.05; letter-spacing: -.03em; margin: 14px 0 8px; }
+.verbete .gram { font-family: var(--ler); font-style: italic; font-size: 18px; color: var(--ink2); }
+.acecao { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; font-family: var(--ler); font-size: 21px; line-height: 1.55; align-self: center; }
+.acecao .n { font-style: italic; font-weight: 500; font-size: 30px; line-height: 1.05; color: var(--accent); }
+.acecao p { margin: 0; }
+
+/* Início: porque é diferente */
+.diferente {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 56px;
+  background: var(--invBg); color: var(--invInk); border-radius: 28px; padding: 64px;
+}
+.diferente .sobre { color: var(--invMuted); }
+.diferente h2 { font-family: var(--ler); font-weight: 500; font-style: italic; font-size: clamp(34px, 4vw, 46px); line-height: 1.1; letter-spacing: -.02em; margin: 12px 0 0; }
+.diferente p { font-family: var(--ler); font-size: 20px; line-height: 1.6; margin: 0; }
+.diferente .chave { background: linear-gradient(transparent 62%, var(--invLine) 62%, var(--invLine) 94%, transparent 94%); }
+
+/* Rodapé */
+.rodape { margin-top: 88px; padding: 28px 0 44px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 16px 40px; justify-content: space-between; font-size: 14px; color: var(--ink2); }
+.rodape p { margin: 0; max-width: 38em; }
+.rodape nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.rodape a { color: var(--ink2); font-weight: 600; text-decoration: none; }
+.rodape a:hover { color: var(--ink); }
+
+/* Privacidade */
+.doc { display: grid; grid-template-columns: 220px minmax(0, 680px); gap: 72px; padding: 40px 0 0; }
+.indice { position: sticky; top: 28px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+.indice .sobre { margin: 0 0 10px; }
+.indice a { font-size: 15px; color: var(--ink2); text-decoration: none; padding: 6px 12px; margin-left: -12px; border-radius: 9px; }
+.indice a:hover { background: var(--sunk); color: var(--ink); }
+.doc h1 { font-family: var(--ler); font-weight: 500; font-size: clamp(40px, 5vw, 58px); line-height: 1.05; letter-spacing: -.03em; margin: 0 0 12px; text-wrap: balance; }
+.doc .data { font-size: 14px; color: var(--ink2); margin: 0 0 32px; }
+.resumo { background: var(--sunk); border-radius: 22px; padding: 26px 28px; margin: 0 0 16px; }
+.resumo .sobre { color: var(--accentInk); margin-bottom: 8px; }
+.resumo p { font-family: var(--ler); font-size: 21px; line-height: 1.5; margin: 0; }
+.doc section { padding-top: 36px; scroll-margin-top: 20px; }
+.doc h2 { font-family: var(--ler); font-weight: 600; font-size: 27px; line-height: 1.2; letter-spacing: -.015em; margin: 0 0 12px; }
+.doc section p { font-size: 17px; line-height: 1.7; }
+.permissoes { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 10px; }
+.permissoes li { background: var(--card); border-radius: 18px; box-shadow: inset 0 0 0 1px var(--line); padding: 18px 20px; line-height: 1.65; }
+.permissoes strong { display: block; font-family: var(--ler); font-size: 19px; font-weight: 600; margin-bottom: 4px; }
+.voltar { display: inline-flex; align-items: center; gap: 8px; margin-top: 40px; font-weight: 600; text-decoration: none; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 48px; padding: 20px 0 72px; }
+  .telefones { height: 560px; width: 100%; max-width: 440px; margin: 0 auto; }
+  .telefones .tel { width: 250px; }
+  .verbete, .diferente { grid-template-columns: 1fr; gap: 20px; }
+  .verbete { padding: 56px 0; }
+  .diferente { padding: 36px 28px; border-radius: 24px; }
+  .doc { grid-template-columns: 1fr; gap: 0; padding-top: 16px; }
+  .indice { display: none; }
+}
+@media (max-width: 520px) {
+  .nav { display: none; }
+  .envolucro { padding: 0 20px; }
+  .topo { padding: 16px 0; }
+  .logo span { font-size: 20px; }
+  .nav a { padding: 8px 9px; font-size: 14px; }
+  .intro { font-size: 18px; }
+  .telefones { height: 440px; }
+  .telefones .tel { width: 196px; }
+  .telefones .tras { top: 44px; }
+  .acecao { font-size: 19px; }
+  .resumo { padding: 22px; }
+  .resumo p { font-size: 19px; }
+}
