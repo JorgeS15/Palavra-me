@@ -26,9 +26,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +44,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.data.*
+import pt.jorges15.palavrame.jogo.LIMITE_MANUAL_POR_DIA
 import pt.jorges15.palavrame.jogo.Niveis
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
@@ -67,6 +73,10 @@ fun EcraPesquisa(
     val palavras = carregadas.orEmpty()
     val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
     val porRever by vm.porRever.collectAsState(initial = 0)
+    val cota by preferencias.cotaManual.collectAsState()
+    // Quantas se podem ainda rever à mão hoje. No Modo Desenvolvedor não há
+    // limite (é para testar perguntas).
+    val restantesHoje = if (desenvolvedor) Int.MAX_VALUE else cota.restantes(LocalDate.now())
     val progresso by vm.progresso.collectAsState(initial = null)
     val context = LocalContext.current
     val focus = LocalFocusManager.current
@@ -166,9 +176,10 @@ fun EcraPesquisa(
                     palavras = palavras,
                     aCarregar = carregadas == null,
                     progresso = progresso,
-                    // "N por rever" é do Modo Desenvolvedor: para quem lê, o
-                    // jogo vem só pelo lembrete.
-                    porRever = if (desenvolvedor) porRever else 0,
+                    // Rever à mão, para toda a gente desde a 1.20 (até aí era
+                    // do Modo Desenvolvedor). O limite do dia mantém a app calma.
+                    porRever = porRever,
+                    restantesHoje = restantesHoje,
                     aoEscrever = vm::escrever,
                     aoProcurar = { termo ->
                         vm.procurar(termo)
@@ -350,6 +361,7 @@ private fun Inicio(
     aCarregar: Boolean,
     progresso: Progresso?,
     porRever: Int,
+    restantesHoje: Int,
     aoEscrever: (String) -> Unit,
     aoProcurar: (String) -> Unit,
     aoLimpar: () -> Unit,
@@ -420,7 +432,9 @@ private fun Inicio(
             )
         } else {
             // O cartão de progresso só depois da primeira resposta: antes seriam
-            // zeros a insinuar que se está atrasado em alguma coisa.
+            // zeros a insinuar que se está atrasado em alguma coisa. Antes
+            // disso, havendo palavras por rever, aparece só a faixa, para
+            // quem ainda nunca recebeu um lembrete (ou não os ligou).
             val respostas = (progresso?.acertos ?: 0) + (progresso?.erros ?: 0)
             if (progresso != null && respostas > 0) {
                 Spacer(Modifier.height(22.dp))
@@ -431,7 +445,14 @@ private fun Inicio(
                     sabidas = palavras.count { it.mastery >= Niveis.CAIXA_SABIDA },
                     sequencia = sequencia,
                     porRever = porRever,
+                    restantesHoje = restantesHoje,
                     aoRever = aoRever,
+                )
+            } else if (porRever > 0) {
+                Spacer(Modifier.height(22.dp))
+                FaixaRever(
+                    porRever, restantesHoje, aoRever,
+                    fundo = Cores.accentSoft, cor = Cores.accentInk,
                 )
             }
 
@@ -622,6 +643,7 @@ private fun CartaoProgresso(
     sabidas: Int,
     sequencia: Int,
     porRever: Int,
+    restantesHoje: Int,
     aoRever: () -> Unit,
 ) {
     val nivel = Niveis.para(progresso.acertos)
@@ -693,34 +715,53 @@ private fun CartaoProgresso(
             Estatistica(sabidas, "que já sabes", Modifier.weight(1f))
             Estatistica(sequencia, if (sequencia == 1) "dia seguido" else "dias seguidos", Modifier.weight(1f))
         }
-        // Rever à mão é do Modo Desenvolvedor. Para quem lê, o jogo vem pelo
-        // lembrete: chega, responde-se, acabou.
+        // Rever à mão: para toda a gente, até ao limite do dia.
         if (porRever > 0) {
             Spacer(Modifier.height(16.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Cores.invFill)
-                    .clickable(onClick = aoRever)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (porRever == 1) "1 palavra por rever" else "$porRever palavras por rever",
-                    style = Estilo.controloForte,
-                    color = Cores.invCtaInk,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "DEV",
-                    style = Estilo.rotulo.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                    color = Cores.invCtaInk.copy(alpha = 0.7f),
-                )
-                Spacer(Modifier.weight(1f))
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Cores.invCtaInk)
-            }
+            FaixaRever(
+                porRever, restantesHoje, aoRever,
+                fundo = Cores.invFill, cor = Cores.invCtaInk,
+            )
+        }
+    }
+}
+
+/**
+ * "N palavras por rever", que abre o jogo. Atingido o limite do dia, diz-o e
+ * deixa de abrir: amanhã há mais, e os lembretes continuam.
+ */
+@Composable
+private fun FaixaRever(
+    porRever: Int,
+    restantesHoje: Int,
+    aoRever: () -> Unit,
+    fundo: Color,
+    cor: Color,
+) {
+    val podeRever = restantesHoje > 0
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 50.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (podeRever) fundo else fundo.copy(alpha = 0.55f))
+            .then(if (podeRever) Modifier.clickable(onClick = aoRever) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            when {
+                !podeRever -> "Já reviste $LIMITE_MANUAL_POR_DIA hoje. Amanhã há mais."
+                porRever == 1 -> "1 palavra por rever"
+                else -> "$porRever palavras por rever"
+            },
+            style = Estilo.controloForte,
+            color = cor,
+            modifier = Modifier.weight(1f),
+        )
+        if (podeRever) {
+            Spacer(Modifier.width(8.dp))
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = cor)
         }
     }
 }
@@ -812,8 +853,11 @@ private fun VistaEntrada(
         ) {
             item {
                 TextoMarcado(entrada.lemma, Estilo.lema)
-                val classe = entrada.pos.takeIf { it.isNotBlank() && it != "desconhecido" }
-                    ?.let(::rotuloPos)
+                // Todas as classes da palavra, a principal primeiro
+                // ("substantivo · adjetivo"); com um dicionário anterior à
+                // 1.21, só a do lema, como antes.
+                val classe = entrada.classes.takeIf { it.isNotEmpty() }
+                    ?.joinToString(" · ") { rotuloPos(it) }
                 if (classe != null || entrada.silabas != null) {
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -892,10 +936,33 @@ private fun VistaEntrada(
                 }
             }
 
-            items(entrada.acecoes) { acecao ->
+            // Com mais do que uma classe, as aceções agrupam-se por classe,
+            // cada grupo com um título pequeno ("lacónico": o adjetivo e, à
+            // parte, o substantivo das termas romanas). Os números seguem a
+            // ordem em que aparecem no ecrã.
+            val classes = entrada.classes
+            val grupos = if (classes.size > 1) {
+                classes.map { c -> c to entrada.acecoes.filter { (it.pos ?: entrada.pos) == c } }
+                    .filter { it.second.isNotEmpty() }
+            } else listOf((classes.firstOrNull() ?: "") to entrada.acecoes)
+            var numero = 0
+            val numeradas = grupos.map { (c, lista) -> c to lista.map { it to ++numero } }
+
+            numeradas.forEachIndexed { g, (classeDoGrupo, lista) ->
+              if (numeradas.size > 1) {
+                item(key = "classe-$classeDoGrupo") {
+                    Text(
+                        rotuloPos(classeDoGrupo),
+                        style = Estilo.classe,
+                        color = Cores.accentInk,
+                        modifier = Modifier.padding(top = if (g == 0) 0.dp else 8.dp, bottom = 10.dp),
+                    )
+                }
+              }
+              items(lista, key = { it.first.id }) { (acecao, n) ->
                 Row(Modifier.padding(bottom = 16.dp)) {
                     Text(
-                        "${acecao.ord}",
+                        "$n",
                         style = Estilo.numeroAcecao,
                         color = Cores.accent,
                         modifier = Modifier.width(26.dp).padding(top = 2.dp),
@@ -909,7 +976,7 @@ private fun VistaEntrada(
                                 color = Cores.ink2,
                             )
                         }
-                        Text(acecao.definicao, style = Estilo.acecao, color = Cores.ink)
+                        DefinicaoComRemissao(acecao, aoSeguir)
                         // A proveniência de cada aceção é ferramenta de quem
                         // constrói a base; a atribuição cumpre-se no ecrã de
                         // licenças.
@@ -922,6 +989,7 @@ private fun VistaEntrada(
                         }
                     }
                 }
+              }
             }
 
             val soltos = entrada.exemplosSoltos
@@ -995,6 +1063,57 @@ private fun VistaEntrada(
                 )
             }
         }
+    }
+}
+
+/**
+ * O texto de uma aceção. Se remete para outra palavra ("Vide ação", "O mesmo
+ * que e-mail"), o destino fica sublinhado e tocável (abre-o, com o histórico
+ * para voltar, como os sinónimos), e a definição dele aparece por baixo, para
+ * a resposta estar à vista sem tocar. Antes era só texto, e a pessoa tinha de
+ * procurar o destino à mão.
+ */
+@Composable
+private fun DefinicaoComRemissao(acecao: Acecao, aoSeguir: (String) -> Unit) {
+    val destino = acecao.remetePara
+    if (destino == null) {
+        Text(acecao.definicao, style = Estilo.acecao, color = Cores.ink)
+        return
+    }
+    val estiloLigacao = TextLinkStyles(
+        SpanStyle(color = Cores.accentInk, textDecoration = TextDecoration.Underline)
+    )
+    val texto = acecao.definicao
+    // O destino como está escrito na aceção; se lá não estiver (outra grafia),
+    // acrescenta-se à frente.
+    val inicio = texto.indexOf(destino, ignoreCase = true)
+    val anotado = buildAnnotatedString {
+        if (inicio >= 0) {
+            append(texto.substring(0, inicio))
+            withLink(LinkAnnotation.Clickable("remissao", estiloLigacao) { aoSeguir(destino) }) {
+                append(texto.substring(inicio, inicio + destino.length))
+            }
+            append(texto.substring(inicio + destino.length))
+        } else {
+            append(texto)
+            append("  ")
+            withLink(LinkAnnotation.Clickable("remissao", estiloLigacao) { aoSeguir(destino) }) {
+                append(destino)
+            }
+        }
+    }
+    Text(anotado, style = Estilo.acecao, color = Cores.ink)
+    acecao.definicaoDoDestino?.let { def ->
+        Spacer(Modifier.height(4.dp))
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(destino) }
+                append(": ")
+                append(def)
+            },
+            style = Estilo.texto.copy(fontSize = 14.5.sp, lineHeight = 1.45.em),
+            color = Cores.ink2,
+        )
     }
 }
 

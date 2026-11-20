@@ -15,8 +15,12 @@ import pt.jorges15.palavrame.ui.theme.Estilo
  * atualização, e só nas versões que têm alguma coisa a contar. Correções
  * pequenas não merecem aviso; essas ficam no CHANGELOG.
  *
- * Para uma versão nova: acrescentar uma entrada a NOVIDADES, com a chave
- * igual ao `versionName` do build.gradle.kts. Três ou quatro pontos, curtos.
+ * Para uma versão nova: acrescentar uma entrada a NOVIDADES com o
+ * `versionCode` do build.gradle.kts. Três ou quatro pontos, curtos.
+ *
+ * Indexa-se pelo código e não pelo nome porque nem todas as versões se
+ * publicam: quem salta da 1.19 para a 1.20.1 tem de ver as notas da 1.20.0.
+ * Mostram-se as mais recentes que a pessoa ainda não viu (`notasPorVer`).
  */
 
 /** Para onde leva o botão da nota, quando a novidade tem um sítio na app. */
@@ -26,9 +30,25 @@ enum class AcaoNovidade(val rotulo: String) {
 
 class Novidades(val itens: List<String>, val acao: AcaoNovidade? = null)
 
-/** As notas por versão (`versionName`). Só as versões com algo a contar. */
-val NOVIDADES: Map<String, Novidades> = mapOf(
-    "1.19.0" to Novidades(
+/** As notas por `versionCode`. Só as versões com algo a contar. */
+val NOVIDADES: Map<Int, Novidades> = mapOf(
+    33 to Novidades(          // 1.21.0
+        itens = listOf(
+            "Cada significado tem a sua classe: \"computador\" é substantivo, e os significados aparecem agrupados.",
+            "\"Ver ação\" leva-te à palavra com um toque, e mostra logo a definição.",
+            "Novas definições e menos palavras repetidas na pesquisa.",
+            "O dicionário ocupa menos espaço no telemóvel.",
+        ),
+    ),
+    31 to Novidades(          // 1.20.0
+        itens = listOf(
+            "Revê à mão no ecrã inicial, quando há palavras por rever: até 10 por dia, além dos lembretes.",
+            "Depois de um lembrete, podes continuar com \"Rever mais\".",
+            "As palavras antigas já não ficam para trás das novas.",
+            "Os lembretes voltam sempre à hora que escolheste.",
+        ),
+    ),
+    29 to Novidades(          // 1.19.0
         itens = listOf(
             "Escolhe as cores da app: cinco paletas, cada uma em claro e escuro.",
             "Escolhe a letra: Literata, Figtree, Atkinson Hyperlegible ou a do telemóvel.",
@@ -46,6 +66,16 @@ val NOVIDADES: Map<String, Novidades> = mapOf(
  */
 fun mostrarNovidades(versaoAtual: Int, versaoVista: Int, foiAtualizacao: Boolean): Boolean =
     foiAtualizacao && versaoVista < versaoAtual
+
+/**
+ * O código das notas a mostrar: o da versão mais recente com notas, entre a
+ * última vista (exclusive) e a atual (inclusive). Nulo se não houver nenhuma.
+ */
+fun notasPorVer(
+    versaoAtual: Int,
+    versaoVista: Int,
+    notas: Map<Int, Novidades> = NOVIDADES,
+): Int? = notas.keys.filter { it in (versaoVista + 1)..versaoAtual }.maxOrNull()
 
 @Composable
 fun DialogoNovidades(

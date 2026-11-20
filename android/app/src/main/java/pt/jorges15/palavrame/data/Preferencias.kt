@@ -4,6 +4,8 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import pt.jorges15.palavrame.jogo.CotaManual
+import java.time.LocalDate
 
 /**
  * Preferências da app. Poucas, e todas do utilizador.
@@ -155,6 +157,25 @@ class Preferencias(context: Context) {
         prefs.edit().putBoolean(CHAVE_AVALIACAO_FIM, true).apply()
     }
 
+    // --- revisão à mão: o limite do dia --------------------------------------
+
+    private val _cotaManual = MutableStateFlow(
+        CotaManual(prefs.getString(CHAVE_COTA_DIA, null), prefs.getInt(CHAVE_COTA_USADAS, 0))
+    )
+
+    /** As revisões à mão feitas hoje (ver `LIMITE_MANUAL_POR_DIA`). */
+    val cotaManual: StateFlow<CotaManual> = _cotaManual.asStateFlow()
+
+    /** Conta uma resposta dada numa revisão à mão. */
+    fun usarCotaManual(hoje: LocalDate = LocalDate.now()) {
+        val nova = _cotaManual.value.usar(hoje)
+        prefs.edit()
+            .putString(CHAVE_COTA_DIA, nova.dia)
+            .putInt(CHAVE_COTA_USADAS, nova.usadas)
+            .apply()
+        _cotaManual.value = nova
+    }
+
     // --- novidades da versão ------------------------------------------------
 
     /** O código da versão cujas novidades já se mostraram (0 = nenhuma). */
@@ -166,6 +187,8 @@ class Preferencias(context: Context) {
 
     companion object {
         private const val CHAVE_VERSAO_VISTA = "novidades_vistas_ate"
+        private const val CHAVE_COTA_DIA = "revisao_manual_dia"
+        private const val CHAVE_COTA_USADAS = "revisao_manual_usadas"
         private const val CHAVE_TEMA = "tema"
         private const val CHAVE_PALETA = "paleta"
         private const val CHAVE_LETRA = "letra"

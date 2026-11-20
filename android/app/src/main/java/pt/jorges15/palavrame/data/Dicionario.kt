@@ -1,5 +1,6 @@
 package pt.jorges15.palavrame.data
 
+import pt.jorges15.palavrame.jogo.Perguntas
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import java.io.File
@@ -18,6 +19,9 @@ import kotlin.random.Random
 class Dicionario private constructor(private val db: SQLiteDatabase) {
 
     companion object {
+        /** Condição de "este lema, pela grafia exata", pelo índice (ver `argsPorLema`). */
+        private const val POR_LEMA = "normalized = ? AND lemma = ?"
+
         const val NOME_FICHEIRO = "dicionario.db"
 
         fun abrir(ficheiro: File): Dicionario? = try {
@@ -80,10 +84,12 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
         // de superfície que normalizam para a mesma chave (p. ex. o infinitivo
         // e uma grafia com maiúscula) dava duas linhas iguais no ecrã — a
         // "palavra a dobrar" que se via nalgumas entradas. Agrupar por lema
-        // devolve-o uma só vez; `MIN(f.form)` fica com uma forma representativa
-        // para o "· via ...".
+        // devolve-o uma só vez; o `MIN` fica com uma forma representativa
+        // para o "· via ...". Desde a 1.21 a cópia da base que vai na app só
+        // escreve `form` quando difere de `normalized` (poupa espaço); daí o
+        // COALESCE, que numa base antiga não muda nada.
         val sql = """
-            SELECT l.id, l.lemma, l.pos, l.frequency_rank, MIN(f.form) AS form
+            SELECT l.id, l.lemma, l.pos, l.frequency_rank, MIN(COALESCE(f.form, f.normalized)) AS form
             FROM forms f
             JOIN lemmas l ON l.id = f.lemma_id
             WHERE f.normalized = ?
@@ -284,10 +290,59 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
      */
     fun entradaPorLema(lemma: String): Entrada? {
         val id = db.rawQuery(
-            "SELECT id FROM lemmas WHERE lemma = ? LIMIT 1", arrayOf(lemma)
+            "SELECT id FROM lemmas WHERE $POR_LEMA LIMIT 1", argsPorLema(lemma)
         ).use { if (it.moveToFirst()) it.getLong(0) else null } ?: return null
         return entrada(id)
     }
+
+    /*
+     * Procurar um lema pela grafia exata.
+     *
+     * `lemma` não tem índice no dicionário (só `normalized` tem), e um
+     * `WHERE lemma = ?` sozinho percorria as 181 mil linhas: 12 a 23 ms por
+     * consulta num computador, várias vezes mais num telemóvel. O jogo e o
+     * lembrete fazem uma destas por cada palavra da coleção, o que dava
+     * segundos de espera. Filtrar também por `normalized` usa o índice e
+     * deixa a grafia exata decidir entre os poucos que sobram.
+     *
+     * Só é correto porque `Texto.normalizar` dá o mesmo que o `normalize` do
+     * pipeline: conferido nas 181 407 palavras da base de 2026-11-04, sem
+     * nenhuma diferença. Mexer num obriga a mexer no outro.
+     */
+    private fun argsPorLema(lemma: String) = arrayOf(Texto.normalizar(lemma), lemma)
+
+    /**
+     * O dicionário traz a classe de cada aceção (`senses.pos`, desde a 1.21)?
+     *
+     * Um dicionário mais antigo não a tem, e a app tem de continuar a
+     * funcionar com ele (por exemplo, depois de uma atualização falhada que
+     * deixou ficar a base anterior). Sem a coluna, tudo se comporta como
+     * antes: uma classe por palavra.
+     */
+    private val colunasDasAcecoes: Set<String> by lazy {
+        db.rawQuery("PRAGMA table_info(senses)", null).use { c ->
+            buildSet { while (c.moveToNext()) add(c.getString(1)) }
+        }
+    }
+
+    private val temClassePorAcecao: Boolean get() = "pos" in colunasDasAcecoes
+
+    /** As remissões já resolvidas pelo pipeline (`senses.remete_para`, 1.21). */
+    private val temRemissoes: Boolean get() = "remete_para" in colunasDasAcecoes
+
+    /**
+     * Condição SQL que tira as remissões resolvidas. Desde a 1.21 o pipeline
+     * escreve-as todas como "Ver X" (antes "Vide X" ou "V. X"), e o
+     * `Perguntas.eRemissao` só reconhece "Ver" seguido de uma palavra, por
+     * causa de definições a sério como "Ver com atenção". "Ver pão de ló"
+     * escapava. Com a coluna `remete_para` preenchida não há dúvida.
+     */
+    private val semRemissao: String
+        get() = if (temRemissoes) "AND NOT (s.remete_para IS NOT NULL AND s.definition LIKE 'Ver %')" else ""
+
+    /** A classe de uma aceção em SQL: a dela, ou a do lema sem a coluna. */
+    private val classeDaAcecao: String
+        get() = if (temClassePorAcecao) "COALESCE(s.pos, l.pos)" else "l.pos"
 
     fun entrada(lemmaId: Long): Entrada? {
         val cabecalho = db.rawQuery(
@@ -301,10 +356,42 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
             lemma = cabecalho.first,
             pos = cabecalho.second ?: "",
             silabas = cabecalho.third,
-            acecoes = acecoes(lemmaId),
+            // Sem as remissões para a própria palavra ("lacónico: Vide
+            // lacónico"), e renumeradas para não ficar um buraco na lista.
+            acecoes = acecoes(lemmaId)
+                .filterNot { Perguntas.eAutoRemissao(it.definicao, cabecalho.first) }
+                .mapIndexed { i, a ->
+                    // Uma remissão traz já a definição do destino, para a
+                    // resposta estar à vista sem tocar.
+                    a.copy(
+                        ord = i + 1,
+                        definicaoDoDestino = a.remetePara?.let { primeiraDefinicao(it) },
+                    )
+                },
             exemplos = exemplos(lemmaId),
             relacionadas = relacionadas(lemmaId),
         )
+    }
+
+    /**
+     * A primeira definição de um lema que não seja ela própria uma remissão
+     * (não vale mostrar "Vide X" como resposta de "Vide Y").
+     */
+    private fun primeiraDefinicao(lemma: String): String? {
+        val sql = """
+            SELECT s.definition FROM senses s
+            WHERE s.lemma_id = (SELECT id FROM lemmas WHERE $POR_LEMA LIMIT 1)
+              $semRemissao
+            ORDER BY s.ord LIMIT 6
+        """
+        return db.rawQuery(sql, argsPorLema(lemma)).use { c ->
+            var achada: String? = null
+            while (achada == null && c.moveToNext()) {
+                val d = c.getString(0)
+                if (!Perguntas.eRemissao(d)) achada = d
+            }
+            achada
+        }
     }
 
     /**
@@ -317,21 +404,28 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
      */
     fun candidataDeJogo(lemma: String): Pair<String, List<String>>? {
         val sql = """
-            SELECT l.pos, s.definition
+            SELECT l.pos, s.definition, $classeDaAcecao
             FROM senses s JOIN lemmas l ON l.id = s.lemma_id
-            WHERE l.id = (SELECT id FROM lemmas WHERE lemma = ? LIMIT 1)
+            WHERE l.id = (SELECT id FROM lemmas WHERE $POR_LEMA LIMIT 1)
+              $semRemissao
             ORDER BY s.ord
         """
         var pos = ""
-        val defs = db.rawQuery(sql, arrayOf(lemma)).use { c ->
+        val todas = db.rawQuery(sql, argsPorLema(lemma)).use { c ->
             buildList {
                 while (c.moveToNext()) {
                     pos = c.getString(0) ?: ""
-                    add(c.getString(1))
+                    add(c.getString(1) to (c.getString(2) ?: pos))
                 }
             }
         }
-        return if (defs.isEmpty()) null else pos to defs
+        if (todas.isEmpty()) return null
+        // Só as aceções da classe principal: a pergunta mostra essa classe
+        // ("substantivo") e as distrações escolhem-se por ela, por isso a
+        // definição tem de ser dessa classe ("computador" já não se pergunta
+        // como "que computa"). Se nenhuma for (dados estranhos), usam-se todas.
+        val daPrincipal = todas.filter { it.second == pos }.map { it.first }
+        return pos to daPrincipal.ifEmpty { todas.map { it.first } }
     }
 
     /**
@@ -346,17 +440,19 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
         val sql = """
             SELECT l2.lemma FROM synonyms y
             JOIN lemmas l2 ON l2.id = y.synonym_id
-            WHERE y.lemma_id = (SELECT id FROM lemmas WHERE lemma = ? LIMIT 1)
+            WHERE y.lemma_id = (SELECT id FROM lemmas WHERE $POR_LEMA LIMIT 1)
               AND y.relation = 'sinonimo'
         """
-        return db.rawQuery(sql, arrayOf(lemma)).use { c ->
+        return db.rawQuery(sql, argsPorLema(lemma)).use { c ->
             buildSet { while (c.moveToNext()) add(c.getString(0)) }
         }
     }
 
     private fun acecoes(lemmaId: Long): List<Acecao> {
         val sql = """
-            SELECT s.id, s.ord, s.definition, s.domains, src.name, s.modernized
+            SELECT s.id, s.ord, s.definition, s.domains, src.name, s.modernized,
+                   ${if (temClassePorAcecao) "s.pos" else "NULL"},
+                   ${if (temRemissoes) "s.remete_para" else "NULL"}
             FROM senses s JOIN sources src ON src.id = s.source_id
             WHERE s.lemma_id = ? ORDER BY s.ord
         """
@@ -371,6 +467,8 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
                             dominios = dominiosDeJson(c.getString(3)),
                             fonte = c.getString(4),
                             modernizada = c.getInt(5) == 1,
+                            pos = if (c.isNull(6)) null else c.getString(6),
+                            remetePara = if (c.isNull(7)) null else c.getString(7),
                         )
                     )
                 }
@@ -447,7 +545,7 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
         val sql = """
             SELECT l.lemma, l.pos, s.definition
             FROM senses s JOIN lemmas l ON l.id = s.lemma_id
-            WHERE s.id >= CAST(? AS INTEGER) AND l.pos = ?
+            WHERE s.id >= CAST(? AS INTEGER) AND $classeDaAcecao = ?
               -- CAST: o rawQuery passa os parâmetros como texto, e um número
               -- comparado com texto é sempre menor no SQLite. Sem isto, esta
               -- condição era falsa para tudo e as distrações do dicionário
@@ -464,6 +562,12 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
               AND s.definition NOT LIKE 'pertencente %'
               AND s.definition NOT LIKE 'natural d%'
               AND s.definition NOT LIKE '%habitante%'
+              -- As remissões ("Vide ação", "V. t. (e der.)") não são
+              -- definições: como distração eram uma opção que se via logo
+              -- que não podia ser. Ver `Perguntas.eRemissao`.
+              AND s.definition NOT LIKE 'Vide %'
+              AND s.definition NOT LIKE 'V. %'
+              $semRemissao
             ORDER BY s.id LIMIT ?
         """
         val porSonda = 5
@@ -480,6 +584,9 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
             ).use { c ->
                 while (c.moveToNext()) {
                     val definicao = c.getString(2)
+                    // O SQL já tira "Vide" e "V."; o "Ver bulevar" precisa da
+                    // regra inteira, que não cabe num LIKE.
+                    if (Perguntas.eRemissao(definicao)) continue
                     achadas.putIfAbsent(definicao, Triple(c.getString(0), c.getString(1), definicao))
                 }
             }

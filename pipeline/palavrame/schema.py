@@ -12,10 +12,28 @@ proveniência e diagnóstico que não vão para a DB final.
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
-from .text import normalize
+from .text import normalize, sem_trema
+
+
+def _nfc(s: str) -> str:
+    """Forma canónica da grafia à entrada do pipeline: NFC e sem trema.
+
+    Duas normalizações que têm de acontecer cedo, senão a fusão (que agrupa por
+    grafia exata) fica com duplicados:
+
+    * **NFC.** As fontes misturam `é` num só código (U+00E9) com `e`+acento em
+      códigos separados (U+0065 U+0301). No ecrã são idênticos, mas como
+      cadeias diferem, e `bebé` aparecia a dobrar. Canonicaliza também a grafia
+      que a portugalização produz (`é` composto), para bater certo com a fonte.
+    * **Trema.** Abolido no português: `lângüido` é só grafia velha de
+      `lânguido`, e sem isto ficavam duas entradas, uma delas só com "Ver
+      lânguido". O trema, ao contrário do acento, nunca distingue palavras.
+    """
+    return sem_trema(unicodedata.normalize("NFC", s))
 
 # Classes gramaticais canónicas. Cada fonte traz a sua nomenclatura; o
 # normalizador mapeia para esta lista fechada.
@@ -106,6 +124,17 @@ class Sense:
     domains: list[str] = field(default_factory=list)   # ["Figurado"], ["Náutica"]
     modernized: bool = False         # fraseado adaptado por LLM
     original_definition: str | None = None  # preenchido quando modernized
+    # A classe gramatical DESTA aceção. Uma palavra pode ter aceções de
+    # classes diferentes ("computador": adjetivo e substantivo); a do lema é
+    # só a principal. Nula se a fonte não a der.
+    pos: str | None = None
+    # Se a aceção remete para outra palavra ("Vide ação", "O mesmo que
+    # e-mail"), o lema de destino, confirmado no dicionário. A app torna-o
+    # tocável e mostra a definição do destino. Nulo se não remete.
+    remete_para: str | None = None
+
+    def __post_init__(self) -> None:
+        self.definition = _nfc(self.definition)
 
 
 @dataclass
@@ -119,6 +148,9 @@ class Example:
     generated: bool = False
     sense_ord: int | None = None     # a que aceção pertence, se conhecida
 
+    def __post_init__(self) -> None:
+        self.sentence = _nfc(self.sentence)
+
 
 @dataclass
 class Form:
@@ -126,6 +158,9 @@ class Form:
 
     form: str
     tag: str | None = None           # morfologia, quando a fonte a dá
+
+    def __post_init__(self) -> None:
+        self.form = _nfc(self.form)
 
     @property
     def normalized(self) -> str:
@@ -159,6 +194,9 @@ class SourceEntry:
     syllables: str | None = None
     frequency_rank: int | None = None
     notes: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.lemma = _nfc(self.lemma)
 
     @property
     def normalized(self) -> str:

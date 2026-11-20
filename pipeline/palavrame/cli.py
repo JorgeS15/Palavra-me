@@ -139,6 +139,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--db", required=True)
     p.add_argument("--destino", default="../android/app/src/main/assets")
+    p.add_argument("--completa", action="store_true",
+                   help="empacota a base inteira, sem tirar o que a app não usa")
     p.set_defaults(func=cmd_empacotar)
 
     p = sub.add_parser("validar", help="valida uma DB construída")
@@ -146,6 +148,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--distribuicao", action="store_true",
                    help="modo severo: licenças por verificar bloqueiam")
     p.set_defaults(func=cmd_validar)
+
+    p = sub.add_parser("lacunas", help="lista os lemas sem definição, para curar")
+    p.add_argument("--db", required=True)
+    p.add_argument("--saida", help="ficheiro de saída (por omissão: lacunas.txt ao lado da DB)")
+    p.set_defaults(func=cmd_lacunas)
+
+    p = sub.add_parser("rever-curadoria",
+                       help="revisão interativa das definições curadas (aceitar/editar/apagar)")
+    p.add_argument("--ficheiro", help="por omissão: seeds/curadoria.csv")
+    p.set_defaults(func=cmd_rever_curadoria)
 
     return parser
 
@@ -311,6 +323,14 @@ def _finish_build(result, paths, available, *, db_version, extra_meta,
           f"autoridade de lemas: {result.backbone or 'nenhuma (modo permissivo)'}, "
           f"{result.conflicts.total()} conflitos.")
 
+    # Curadoria de origem: rótulos escritos à mão (Brasil, Estrangeirismo…)
+    # para as palavras que a fonte não etiquetou. Ver `palavrame.origem`.
+    from .origem import aplicar as aplicar_origem, carregar as carregar_origem
+
+    marcadas = aplicar_origem(result.entries, carregar_origem(paths.seeds))
+    if marcadas:
+        print(f"  Curadoria de origem: {marcadas} aceções marcadas.")
+
     dump_jsonl(result.entries, paths.work / "entries.jsonl")
 
     from .build import build_database
@@ -327,8 +347,11 @@ def _finish_build(result, paths, available, *, db_version, extra_meta,
                           result.conflicts, available or all_infos())
     written = write_reports(paths.out, report, result.entries)
 
+    from .sources.curadoria import FICHEIRO as CURADORIA_CSV, lemas_acrescentados
+
     validation = validate_database(
-        db_path, available or all_infos(), distribution=False, probes=probes
+        db_path, available or all_infos(), distribution=False, probes=probes,
+        acrescentos=lemas_acrescentados(paths.seeds / CURADORIA_CSV),
     )
     print("\n  Validação:")
     print(validation.render())
@@ -493,7 +516,8 @@ def cmd_rever(args) -> int:
 def cmd_empacotar(args) -> int:
     """Comprime a DB para dentro dos assets da app.
 
-    A base tem 200 MB e comprime para perto de 60. Vai gzipada no APK e a
+    A base tem 200 MB; a cópia para a app, 100 MB, e comprime para perto
+    de 36. Vai gzipada no APK e a
     app descomprime-a no primeiro arranque — é o preço de ter o dicionário
     a funcionar mal se instala a app, sem passo manual nenhum.
 
@@ -512,9 +536,23 @@ def cmd_empacotar(args) -> int:
     destino_dir.mkdir(parents=True, exist_ok=True)
     destino = destino_dir / "dicionario.db.gz"
 
-    print(f"\n  A comprimir {origem.name} ({origem.stat().st_size / 1048576:.0f} MB)…")
-    with open(origem, "rb") as entrada, gzip.open(destino, "wb", compresslevel=6) as saida:
-        shutil.copyfileobj(entrada, saida, 1 << 20)
+    # A cópia que vai no APK leva só o que a app usa (ver `_emagrecer`). A base
+    # completa em `out/` fica intacta: é essa que se valida e publica.
+    if args.completa:
+        para_app, temporaria = origem, None
+    else:
+        print(f"\n  A preparar a cópia para a app ({origem.stat().st_size / 1048576:.0f} MB)…")
+        para_app = temporaria = _emagrecer(origem)
+        print(f"  Sem o que a app não usa: {para_app.stat().st_size / 1048576:.0f} MB")
+
+    try:
+        print(f"  A comprimir…")
+        with open(para_app, "rb") as entrada, gzip.open(destino, "wb", compresslevel=6) as saida:
+            shutil.copyfileobj(entrada, saida, 1 << 20)
+        assinatura = _sha256(para_app)
+    finally:
+        if temporaria is not None:
+            temporaria.unlink(missing_ok=True)
 
     # Uma marca de versão ao lado do ficheiro. É o que permite à app saber
     # que o dicionário dentro do APK é mais recente do que o que já tem
@@ -531,13 +569,87 @@ def cmd_empacotar(args) -> int:
         conn.close()
     versao = linha[0] if linha else "?"
     marca = destino_dir / "dicionario.versao"
-    marca.write_text(f"{versao}\n{_sha256(origem)}\n", encoding="utf-8")
+    marca.write_text(f"{versao}\n{assinatura}\n", encoding="utf-8")
 
     tamanho = destino.stat().st_size / 1048576
     print(f"  Escrito: {destino} ({tamanho:.0f} MB), versao {versao}")
     print("\n  A app descomprime-o no primeiro arranque. Compila com:")
     print("    cd android && .\\gradlew installDebug\n")
     return 0
+
+
+def _emagrecer(origem: Path) -> Path:
+    """Uma cópia da base sem o que a app nunca lê, num temporário local.
+
+    Mais de um quarto dos 200 MB eram coisas que só o pipeline usa:
+
+    * `forms.tag` (≈34 MB): a morfologia do Hunspell. A app só procura por
+      `normalized` e mostra `form`.
+    * `idx_forms_lemma` (≈17 MB): nenhuma consulta da app vai de lema para
+      formas.
+    * `lemmas_fts` (≈4,5 MB): a pesquisa da app usa `forms` e `lemmas`, não o
+      FTS.
+
+    Na 1.21 (medido na base de 2026-11-04: 146 MB -> 100 MB, 53 MB -> 36 MB
+    comprimida), a tabela `forms` fica com a forma que a app consulta:
+
+    * `WITHOUT ROWID` com chave `(normalized, lemma_id)`. A chave É o índice
+      da pesquisa, e deixa de ser preciso guardar as linhas e um índice à
+      parte com o mesmo conteúdo (o `idx_forms_norm` eram 30 MB).
+    * Uma linha por forma e lema: a app agrupa por lema e fica com uma forma
+      só (`MIN`), por isso as repetidas (40 mil, de grafias que normalizam
+      para o mesmo, como "Abril" e "abril") não faziam nada.
+    * `form` vazio quando é igual a `normalized` (62% das linhas). A app lê
+      `COALESCE(f.form, f.normalized)`.
+
+    Constrói-se fora da pasta de destino pela mesma razão do `build_database`:
+    numa pasta sincronizada (ownCloud) o SQLite corrompe-se a meio da escrita.
+    """
+    import os
+    import shutil
+    import sqlite3
+    import tempfile
+
+    fd, nome = tempfile.mkstemp(prefix="palavrame-app-", suffix=".db")
+    os.close(fd)
+    copia = Path(nome)
+    shutil.copyfile(origem, copia)
+    conn = sqlite3.connect(copia)
+    try:
+        try:
+            conn.execute("DROP TABLE IF EXISTS lemmas_fts")
+        except sqlite3.OperationalError as e:
+            # Sem o módulo FTS5 neste Python não se consegue largar a tabela;
+            # fica, e a base continua válida.
+            print(f"  (aviso: FTS mantido — {e})")
+        conn.executescript(
+            """
+            DROP INDEX IF EXISTS idx_forms_lemma;
+            DROP INDEX IF EXISTS idx_forms_norm;
+            CREATE TABLE forms_app (
+                normalized TEXT NOT NULL,
+                lemma_id   INTEGER NOT NULL REFERENCES lemmas(id),
+                form       TEXT,             -- NULL = igual a `normalized`
+                PRIMARY KEY (normalized, lemma_id)
+            ) WITHOUT ROWID;
+            INSERT INTO forms_app (normalized, lemma_id, form)
+                SELECT normalized, lemma_id, NULLIF(MIN(form), normalized)
+                FROM forms GROUP BY normalized, lemma_id;
+            DROP TABLE forms;
+            ALTER TABLE forms_app RENAME TO forms;
+            INSERT OR REPLACE INTO meta (key, value)
+                SELECT 'count_forms', COUNT(*) FROM forms;
+            INSERT OR REPLACE INTO meta (key, value) VALUES ('para_app', '1');
+            """
+        )
+        conn.commit()
+        conn.execute("VACUUM")
+    except Exception:
+        conn.close()
+        copia.unlink(missing_ok=True)
+        raise
+    conn.close()
+    return copia
 
 
 def _sha256(path: Path) -> str:
@@ -551,13 +663,58 @@ def _sha256(path: Path) -> str:
 
 
 def cmd_validar(args) -> int:
+    from .sources.curadoria import FICHEIRO as CURADORIA_CSV, lemas_acrescentados
+
     report = validate_database(
-        Path(args.db), all_infos(), distribution=args.distribuicao
+        Path(args.db), all_infos(), distribution=args.distribuicao,
+        acrescentos=lemas_acrescentados(default_paths().seeds / CURADORIA_CSV),
     )
     print()
     print(report.render())
     print()
     return 0 if report.ok else 1
+
+
+def cmd_lacunas(args) -> int:
+    from .lacunas import escrever_lista, lemas_sem_definicao
+    import sqlite3
+
+    caminho = Path(args.db)
+    if not caminho.exists():
+        print(f"  Não existe: {caminho}", file=sys.stderr)
+        return 2
+
+    saida = Path(args.saida) if args.saida else caminho.parent / "lacunas.txt"
+    sem_def, total, com_freq = escrever_lista(caminho, saida)
+
+    pct = 100 * sem_def / total if total else 0
+    print(f"\n  {sem_def} lemas sem definição, de {total} ({pct:.1f}%).")
+    print(f"  {com_freq} têm frequência conhecida — são os que interessa curar primeiro.")
+    print(f"\n  Lista escrita em: {saida}")
+
+    conn = sqlite3.connect(caminho)
+    try:
+        topo = lemas_sem_definicao(conn)[:15]
+    finally:
+        conn.close()
+    if topo:
+        print("\n  As mais frequentes por curar:")
+        for lemma, pos, _ in topo:
+            print(f"    {lemma:<22} {pos or ''}")
+    print()
+    return 0
+
+
+def cmd_rever_curadoria(args) -> int:
+    from .revisao_curadoria import rever
+
+    caminho = (Path(args.ficheiro) if args.ficheiro
+               else default_paths().seeds / "curadoria.csv")
+    if not caminho.exists():
+        print(f"  Não existe: {caminho}", file=sys.stderr)
+        return 2
+    rever(caminho)
+    return 0
 
 
 def _fetch_override(cache, slug: str, args) -> int:

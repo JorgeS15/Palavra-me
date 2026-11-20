@@ -9,6 +9,10 @@ import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.UtilizadorDb
 import pt.jorges15.palavrame.jogo.Lembrete
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.zip.GZIPInputStream
 
 class PalavrameApp : Application() {
@@ -33,6 +37,10 @@ class PalavrameApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Uma cópia interrompida (app morta a meio, telemóvel desligado)
+        // deixava aqui um ficheiro temporário de centenas de MB, para sempre.
+        // Ao arrancar não há instalação nenhuma a correr: pode ir.
+        temporarioDe(ficheiroDicionario).delete()
         abrirDicionario()
         // Repõe o agendamento dos lembretes se não corresponder às
         // preferências (ver `Lembrete.garantirAgendamento`).
@@ -104,7 +112,11 @@ class PalavrameApp : Application() {
     suspend fun instalarDicionarioEmpacotado(): ResultadoImportacao =
         withContext(Dispatchers.IO) {
             val destino = ficheiroDicionario
-            val temporario = File(destino.parentFile, "${destino.name}.a-copiar")
+            val temporario = temporarioDe(destino)
+            // Antes de copiar, ver se cabe. A cópia nova vive ao lado da
+            // antiga até à troca, por isso é preciso o tamanho inteiro livre;
+            // descobri-lo a meio, com o disco cheio, era pior para todos.
+            faltaDeEspaco(destino)?.let { return@withContext ResultadoImportacao.Erro(it) }
             try {
                 abrirAssetDicionario().use { entrada ->
                     temporario.outputStream().use { saida ->
@@ -122,9 +134,12 @@ class PalavrameApp : Application() {
                 // ficheiro como mensagem, o que sozinho não explica nada.
                 // Dizer o que ESTÁ empacotado poupa uma tarde de suposições.
                 ResultadoImportacao.Erro(
-                    if (e is java.io.FileNotFoundException)
-                        "O APK não traz o $ASSET_DICIONARIO.\n\nAssets: ${listaDeAssets()}"
-                    else e.message ?: "Falhou a instalação."
+                    when {
+                        e is java.io.FileNotFoundException ->
+                            "O APK não traz o $ASSET_DICIONARIO.\n\nAssets: ${listaDeAssets()}"
+                        eFaltaDeEspaco(e) -> mensagemDeEspaco(destino)
+                        else -> e.message ?: "Falhou a instalação."
+                    }
                 )
             }
         }
@@ -174,7 +189,7 @@ class PalavrameApp : Application() {
     suspend fun importarDicionario(origem: Uri): ResultadoImportacao =
         withContext(Dispatchers.IO) {
             val destino = ficheiroDicionario
-            val temporario = File(destino.parentFile, "${destino.name}.a-copiar")
+            val temporario = temporarioDe(destino)
             try {
                 contentResolver.openInputStream(origem)?.use { entrada ->
                     temporario.outputStream().use { saida -> entrada.copyTo(saida, 1 shl 20) }
@@ -185,15 +200,23 @@ class PalavrameApp : Application() {
                 trocar(temporario, destino)
             } catch (e: Exception) {
                 temporario.delete()
-                ResultadoImportacao.Erro(e.message ?: "Falhou a cópia.")
+                ResultadoImportacao.Erro(
+                    if (eFaltaDeEspaco(e)) mensagemDeEspaco(destino)
+                    else e.message ?: "Falhou a cópia."
+                )
             }
         }
 
     /**
      * Valida o candidato e só depois substitui o que lá está.
      *
-     * Se a cópia falhou a meio — bateria, espaço, cabo — a base anterior
-     * continua boa. Vale o cuidado num ficheiro de 200 MB.
+     * Se a cópia falhou a meio (bateria, espaço, cabo), a base anterior
+     * continua boa. Vale o cuidado num ficheiro de centenas de MB.
+     *
+     * A troca é **atómica**: um `rename` por cima do ficheiro antigo, que o
+     * sistema faz de uma vez. Antes apagava-se a base antiga e só depois se
+     * mudava o nome da nova; se a mudança de nome falhasse, ficava sem base
+     * nenhuma. Agora, ou fica a nova, ou fica a antiga, sempre uma das duas.
      */
     private fun trocar(temporario: File, destino: File): ResultadoImportacao {
         val candidato = Dicionario.abrir(temporario)
@@ -207,12 +230,80 @@ class PalavrameApp : Application() {
         }
         dicionario?.fechar()
         dicionario = null
-        if (destino.exists()) destino.delete()
-        if (!temporario.renameTo(destino)) {
-            return ResultadoImportacao.Erro("Não consegui guardar a base.")
+        try {
+            Files.move(
+                temporario.toPath(), destino.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (e: Exception) {
+            temporario.delete()
+            // A antiga ficou onde estava: volta a abrir-se, para a app seguir.
+            abrirDicionario()
+            return ResultadoImportacao.Erro("Não consegui guardar a base nova.")
         }
         return if (abrirDicionario()) ResultadoImportacao.Feito(versao)
         else ResultadoImportacao.Erro("A base foi copiada mas não abriu.")
+    }
+
+    private fun temporarioDe(destino: File) = File(destino.parentFile, "${destino.name}.a-copiar")
+
+    // --- espaço ---------------------------------------------------------------
+
+    /** Folga além do tamanho da base: o SQLite e o sistema precisam de algum. */
+    private val FOLGA = 20L shl 20
+
+    /**
+     * O tamanho do dicionário depois de descomprimido, lido do próprio APK sem
+     * o descomprimir: o gzip guarda-o nos últimos 4 bytes (até 4 GB, que é o
+     * que chega aqui). Se o AGP o tiver guardado já descomprimido, é o
+     * tamanho do asset. Nulo se não se conseguir saber.
+     */
+    fun tamanhoDoDicionarioEmpacotado(): Long? {
+        val nomes = listOf(ASSET_DICIONARIO, ASSET_DICIONARIO.removeSuffix(".gz"))
+        for (nome in nomes) {
+            try {
+                assets.openFd(nome).use { fd ->
+                    val canal = java.io.FileInputStream(fd.fileDescriptor).channel
+                    val cabeca = ByteBuffer.allocate(2)
+                    canal.read(cabeca, fd.startOffset)
+                    val gzip = cabeca.get(0) == 0x1f.toByte() && cabeca.get(1) == 0x8b.toByte()
+                    if (!gzip) return fd.length
+                    val fim = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+                    canal.read(fim, fd.startOffset + fd.length - 4)
+                    return fim.getInt(0).toLong() and 0xFFFFFFFFL
+                }
+            } catch (e: Exception) {
+                // Comprimido dentro do APK (não dá `openFd`) ou inexistente:
+                // tenta-se o outro nome.
+            }
+        }
+        return null
+    }
+
+    /** A mensagem de falta de espaço, ou nula se cabe (ou não se sabe). */
+    private fun faltaDeEspaco(destino: File): String? {
+        val precisa = (tamanhoDoDicionarioEmpacotado() ?: return null) + FOLGA
+        val livre = destino.parentFile?.usableSpace ?: return null
+        return if (livre < precisa) mensagemDeEspaco(destino, precisa) else null
+    }
+
+    private fun mensagemDeEspaco(destino: File, precisa: Long? = null): String {
+        val mb = { b: Long -> (b + (1 shl 20) - 1) shr 20 }
+        val livre = destino.parentFile?.usableSpace
+        val pedido = precisa ?: tamanhoDoDicionarioEmpacotado()?.plus(FOLGA)
+        return buildString {
+            append("Falta espaço no telemóvel para atualizar o dicionário")
+            if (pedido != null && livre != null) {
+                append(": são precisos cerca de ${mb(pedido)} MB livres e há ${mb(livre)} MB")
+            }
+            append(". Liberta algum espaço e volta a abrir a app.")
+        }
+    }
+
+    /** Um erro de escrita por disco cheio (o Android diz ENOSPC). */
+    private fun eFaltaDeEspaco(e: Throwable): Boolean {
+        val m = (e.message.orEmpty() + " " + e.cause?.message.orEmpty()).lowercase()
+        return "enospc" in m || "no space" in m
     }
 
     companion object {

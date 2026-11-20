@@ -282,7 +282,13 @@ fun CampoPesquisa(
         singleLine = true,
         textStyle = estilo.copy(color = Cores.ink),
         cursorBrush = SolidColor(Cores.accent),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        // Sem correção automática: numa app de palavras raras, o teclado
+        // "corrigia" exatamente o que se queria procurar ("lôbrego" passava a
+        // outra coisa antes de chegar ao dicionário).
+        keyboardOptions = KeyboardOptions(
+            imeAction = ImeAction.Search,
+            autoCorrectEnabled = false,
+        ),
         keyboardActions = KeyboardActions(onSearch = { aoProcurar() }),
         modifier = modifier.fillMaxWidth().height(altura),
         decorationBox = { campo ->

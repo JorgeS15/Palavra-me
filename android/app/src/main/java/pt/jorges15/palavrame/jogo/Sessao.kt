@@ -42,10 +42,22 @@ object Leitner {
         else -> (caixa + 1).coerceAtMost(CAIXA_MAXIMA)
     }
 
-    /** Quando a palavra volta ao jogo, em milissegundos. */
-    fun proximaRevisao(caixa: Int, agora: Long): Long {
+    /**
+     * Quando a palavra volta ao jogo, em milissegundos: **a meia-noite (hora
+     * local) do dia devido**, e não a mesma hora desse dia.
+     *
+     * Antes somava N × 24 h ao instante da resposta. Quem respondia às 21h05
+     * ao lembrete das 21h só tinha a palavra vencida às 21h05 do dia
+     * seguinte, depois do último lembrete, e o intervalo de 1 dia passava a 2
+     * na prática. Contar em dias de calendário também aguenta a mudança da
+     * hora, onde um dia tem 23 ou 25 horas.
+     */
+    fun proximaRevisao(caixa: Int, agora: Long, zona: ZoneId = ZoneId.systemDefault()): Long {
         val dias = INTERVALOS[caixa.coerceIn(0, CAIXA_MAXIMA)]
-        return agora + dias * 24L * 60 * 60 * 1000
+        return Instant.ofEpochMilli(agora).atZone(zona).toLocalDate()
+            .plusDays(dias.toLong())
+            .atStartOfDay(zona)
+            .toInstant().toEpochMilli()
     }
 }
 
@@ -151,7 +163,7 @@ fun aplicarResposta(
         return Avanco(caixaAtual, null, pontuacao, bonus)
     }
     val caixa = Leitner.proximaCaixa(caixaAtual, acertou)
-    return Avanco(caixa, Leitner.proximaRevisao(caixa, agora), pontuacao, bonus)
+    return Avanco(caixa, Leitner.proximaRevisao(caixa, agora, zona), pontuacao, bonus)
 }
 
 /**
@@ -202,4 +214,55 @@ fun minutosAte(hora: Int, agora: Calendar = Calendar.getInstance()): Long {
     // Se a hora de hoje já passou, é para amanhã.
     if (!alvo.after(agora)) alvo.add(Calendar.DAY_OF_YEAR, 1)
     return (alvo.timeInMillis - agora.timeInMillis) / 60_000
+}
+
+/**
+ * O instante da próxima ocorrência de uma hora do dia, depois de `agora`.
+ *
+ * É o que mantém cada lembrete à hora escolhida: o worker, ao acabar,
+ * marca a execução seguinte para aqui (ver `LembreteWorker`). Sem isto, o
+ * trabalho periódico contava 24 h a partir da última execução, e um lembrete
+ * das 9h que o sistema atrasasse para as 11h ficava às 11h daí em diante.
+ *
+ * Faz-se em hora local e dia de calendário, por isso a mudança da hora não o
+ * desloca: no dia em que o relógio adianta, das 9h às 9h vão 23 horas. Uma
+ * hora que não existe nesse dia (a 1h, quando se salta da 1h para as 2h)
+ * passa para a primeira que existe.
+ */
+fun proximaOcorrencia(hora: Int, agora: Long, zona: ZoneId = ZoneId.systemDefault()): Long {
+    val atual = Instant.ofEpochMilli(agora).atZone(zona)
+    val h = hora.coerceIn(0, 23)
+    var alvo = atual.toLocalDate().atTime(h, 0).atZone(zona)
+    if (!alvo.isAfter(atual)) alvo = atual.toLocalDate().plusDays(1).atTime(h, 0).atZone(zona)
+    return alvo.toInstant().toEpochMilli()
+}
+
+// --- revisão à mão ------------------------------------------------------------
+
+/**
+ * Quantas palavras se podem rever à mão por dia, além dos lembretes.
+ *
+ * Dez: uma pergunta leva uns 15 segundos, portanto são 2 a 3 minutos, o que
+ * cabe numa pausa de leitura sem virar sessão de estudo. Com os 4 lembretes
+ * por omissão dá 14 revisões por dia; cada palavra precisa de umas 6 nos
+ * primeiros dois meses, e isso acompanha quem regista até 2 palavras por
+ * dia. Quem regista mais tem os lembretes para subir até 6.
+ *
+ * As respostas aos lembretes não contam: esses já têm o seu teto
+ * (`Preferencias.MAX_POR_DIA`).
+ */
+const val LIMITE_MANUAL_POR_DIA = 10
+
+/**
+ * As revisões à mão já feitas num dia. Guarda-se o dia com o contador, para
+ * o limite voltar a zero sozinho à meia-noite, sem ninguém o apagar.
+ */
+data class CotaManual(val dia: String? = null, val usadas: Int = 0) {
+
+    fun restantes(hoje: LocalDate, limite: Int = LIMITE_MANUAL_POR_DIA): Int =
+        (limite - usadasEm(hoje)).coerceAtLeast(0)
+
+    fun usar(hoje: LocalDate): CotaManual = CotaManual(hoje.toString(), usadasEm(hoje) + 1)
+
+    private fun usadasEm(hoje: LocalDate) = if (dia == hoje.toString()) usadas else 0
 }

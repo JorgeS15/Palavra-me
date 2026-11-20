@@ -87,13 +87,18 @@ object Perguntas {
      * começa.
      */
     fun definicaoParaJogo(acecoes: List<String>, lemma: String? = null): String? {
+        // As remissões ("Vide ação") não são definições: saltam-se. Juntadas
+        // às outras davam opções como "Vide ação; modo de actuar", que
+        // entregavam a resposta a quem lia, e o `revelaOLema` não apanha
+        // "ação" a partir de "acção".
+        val definicoes = acecoes.filterNot(::eRemissao)
         // Com o lema, tira-se primeiro de cada aceção o pedaço que o nomeia
         // ("Que periclita" em `periclitante`), e só depois se junta. Se se
         // tirasse depois de juntar, "Que está em perigo; que periclita" ficava
         // curta de mais e a palavra perdia-se, quando a aceção seguinte ("Que
         // decai de maneira perigosa") servia perfeitamente.
         val alvo = lemma?.let { Texto.normalizar(it) }?.takeIf { it.length >= 3 }
-        val limpas = acecoes
+        val limpas = definicoes
             .map { a -> if (alvo == null) a.trim() else retirarPedacos(a.trim(), alvo) }
             .filter { it.isNotEmpty() }
         if (limpas.isEmpty()) return null
@@ -119,6 +124,41 @@ object Perguntas {
         if (juntas.length < MIN_CARACTERES) return null
         return juntas.append('.').toString()
     }
+
+    /**
+     * A aceção é só uma remissão para outra palavra?
+     *
+     * Três formas na base: "Vide ação" e "V. rhizophoráceas." (Dicionário
+     * Aberto, quase sempre grafias anteriores ao acordo ortográfico) e "Ver
+     * bulevar" (Wikcionário). As duas primeiras nunca são definições. A
+     * terceira só conta quando é "Ver" seguido de uma palavra (com, quando
+     * muito, uma nota entre parênteses), porque há definições a sério que
+     * começam pelo verbo: "Ver com atenção".
+     */
+    fun eRemissao(acecao: String): Boolean {
+        val t = acecao.trim()
+        return REMISSAO.containsMatchIn(t) || REMISSAO_VER.matches(t)
+    }
+
+    /**
+     * A remissão aponta para a própria palavra? "lacónico: Vide lacónico",
+     * "Abril: Vide abril", "alcalóide: Vide alcaloide": 284 casos na base de
+     * 2026-11-04, quase todos variantes de grafia que, sem acentos nem
+     * maiúsculas, são a mesma palavra. Não levam a lado nenhum (a pesquisa
+     * do alvo dá a mesma entrada), por isso não se mostram.
+     */
+    fun eAutoRemissao(acecao: String, lemma: String): Boolean {
+        if (!eRemissao(acecao)) return false
+        val alvo = ALVO.find(acecao.trim())?.groupValues?.get(1) ?: return false
+        return Texto.normalizar(alvo) == Texto.normalizar(lemma)
+    }
+
+    private val ALVO =
+        Regex("""^(?:vide|v\.|ver)\s+(.+?)\s*(?:\([^)]*\))?\s*\.?$""", RegexOption.IGNORE_CASE)
+
+    private val REMISSAO = Regex("""^(vide|v\.)\s+\S""", RegexOption.IGNORE_CASE)
+    private val REMISSAO_VER =
+        Regex("""^ver\s+[^\s,;.()]+\s*(\([^)]*\))?\s*\.?$""", RegexOption.IGNORE_CASE)
 
     /**
      * Desmaiuscula a inicial de uma aceção que vai entrar a meio de outra.

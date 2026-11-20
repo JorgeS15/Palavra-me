@@ -1,5 +1,230 @@
 # Changelog
 
+Todas as alterações relevantes ao projeto. Formato baseado em
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versões seguem
+[SemVer](https://semver.org/lang/pt-BR/).
+
+Duas versões, porque são dois artefactos: a do **pipeline** (`pipeline/
+pyproject.toml`) titula as entradas; a da **app** (`android/app/build.gradle.kts`)
+vai indicada quando muda. Correções e afinações sobem o PATCH; funcionalidade
+nova sobe o MINOR.
+
+Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
+alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
+
+## [0.34.0] - em curso · app v1.21.0
+
+O dicionário novo (`docs/roadmap.md`, 1.21.0). Faz-se por partes e
+publica-se de uma vez, com uma só reconstrução do dicionário. **Não publicar
+antes de reconstruir e empacotar o dicionário.**
+
+### Added
+
+- **Classe gramatical por aceção.** Cada aceção guarda a sua classe (coluna
+  nova `senses.pos`), que o pipeline perdia ao juntar num só lema as entradas
+  que o Wikcionário dá por classe. A classe do lema passa a ser a que tem
+  mais aceções, e em empate a da primeira aceção: "computador" passa a
+  substantivo (era adjetivo, por "que computa" vir à frente), "ser" a verbo.
+  O relatório de conflitos regista cada mudança (`pos_principal`).
+  - **Ecrã da palavra:** o cabeçalho mostra as classes por ordem
+    ("substantivo · adjetivo") e, com mais do que uma, as aceções aparecem
+    em grupos, cada um com o título da classe ("lacónico": o adjetivo e, à
+    parte, o substantivo das termas romanas).
+  - **Jogo:** a pergunta usa só as aceções da classe principal, e as
+    distrações escolhem-se pela classe da aceção.
+  - **Imagem de partilha:** as aceções são as da classe que mostra.
+  - Com um dicionário anterior (sem a coluna), a app funciona como antes.
+- **Índice em `lemmas(lemma)`**: as consultas pela grafia exata deixam de
+  depender do truque da 1.19.1 (que continua certo).
+- **Curadoria: 66 definições novas, em rascunho**, para as 65 palavras
+  comuns cuja única definição era a glosa traduzida do wordnet ("tsunami: um
+  cataclismo resultante de um mar destrutiva onda", "minhoquices", que
+  falava de minhocas, "postulador" como adjetivo). Marcadas "rascunho —
+  rever", para aprovar com `palavrame rever-curadoria`. A glosa do wordnet
+  desaparece sozinha de cada uma (só preenche quando não há mais nada).
+  "acrecentar", erro de grafia, fica como remissão para "acrescentar".
+- **A curadoria guarda a classe de cada linha** na aceção ("alimentador":
+  uma linha de adjetivo e outra de substantivo).
+- **Remissões tocáveis.** "acção: Vide ação", "email: O mesmo que e-mail",
+  "yoga: Ver ioga": o destino fica sublinhado e abre a palavra (com o
+  histórico para voltar, como os sinónimos), e a definição dele aparece por
+  baixo, para a resposta estar à vista sem tocar. O pipeline resolve o
+  destino e guarda-o numa coluna nova (`senses.remete_para`), só quando ele
+  existe e tem definição: cerca de 20 700 aceções na base de 2026-11-04
+  (19 000 "O mesmo que", 650 "Vide", 550 "Ver", 470 "V."). Com texto a mais
+  ("O mesmo que avonde: «...»") usa-se a primeira parte, exceto no "Ver",
+  que também é o verbo. "V. t." do Dicionário Aberto é a marca "verbo
+  transitivo", não uma remissão: destinos com menos de 3 letras recusam-se.
+  Na imagem de partilha, uma remissão pura dá lugar à definição do destino.
+  Decidiu-se resolver no pipeline e não na app: aí conhece-se o dicionário
+  inteiro, e na app só se confirmava o destino com uma consulta por aceção.
+
+### Changed
+
+- **Sem lemas vazios que são só flexões de outra palavra.** "túneis",
+  "abandonada", "pudera", "amenorréia" entravam como palavras próprias, sem
+  definição, e a pesquisa oferecia-as ao lado da certa. Saem (338 na base de
+  2026-11-04); as formas e os exemplos passam para a palavra com definição, e
+  a pesquisa continua a chegar lá. Regra revista à mão: ficam as que têm
+  sinónimos (204), as derivadas que o Hunspell gera como se fossem formas
+  ("oscilador" não é "oscilar"; 200), os nomes e siglas ("SOS" não pode ir
+  dar a "só"; 62) e as que não têm para onde ir (50). O relatório lista cada
+  uma (`flexao_absorvida`).
+- **Sem glosas do wordnet em nomes próprios e siglas:** acabam "SNS:
+  carcinoma do fígado" e "Intel: uma capa de chuva impermeável" (6 casos).
+  Ficam sem definição, que é melhor do que um disparate.
+- **O Aspeto, nas Definições, vem fechado:** uma linha com o que está
+  escolhido ("Sistema · Papel · Literata") e uma seta. Toca-se para abrir o
+  modo, as cores e a letra. Aberto ocupava o ecrã inteiro antes do resto.
+  A nota de novidades "Ver o Aspeto" abre-o já aberto.
+- **Todas as remissões dizem "Ver X".** "Vide ação" (Dicionário Aberto, 1913)
+  e "Ver ioga" (Wikcionário) querem dizer o mesmo; misturavam-se conforme a
+  fonte. "Vide" passa sempre a "Ver"; "V." só quando o destino existe, porque
+  "V. t. (e der.)" é a marca "verbo transitivo" e fica como está. Quando a
+  mesma palavra ficava com "Vide ioga" e "Ver ioga", fica uma só. Na app, as
+  remissões resolvidas ("Ver pão de ló", com mais de uma palavra) também
+  ficam fora do jogo, das distrações e da imagem de partilha.
+- **Dicionário mais pequeno no telemóvel:** de 146 MB para 100 MB instalado,
+  e de 53 MB para 36 MB dentro do APK (medido na base de 2026-11-04). A
+  tabela das formas, que é a maior parte, guarda-se como a app a consulta:
+  sem rowid nem índice à parte, uma linha por forma e palavra, e a forma
+  escrita só quando difere da versão sem acentos. A pesquisa faz o mesmo
+  caminho (pela chave) e dá os mesmos resultados. A base completa em `out/`
+  não muda.
+
+### Fixed
+
+- **O pipeline tira também as remissões "Vide X" e "V. X" para o próprio
+  lema** ("lacónico: Vide lacónico"); só conhecia "Ver X", "O mesmo que X"
+  e "Idem". A app já as escondia desde a 1.20.1.
+
+## [app v1.20.1] - 2026-11-15
+
+Só a app. A instalação do dicionário deixa de poder bloquear a app ou
+acabar sem base (`docs/roadmap.md`, ponto 4 do brief). Fica antes do
+dicionário novo de propósito: é ele que vai pôr isto à prova.
+
+### Fixed
+
+- **Uma atualização do dicionário que falhe já não deixa a pessoa sem
+  app.** Quando o APK trazia um dicionário novo e a cópia falhava (quase
+  sempre por falta de espaço), a app ficava no ecrã de instalação, com o
+  erro e o botão "Escolher o ficheiro", sem forma de continuar, embora a
+  base antiga estivesse no disco e a funcionar. Agora a app abre com a base
+  antiga, diz que a atualização falhou e porquê, e volta a tentar no
+  arranque seguinte.
+- **A troca de ficheiros é atómica.** Apagava-se a base antiga antes de pôr
+  a nova no lugar; se o segundo passo falhasse, ficava sem base nenhuma.
+  Passa a ser um só `rename` por cima (`Files.move` com `ATOMIC_MOVE`):
+  fica sempre uma das duas.
+- **Espaço verificado antes de copiar.** O tamanho do dicionário
+  descomprimido lê-se do próprio APK (os últimos 4 bytes do gzip), e se não
+  houver espaço livre para ele a mensagem diz quanto falta ("são precisos
+  cerca de 167 MB livres e há 90 MB"). Um disco cheio a meio da cópia dá a
+  mesma mensagem, em vez do erro técnico.
+- **Cópias interrompidas já não deixam lixo.** Um ficheiro temporário de
+  uma instalação a que mataram a app ficava no telemóvel para sempre; é
+  apagado no arranque seguinte.
+- **O ecrã de instalação diz o tamanho real** ("São 147 MB"), em vez dos
+  200 MB escritos à mão.
+- **As remissões para a própria palavra deixam de aparecer.** "lacónico:
+  Vide lacónico", "Abril: Vide abril", "alcalóide: Vide alcaloide": 284 na
+  base, quase todas variantes de grafia que, sem acentos nem maiúsculas, são
+  a mesma palavra, e que não levavam a lado nenhum. Saem da entrada (as
+  aceções renumeram-se) e, com isso, também da imagem de partilha. As que
+  apontam para outra palavra ("acção: Vide ação") ficam, porque são a única
+  pista; passam a ser tocáveis com o dicionário novo (1.21.0).
+- **A nota de novidades não se perde quando se salta uma versão.** As notas
+  passam a indexar-se pelo `versionCode`, e mostram-se as mais recentes que a
+  pessoa ainda não viu: quem atualiza da 1.19 diretamente para a 1.20.1 vê
+  as da 1.20.0 ("Rever agora"), que antes ficavam por mostrar.
+
+## [app v1.20.0] - 2026-11-15
+
+Só a app. A revisão que acompanha quem lê (`docs/roadmap.md`, pontos 1, 3 e
+6 do brief). Muda uma decisão de produto: até aqui, uma sessão era uma
+pergunta, só pelo lembrete. `docs/jogo.md` foi atualizado.
+
+### Added
+
+- **Rever à mão, para toda a gente.** "N palavras por rever" no ecrã inicial
+  (até aqui era do Modo Desenvolvedor), também antes da primeira resposta
+  (só a faixa, sem o cartão de zeros). A sessão encadeia perguntas
+  ("Palavra seguinte" e "Feito") até acabarem as vencidas ou o limite do
+  dia, com uma linha discreta a dizer quantas ainda dá.
+- **Limite de 10 revisões à mão por dia** (`LIMITE_MANUAL_POR_DIA`), além
+  dos lembretes, para a app continuar calma: 2 a 3 minutos. As respostas aos
+  lembretes não contam, e o contador volta a zero à meia-noite. Atingido o
+  limite: "Já reviste 10 hoje. Amanhã há mais." O Modo Desenvolvedor não tem
+  limite.
+- **"Rever mais" depois de um lembrete**, se houver mais vencidas e o limite
+  o permitir.
+- **Autorização das notificações:** se for recusada, as Definições dizem
+  porquê e dão o atalho para as definições de notificações da app; se for
+  retirada depois no sistema, avisam ao voltar ao ecrã (antes, o interruptor
+  ficava ligado e os lembretes simplesmente não chegavam).
+- **Nota de novidades** desta versão.
+
+### Changed
+
+- **A fila de revisão é justa:** ordena-se pela data em que cada palavra
+  ficou vencida, e uma palavra nunca jogada conta desde que foi registada.
+  Antes, as nunca jogadas passavam todas à frente e as antigas nunca
+  chegavam a ser revistas.
+- **Uma palavra fica vencida à meia-noite do dia devido**, e não à mesma
+  hora: quem responde às 21h05 já a tem no lembrete da manhã seguinte (antes,
+  o intervalo de 1 dia passava a 2 na prática). Conta em dias de calendário,
+  por isso aguenta a mudança da hora.
+- **Coleção:** partilhar, editar e esquecer passam para um menu de três
+  pontos (toque de 48 dp), em vez de três ícones de 40 dp lado a lado onde
+  era fácil apagar por engano.
+
+### Fixed
+
+- **Os lembretes já não mudam de hora.** O trabalho periódico contava as
+  24 h a partir da última execução: um lembrete das 9h que o sistema
+  atrasasse para as 11h ficava às 11h para sempre, e a mudança da hora
+  deslocava tudo. Cada lembrete, ao acabar, marca a execução seguinte para a
+  próxima ocorrência da sua hora (`setNextScheduleTimeOverride`; o cálculo
+  em `proximaOcorrencia`, com testes). Quem atualiza tem os lembretes
+  reagendados uma vez, para levarem a hora nos dados.
+
+## [app v1.19.1] - 2026-11-13
+
+Só a app. Primeira parte do roteiro (`docs/roadmap.md`), a partir da
+revisão em `palavra-me-brief-opus.md`.
+
+### Fixed
+
+- **O jogo e os lembretes ficam muito mais rápidos com coleções grandes.**
+  As consultas por lema (`entradaPorLema`, `candidataDeJogo`, `sinonimosDe`)
+  percorriam as 181 mil linhas do dicionário, porque `lemma` não tem índice:
+  23 ms cada num computador, várias vezes mais num telemóvel, e uma por cada
+  palavra da coleção a cada abertura do jogo e a cada lembrete. Passam a
+  filtrar também por `normalized`, que tem índice: menos de 1 ms (o plano
+  deixou de ter `SCAN lemmas`). Só é correto porque a normalização da app e
+  a do pipeline dão o mesmo: conferido nas 181 407 palavras, sem diferenças.
+  O índice próprio em `lemmas(lemma)` vem com o próximo dicionário.
+- **O jogo nunca usa uma remissão como definição.** "Vide ação", "V.
+  rhizophoráceas." e "Ver bulevar" (1 937 aceções na base) saltam-se ao
+  montar a definição da pergunta, e deixam de servir de distração. Para
+  "acção" dava a opção "Vide ação; modo de actuar", que entregava a resposta.
+  "Ver" seguido de mais de uma palavra não conta, porque há definições a
+  sério que começam assim ("Ver com atenção").
+- **A pesquisa já não tem a correção automática do teclado**, que numa app
+  de palavras raras corrigia o que se queria procurar.
+- **"Era a outra." passa a "Era outra."** (há três opções).
+- **Importar uma cópia é tudo ou nada**: numa transação, sem importações
+  parciais se falhar a meio. O domínio de cada palavra fica limitado de 0 a
+  5. A exportação passa a truncar o ficheiro (modo `"wt"`): escrever por
+  cima de uma cópia mais comprida deixava lixo no fim e um JSON inválido.
+
+### Changed
+
+- **Integração contínua:** o workflow `testes` corre também os testes de
+  JVM da app (`testDebugUnitTest`). Por confirmar no primeiro push.
+- **README:** a instalação aponta para a Google Play, em vez das Releases.
+
 ## [app v1.19.0] - 2026-11-11
 
 Só a app.
@@ -17,6 +242,13 @@ Só a app.
     Atkinson Hyperlegible (feita para máxima legibilidade) e "Do telemóvel"
     (a letra do sistema).
 
+  Responde a duas queixas de quem usa a app: o tom amarelado e a serifa.
+  Por omissão fica tudo como estava (Papel e Literata). O logótipo e as
+  cores das capas dos livros não mudam. A imagem "Partilhar palavra" segue
+  também as cores e a letra escolhidas. As letras vão dentro da app, sem
+  rede (a Atkinson na versão Next, de 2025, que tem os pesos intermédios que
+  a app usa); juntas ocupam cerca de 0,6 MB. Desenho em
+  `design_handoff_temas_letras/`.
 - **Nota de novidades.** Ao abrir a app pela primeira vez depois de uma
   atualização, uma nota curta com o que mudou e, quando há sítio para isso,
   um botão que leva lá ("Ver o Aspeto"). Uma vez por versão, só nas versões
@@ -66,10 +298,29 @@ Só a app.
 - **Abrir uma palavra na Coleção já não mostra o ecrã inicial** por um
   instante: a app só muda de separador quando a palavra está pronta.
 
+## [0.33.0] - 2026-11-03 · app v1.18.0
 
-## [app v1.17.1] - 2026-11-01
+Junta a 1.17.1, que não chegou a ser publicada.
 
-Só a app.
+### Added
+
+- **O teu significado, em qualquer palavra.** Ao registar ou editar uma
+  palavra que o dicionário já define, há agora "+ Encontraste-a noutro
+  sentido? Escreve o teu significado". O que se escreve aparece por cima das
+  definições do dicionário. Nasceu de uma leitora: "rebarbativo" só tinha o
+  sentido de 1913 (de quem parece ter duas barbas por gordura), e ela tinha-a
+  lido no de antipático, sem forma de o guardar. Antes, o campo só existia
+  para palavras sem definição.
+- **"Submeter por mail" leva também os sentidos em falta:** palavras com
+  definição a que se juntou um significado próprio. Na lista aparecem como
+  "falta este sentido", e no CSV com a nota "acrescenta: sentido em falta",
+  pronta a colar na curadoria. Deixam de se propor quando a curadoria já
+  acrescentou um sentido à palavra.
+- **Pipeline: a curadoria pode acrescentar sentidos.** Uma linha do
+  `seeds/curadoria.csv` cuja nota começa por "acrescenta" junta uma aceção a
+  uma palavra que já tem definição, e o `validar` deixa de a dar como
+  redundante (passa a contá-la à parte, como acrescento). A primeira é
+  `rebarbativo`, com o sentido corrente.
 
 ### Changed
 

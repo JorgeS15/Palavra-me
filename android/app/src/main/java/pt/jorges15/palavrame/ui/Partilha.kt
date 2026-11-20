@@ -50,6 +50,7 @@ import pt.jorges15.palavrame.data.Entrada
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.data.rotuloPos
+import pt.jorges15.palavrame.jogo.Perguntas
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
 import pt.jorges15.palavrame.ui.theme.Literata
@@ -85,7 +86,20 @@ data class DadosPartilha(
 /** Junta a entrada do dicionário (se houver) com o registo da coleção (se houver). */
 fun dadosPartilha(entrada: Entrada?, guardada: PalavraGuardada?): DadosPartilha? {
     val lemma = entrada?.lemma ?: guardada?.lemma ?: return null
-    val acecoes = entrada?.acecoes?.take(2)?.map { it.definicao }.orEmpty().ifEmpty {
+    // As aceções da classe principal, que é a que o cartão mostra: com a
+    // classe por aceção (1.21), as duas primeiras podiam ser de classes
+    // diferentes e ficar "substantivo" por cima de uma definição de adjetivo.
+    val daPrincipal = entrada?.let { e ->
+        e.acecoes.filter { (it.pos ?: e.pos) == e.pos }.ifEmpty { e.acecoes }
+    }
+    // Uma remissão pura ("Vide ação") não diz nada numa imagem: mostra-se a
+    // definição do destino, quando a há.
+    val acecoes = daPrincipal?.take(2)?.map {
+        val remissao = Perguntas.eRemissao(it.definicao) ||
+            (it.remetePara != null && it.definicao.startsWith("Ver "))
+        if (remissao && it.definicaoDoDestino != null) it.definicaoDoDestino
+        else it.definicao
+    }.orEmpty().ifEmpty {
         val sinonimos = entrada?.relacionadas.orEmpty().filter { it.relacao == "sinonimo" }
         if (sinonimos.isEmpty()) emptyList()
         else listOf("O mesmo que " + sinonimos.take(4).joinToString(", ") { it.lemma } + ".")

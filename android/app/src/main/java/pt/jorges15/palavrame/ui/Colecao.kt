@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SortByAlpha
@@ -404,15 +405,40 @@ private fun LinhaPalavra(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = aoPartilhar, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.Share, contentDescription = "Partilhar", tint = Cores.ink3)
-            }
-            IconButton(onClick = aoEditar, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.EditNote, contentDescription = "Editar", tint = Cores.ink3)
-            }
-            IconButton(onClick = aoApagar, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.DeleteOutline, contentDescription = "Esquecer", tint = Cores.ink3)
+            // Um menu de três pontos em vez de três ícones de 40 dp seguidos:
+            // com o "esquecer" colado ao "editar", um toque ao lado apagava a
+            // palavra (com só uns segundos para anular). O alvo tem 48 dp.
+            var menuAberto by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { menuAberto = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.MoreVert, contentDescription = "Mais", tint = Cores.ink3)
+                }
+                DropdownMenu(
+                    expanded = menuAberto,
+                    onDismissRequest = { menuAberto = false },
+                    containerColor = Cores.card,
+                ) {
+                    ItemMenu("Partilhar", Icons.Rounded.Share) { menuAberto = false; aoPartilhar() }
+                    ItemMenu("Editar", Icons.Rounded.EditNote) { menuAberto = false; aoEditar() }
+                    ItemMenu("Esquecer", Icons.Rounded.DeleteOutline, cor = Cores.err) {
+                        menuAberto = false; aoApagar()
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ItemMenu(
+    texto: String,
+    icone: androidx.compose.ui.graphics.vector.ImageVector,
+    cor: androidx.compose.ui.graphics.Color = Cores.ink,
+    aoTocar: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(texto, style = Estilo.controlo, color = cor) },
+        leadingIcon = { Icon(icone, contentDescription = null, tint = cor) },
+        onClick = aoTocar,
+    )
 }

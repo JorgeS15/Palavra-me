@@ -97,6 +97,13 @@ fun EcraJogo(vm: JogoViewModel, aoVoltar: () -> Unit) {
                         aoVoltar = aoVoltar,
                     )
 
+                    is EstadoJogo.LimiteDoDia -> Explicacao(
+                        titulo = "Por hoje chega",
+                        texto = "Já reviste ${e.limite} palavras à mão hoje. Amanhã há "
+                            + "mais, e os lembretes continuam a chegar.",
+                        aoVoltar = aoVoltar,
+                    )
+
                     is EstadoJogo.AJogar -> Pergunta(e, vm, aoVoltar)
                 }
             }
@@ -152,7 +159,7 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (e.acertou == true) "Certo." else "Era a outra.",
+                    if (e.acertou == true) "Certo." else "Era outra.",
                     style = Estilo.resultado,
                     color = Cores.ink,
                     modifier = Modifier.weight(1f),
@@ -194,11 +201,20 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
             }
             DepoisDeResponder(e)
             Spacer(Modifier.height(24.dp))
-            // Uma pergunta, e acabou: a sessão tem de caber no intervalo em
-            // que se pousa o livro. O encadeamento é do Modo Desenvolvedor,
-            // para verificar perguntas sem fechar e reabrir a app.
+            // Segue-se só se houver mais vencidas e o limite do dia o deixar.
+            // "Feito" está sempre à mão: parar é tão normal como continuar.
             if (e.podeSeguir) {
-                BotaoPrincipal("Palavra seguinte", vm::comecar, Modifier.fillMaxWidth())
+                BotaoPrincipal(e.rotuloSeguir, vm::continuar, Modifier.fillMaxWidth())
+                e.restamHoje?.let { n ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (n == 1) "Podes rever mais 1 hoje." else "Podes rever mais $n hoje.",
+                        style = Estilo.ajuda,
+                        color = Cores.ink3,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 TextButton(
                     onClick = aoVoltar,

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from ..config import EXAMPLE_MAX_CHARS, EXAMPLE_MIN_CHARS
-from ..text import tokens
+from ..text import nomes_proprios, normalize, surface_words
 from ..schema import Example, SourceEntry
 from .base import License, Source, SourceInfo
 
@@ -96,15 +96,21 @@ class Tatoeba(Source):
                 "sem lista de lemas não é útil. Passa `lemmas`."
             )
 
+        # Indexado pela forma de superfície (com acentos): é assim que o
+        # exemplo se liga depois ao lema certo. "bebe" fica "bebe", não "bebé".
         by_word: dict[str, list[Example]] = defaultdict(list)
         for sid, sentence in self._sentences():
             if not (EXAMPLE_MIN_CHARS <= len(sentence) <= EXAMPLE_MAX_CHARS):
                 continue
-            words = set(tokens(sentence))
-            hits = words & wanted
+            palavras = surface_words(sentence)
+            proprios = nomes_proprios(palavras)
+            surface = {w.lower() for w in palavras}
+            normalizadas = {normalize(w) for w in surface}
+            # Fora os nomes próprios: "Nené" (jogador) não é o nome comum.
+            hits = {w for w in surface if normalize(w) in wanted and w not in proprios}
             if not hits:
                 continue
-            variant = _guess_variant(words)
+            variant = _guess_variant(normalizadas)
             for word in hits:
                 by_word[word].append(
                     Example(

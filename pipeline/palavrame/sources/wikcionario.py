@@ -20,7 +20,8 @@ import gzip
 import json
 from typing import Iterable, Iterator
 
-from ..text import clean_definition
+from ..config import EXAMPLE_MAX_CHARS, EXAMPLE_MIN_CHARS
+from ..text import clean_definition, frase_utilizavel
 from ..schema import Example, Form, Sense, SourceEntry, canonical_pos
 from .base import License, Source, SourceInfo, SourceUnavailable
 
@@ -59,6 +60,32 @@ INFO = SourceInfo(
 )
 
 CACHE_NAME = "wikcionario.jsonl"
+
+# Etiquetas de uso a MOSTRAR ao leitor (decisão do Jorge: não deitar fora, mas
+# avisar que a aceção é brasileira ou um estrangeirismo). Entram no campo
+# `domains` da aceção, que a app já apresenta em itálico por cima da definição.
+#
+# Medido no dump real: só ~1,4% das aceções trazem alguma etiqueta — no
+# Wikcionário o brasileiro é o padrão NÃO marcado — por isso isto rotula só o
+# que está explícito (`ônibus`→Brasil, `timer`→estrangeirismo), e deixa sem
+# rótulo o vocabulário brasileiro que ninguém etiquetou (`time`, `nené`).
+_TAGS_BRASIL = {"Brazil", "Brazilian"}
+
+
+def _rotulos_de_uso(tags: list, raw_tags: list) -> list[str]:
+    """Rótulos de variante/registo da aceção: 'Brasil', 'Estrangeirismo'."""
+    rotulos: list[str] = []
+    if any(isinstance(t, str) and t in _TAGS_BRASIL for t in tags):
+        rotulos.append("Brasil")
+    for r in raw_tags:
+        if not isinstance(r, str):
+            continue
+        rl = r.lower()
+        if "brasil" in rl and "Brasil" not in rotulos:
+            rotulos.append("Brasil")
+        elif rl == "estrangeirismo" and "Estrangeirismo" not in rotulos:
+            rotulos.append("Estrangeirismo")
+    return rotulos
 
 # Caminhos do kaikki.org, por ordem de preferência. O primeiro foi confirmado
 # em 2026-07-30 na página de raw data (kaikki.org/dictionary/rawdata.html):
@@ -158,6 +185,10 @@ def _entries_from_wiktextract(data: dict, slug: str) -> list[SourceEntry]:
             for alvo in alvos:
                 alvo_de_flexao.setdefault(alvo, glosa[:80] or None)
             continue   # não é uma aceção: é uma remissão
+        # Rótulos de uso (Brasil, Estrangeirismo) a mostrar com a aceção. A
+        # palavra fica; o leitor é que fica avisado da variante/registo.
+        rotulos = _rotulos_de_uso(sense.get("tags") or [], sense.get("raw_tags") or [])
+        topicos = [t for t in (sense.get("topics") or []) if t]
         glosses = sense.get("glosses") or sense.get("raw_glosses") or []
         for gloss in glosses:
             text = clean_definition(gloss or "")
@@ -169,14 +200,16 @@ def _entries_from_wiktextract(data: dict, slug: str) -> list[SourceEntry]:
                     definition=text,
                     source=slug,
                     ord=ord_,
-                    domains=[t for t in (sense.get("topics") or []) if t],
+                    domains=rotulos + topicos,
                 )
             )
-        # Exemplos ligados a esta aceção.
+        # Exemplos ligados a esta aceção. Filtram-se: o Wikcionário deixa
+        # entrar como exemplo tudo o que um editor lá pôs, e muito não é uma
+        # frase — ver `frase_utilizavel`.
         for ex in sense.get("examples") or []:
             sentence = (ex.get("text") if isinstance(ex, dict) else ex) or ""
             sentence = sentence.strip()
-            if sentence:
+            if frase_utilizavel(sentence, EXAMPLE_MIN_CHARS, EXAMPLE_MAX_CHARS):
                 entry.examples.append(
                     Example(
                         sentence=sentence,

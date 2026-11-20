@@ -235,3 +235,68 @@ def test_forms_vazia_e_erro(tmp_path):
     # O builder acrescenta sempre o lema; a proporção fica em 1.0 -> aviso.
     report = validate_database(path, [INFO_LIVRE])
     assert any(c.name == "forms" for c in report.warnings)
+
+
+def test_copia_para_a_app_tira_o_que_a_app_nao_usa(tmp_path):
+    """O `empacotar` emagrece a cópia que vai no APK: sem `forms.tag`, sem o
+    índice de lema para formas, sem o FTS, e `forms` sem rowid nem repetidas. A pesquisa da app (formas por
+    `normalized`) tem de continuar a funcionar, e a base original não muda."""
+    from palavrame.cli import _emagrecer
+
+    original = tmp_path / "d.db"
+    build_database(original, [entrada_caber(), entrada_janela()], [INFO_LIVRE], db_version="t")
+    tamanho_original = original.stat().st_size
+
+    copia = _emagrecer(original)
+    try:
+        conn = sqlite3.connect(copia)
+        colunas = [r[1] for r in conn.execute("PRAGMA table_info(forms)")]
+        assert colunas == ["normalized", "lemma_id", "form"]
+        # WITHOUT ROWID: a chave é o índice da pesquisa, sem outro ao lado.
+        indices = {r[1] for r in conn.execute("PRAGMA index_list(forms)")}
+        assert len(indices) == 1 and all(i.startswith("sqlite_autoindex") for i in indices)
+        plano = " ".join(r[3] for r in conn.execute(
+            "EXPLAIN QUERY PLAN SELECT lemma_id FROM forms WHERE normalized = ?", ("x",)))
+        assert "PRIMARY KEY" in plano, plano
+        # A forma só fica escrita quando difere da chave normalizada; a app
+        # usa COALESCE.
+        formas = dict(conn.execute(
+            "SELECT normalized, COALESCE(form, normalized) FROM forms"
+            " WHERE normalized IN ('couberam', 'caber')"))
+        assert formas == {"couberam": "couberam", "caber": "caber"}
+        assert conn.execute(
+            "SELECT COUNT(*) FROM forms WHERE form = normalized").fetchone()[0] == 0
+        total = conn.execute("SELECT COUNT(*) FROM forms").fetchone()[0]
+        meta = conn.execute("SELECT value FROM meta WHERE key='count_forms'").fetchone()[0]
+        assert int(meta) == total
+        tabelas = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert "lemmas_fts" not in tabelas
+        lemas = [r[0] for r in conn.execute(
+            "SELECT l.lemma FROM forms f JOIN lemmas l ON l.id = f.lemma_id"
+            " WHERE f.normalized = ?", ("couberam",))]
+        assert lemas == ["caber"]
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        conn.close()
+    finally:
+        copia.unlink(missing_ok=True)
+
+    assert original.stat().st_size == tamanho_original   # a original fica intacta
+
+
+def test_a_classe_de_cada_acecao_vai_para_a_base_e_lemma_tem_indice(tmp_path):
+    """A coluna `senses.pos` (1.21) e o índice em `lemmas(lemma)`, que a app
+    usa para procurar pela grafia exata sem percorrer a tabela."""
+    e = MergedEntry(
+        lemma="computador", pos="substantivo",
+        senses=[Sense("Que computa.", "fonte_livre", ord=1, pos="adjetivo"),
+                Sense("Máquina de calcular.", "fonte_livre", ord=2, pos="substantivo")],
+        contributors=["fonte_livre"],
+    )
+    caminho = tmp_path / "d.db"
+    build_database(caminho, [e], [INFO_LIVRE], db_version="t")
+    with sqlite3.connect(caminho) as conn:
+        classes = [r[0] for r in conn.execute("SELECT pos FROM senses ORDER BY ord")]
+        assert classes == ["adjetivo", "substantivo"]
+        plano = " ".join(r[3] for r in conn.execute(
+            "EXPLAIN QUERY PLAN SELECT id FROM lemmas WHERE lemma = ?", ("computador",)))
+        assert "SCAN" not in plano, plano

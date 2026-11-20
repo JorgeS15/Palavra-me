@@ -223,4 +223,53 @@ class SessaoTest {
             assertTrue(horas.all { it in 7..23 })
         }
     }
+
+    // --- quando a palavra volta (início do dia) ---------------------------
+
+    private fun em(data: LocalDate, hora: Int, minuto: Int = 0) =
+        data.atTime(hora, minuto).atZone(lisboa).toInstant().toEpochMilli()
+
+    private fun meiaNoite(data: LocalDate) = data.atStartOfDay(lisboa).toInstant().toEpochMilli()
+
+    @Test
+    fun `quem responde as 21h05 tem a palavra no dia seguinte desde a meia-noite`() {
+        // Antes: vencida às 21h05 de amanhã, depois do último lembrete.
+        val r = Leitner.proximaRevisao(caixa = 0, agora = em(hoje, 21, 5), zona = lisboa)
+        assertEquals(meiaNoite(hoje.plusDays(1)), r)
+    }
+
+    @Test
+    fun `os intervalos contam em dias de calendario, tambem na mudanca da hora`() {
+        // 2026-03-29: o relógio adianta (o dia tem 23 h). 4 dias depois de
+        // 27 de março continua a ser 31 de março à meia-noite.
+        val dia = LocalDate.of(2026, 3, 27)
+        val r = Leitner.proximaRevisao(caixa = 2, agora = em(dia, 18), zona = lisboa)
+        assertEquals(meiaNoite(LocalDate.of(2026, 3, 31)), r)
+    }
+
+    // --- a hora seguinte de cada lembrete --------------------------------
+
+    @Test
+    fun `a proxima ocorrencia de hoje e hoje, a que ja passou e amanha`() {
+        assertEquals(em(hoje, 21), proximaOcorrencia(21, em(hoje, 19), lisboa))
+        assertEquals(em(hoje.plusDays(1), 9), proximaOcorrencia(9, em(hoje, 11), lisboa))
+        // A hora exata conta para amanhã: o worker acabou de correr.
+        assertEquals(em(hoje.plusDays(1), 9), proximaOcorrencia(9, em(hoje, 9), lisboa))
+    }
+
+    @Test
+    fun `um lembrete atrasado volta a hora certa no dia seguinte`() {
+        // O sistema atrasou o das 9h para as 11h17: o seguinte é às 9h, e não
+        // às 11h17 (era isto que derivava).
+        assertEquals(em(hoje.plusDays(1), 9), proximaOcorrencia(9, em(hoje, 11, 17), lisboa))
+    }
+
+    @Test
+    fun `a mudanca da hora nao desloca os lembretes`() {
+        val sabado = LocalDate.of(2026, 3, 28)
+        val domingo = sabado.plusDays(1)          // dia de 23 h
+        val r = proximaOcorrencia(9, em(sabado, 9, 1), lisboa)
+        assertEquals(em(domingo, 9), r)
+        assertEquals(23L * 60 * 60 * 1000 - 60_000, r - em(sabado, 9, 1))
+    }
 }

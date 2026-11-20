@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import sqlite3
+import tempfile
 import time
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -36,7 +39,9 @@ CREATE TABLE senses (
     definition      TEXT NOT NULL,
     domains         TEXT,            -- JSON: ["Figurado"], ["Náutica"]
     source_id       INTEGER NOT NULL REFERENCES sources(id),
-    modernized      INTEGER DEFAULT 0  -- 1 = fraseado adaptado por LLM
+    modernized      INTEGER DEFAULT 0,  -- 1 = fraseado adaptado por LLM
+    pos             TEXT,            -- classe DESTA aceção (a do lema é a principal)
+    remete_para     TEXT             -- "Vide ação": o lema de destino ("ação")
 );
 
 CREATE TABLE forms (               -- flexionada -> lema. O coração da pesquisa
@@ -81,6 +86,8 @@ INDEX_SQL = """
 CREATE INDEX idx_forms_norm     ON forms(normalized);
 CREATE INDEX idx_forms_lemma    ON forms(lemma_id);
 CREATE INDEX idx_lemmas_norm    ON lemmas(normalized);
+-- A app procura também pela grafia exata (jogo, lembretes, coleção).
+CREATE INDEX idx_lemmas_lemma   ON lemmas(lemma);
 CREATE INDEX idx_senses_lemma   ON senses(lemma_id, ord);
 CREATE INDEX idx_examples_lemma ON examples(lemma_id);
 CREATE INDEX idx_examples_sense ON examples(sense_id);
@@ -109,22 +116,39 @@ def build_database(
     if path.exists():
         path.unlink()
 
-    conn = sqlite3.connect(path)
+    # Constrói-se primeiro num ficheiro temporário LOCAL e só o ficheiro final,
+    # já fechado, é movido para o destino. Se o destino estiver numa pasta
+    # sincronizada (ownCloud, OneDrive, Dropbox, Google Drive), o cliente de
+    # sincronização abre o `.db` (e o `-journal`) a meio da escrita do SQLite e
+    # corrompe-o — o "database disk image is malformed" que rebentava a meio da
+    # F1. O temporário vive no disco local do sistema, longe da sincronização.
+    fd, tmp_nome = tempfile.mkstemp(prefix="palavrame-", suffix=".db")
+    os.close(fd)
+    tmp = Path(tmp_nome)
     try:
-        conn.executescript(SCHEMA_SQL)
-        source_ids = _write_sources(conn, infos)
-        stats = _write_entries(conn, entries, source_ids)
-        conn.executescript(INDEX_SQL)
-        conn.executescript(FTS_SQL)
-        conn.execute(
-            "INSERT INTO lemmas_fts(lemmas_fts) VALUES ('rebuild')"
-        )
-        _write_meta(conn, db_version, stats, extra_meta or {})
-        conn.commit()
-        conn.execute("VACUUM")
-        conn.commit()
+        conn = sqlite3.connect(tmp)
+        try:
+            conn.executescript(SCHEMA_SQL)
+            source_ids = _write_sources(conn, infos)
+            stats = _write_entries(conn, entries, source_ids)
+            conn.executescript(INDEX_SQL)
+            conn.executescript(FTS_SQL)
+            conn.execute(
+                "INSERT INTO lemmas_fts(lemmas_fts) VALUES ('rebuild')"
+            )
+            _write_meta(conn, db_version, stats, extra_meta or {})
+            conn.commit()
+            conn.execute("VACUUM")
+            conn.commit()
+        finally:
+            conn.close()
+        # Um só ficheiro, completo e fechado, entra na pasta de destino.
+        if path.exists():
+            path.unlink()
+        shutil.move(str(tmp), str(path))
     finally:
-        conn.close()
+        if tmp.exists():
+            tmp.unlink()
 
     # O checksum cobre o ficheiro final, por isso grava-se fora dele: um
     # ficheiro não pode conter o hash de si próprio. Fica ao lado, e é o que a
@@ -191,11 +215,12 @@ def _write_entries(
             sense_id += 1
             conn.execute(
                 "INSERT INTO senses (id, lemma_id, ord, definition, domains,"
-                " source_id, modernized) VALUES (?,?,?,?,?,?,?)",
+                " source_id, modernized, pos, remete_para) VALUES (?,?,?,?,?,?,?,?,?)",
                 (sense_id, lemma_id, sense.ord, sense.definition,
                  json.dumps(sense.domains, ensure_ascii=False) if sense.domains else None,
                  source_ids.get(sense.source, unknown_id),
-                 1 if sense.modernized else 0),
+                 1 if sense.modernized else 0,
+                 sense.pos, sense.remete_para),
             )
             sense_by_ord[sense.ord] = sense_id
             counts["senses"] += 1

@@ -15,10 +15,17 @@ as que lá estão são exatamente as que interessaram a alguém.
 
 As regras
 ---------
-1. **Só preenche lacunas.** Esta fonte é a última na prioridade das aceções.
+1. **Preenche lacunas.** Esta fonte é a última na prioridade das aceções.
    Se uma palavra já tem definição de uma fonte publicada, a curada entra a
    seguir, nunca à frente — e o `validar` avisa, para que se possa apagar a
    linha.
+
+   A exceção são os **acrescentos**: palavras que têm definição, mas onde
+   falta o sentido em que hoje se usam. O caso que a abriu é `rebarbativo`,
+   que no Dicionário Aberto (1913) só tem o sentido antigo, de quem parece
+   ter duas barbas por gordura, e não o corrente, de antipático. Uma linha
+   cuja `nota` começa por "acrescenta" é intencional: a aceção entra a
+   seguir às publicadas e o `validar` não a dá como redundante.
 2. **Nunca inventa palavras.** Como o Hunspell, uma entrada de curadoria só
    abre lema novo se mais ninguém reclamou aquela grafia.
 3. **Fica marcada.** A fonte aparece na DB e no ecrã como "Curadoria
@@ -40,6 +47,18 @@ ou as abreviaturas correntes; passa por `canonical_pos` como qualquer outra
 fonte. `nota` é livre e serve para quem revê — não entra na DB.
 
 Várias linhas com o mesmo lema dão várias aceções, pela ordem do ficheiro.
+
+A coluna `formas` (opcional, a última) lista flexões escritas à mão, separadas
+por `;`, para a pesquisa chegar ao lema a partir delas::
+
+    lema,classe,definicao,nota,formas
+    adelgaçante,adjetivo,"Que adelgaça.",,adelgaçantes
+
+Existe porque uma palavra que falta a todas as fontes falta também ao Hunspell,
+e sem ele ninguém sabe que "adelgaçantes" é o plural de "adelgaçante". Não se
+adivinha: escrevem-se as que interessam. Os adjetivos regulares em `-o` não
+precisam (o merger gera-lhes feminino e plurais sozinho). Linhas sem a coluna
+continuam válidas.
 """
 
 from __future__ import annotations
@@ -48,10 +67,33 @@ import csv
 from pathlib import Path
 from typing import Iterable, Iterator, Optional
 
-from ..schema import Sense, SourceEntry, canonical_pos
+from ..schema import Form, Sense, SourceEntry, canonical_pos
 from .base import License, Source, SourceInfo
 
 FICHEIRO = "curadoria.csv"
+
+# Uma `nota` que começa assim marca a linha como acrescento (ver regra 1).
+MARCA_ACRESCENTO = "acrescenta"
+
+
+def lemas_acrescentados(caminho: Path) -> "set[str]":
+    """Os lemas (normalizados) das linhas marcadas como acrescento.
+
+    O `validar` usa-os para não dar como redundante uma aceção que se pôs ao
+    lado de outra de propósito. Sem ficheiro, não há acrescentos.
+    """
+    from ..text import normalize
+
+    if not caminho.exists():
+        return set()
+    out: "set[str]" = set()
+    with caminho.open(encoding="utf-8", newline="") as f:
+        for linha in csv.DictReader(f):
+            lema = (linha.get("lema") or "").strip()
+            nota = (linha.get("nota") or "").strip().lower()
+            if lema and not lema.startswith("#") and nota.startswith(MARCA_ACRESCENTO):
+                out.add(normalize(lema))
+    return out
 
 INFO = SourceInfo(
     slug="curadoria",
@@ -76,7 +118,7 @@ INFO = SourceInfo(
             "para que uma correção de terceiros volte para o mesmo sítio."
         ),
     ),
-    provides=("senses",),
+    provides=("senses", "forms"),
     primary=FICHEIRO,
 )
 
@@ -118,13 +160,25 @@ class Curadoria(Source):
                         continue
                     por_lema[lema] = entry
 
+                # A classe de cada linha vai para a aceção: "alimentador" pode
+                # ter uma linha de adjetivo e outra de substantivo.
+                classe = canonical_pos(linha.get("classe"))
                 entry.senses.append(
                     Sense(
                         definition=definicao,
                         source=self.slug,
                         ord=len(entry.senses) + 1,
+                        pos=None if classe == "desconhecido" else classe,
                     )
                 )
+
+                # Flexões escritas à mão (coluna opcional `formas`).
+                ja = {f.form for f in entry.forms}
+                for forma in (linha.get("formas") or "").split(";"):
+                    forma = forma.strip()
+                    if forma and forma != lema and forma not in ja:
+                        entry.forms.append(Form(form=forma, tag="curadoria"))
+                        ja.add(forma)
 
         for entry in por_lema.values():
             if entry.senses:

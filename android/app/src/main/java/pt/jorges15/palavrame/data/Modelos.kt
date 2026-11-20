@@ -34,6 +34,12 @@ data class Acecao(
     val dominios: List<String>,
     val fonte: String,
     val modernizada: Boolean,
+    /** A classe desta aceção; nula num dicionário anterior à 1.21. */
+    val pos: String? = null,
+    /** "Vide ação", "O mesmo que e-mail": o lema de destino (dicionário 1.21+). */
+    val remetePara: String? = null,
+    /** A primeira definição do destino, para se ver sem tocar. */
+    val definicaoDoDestino: String? = null,
 )
 
 data class Exemplo(
@@ -67,6 +73,19 @@ data class Entrada(
     val exemplos: List<Exemplo>,
     val relacionadas: List<Relacionada>,
 ) {
+    /**
+     * As classes da palavra, pela ordem em que se mostram: a com mais
+     * aceções primeiro (empate: a que aparece primeiro). Num dicionário sem a
+     * classe por aceção, só a do lema.
+     */
+    val classes: List<String>
+        get() {
+            val porAcecao = acecoes.map { it.pos ?: pos }.filter { it.isNotBlank() && it != "desconhecido" }
+            if (porAcecao.isEmpty()) return listOf(pos).filter { it.isNotBlank() && it != "desconhecido" }
+            val contagem = porAcecao.groupingBy { it }.eachCount()
+            return porAcecao.distinct().sortedByDescending { contagem[it] }
+        }
+
     /** Exemplos que não estão presos a nenhuma aceção (ver docs: cascata). */
     val exemplosSoltos: List<Exemplo> get() = exemplos.filter { it.acecaoId == null }
 

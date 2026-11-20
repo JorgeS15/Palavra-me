@@ -17,6 +17,16 @@ from palavrame.sources.dicionario_aberto import _acecoes_do_def
 from palavrame.text import clean_definition
 
 
+def test_tira_ligacoes_de_wikitexto():
+    # O caso real do 'mangar': `[[manguito:2]]` chegava cru ao ecrã.
+    assert clean_definition("Relaciona-se com [[manguito:2]], gesto obsceno.") \
+        == "Relaciona-se com manguito, gesto obsceno."
+    # Com texto de apresentação, fica o texto: [[fruto|manga]] -> manga.
+    assert clean_definition("O [[fruto|manga]] é doce.") == "O manga é doce."
+    # Ligação simples: [[caçoar]] -> caçoar.
+    assert clean_definition("O mesmo que [[caçoar]].") == "O mesmo que caçoar."
+
+
 # --- remissões e abonos ----------------------------------------------------
 
 def test_tira_a_remissao_bibliografica():

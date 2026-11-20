@@ -30,6 +30,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.jogo.JogoViewModel
@@ -44,6 +45,7 @@ import pt.jorges15.palavrame.ui.AcaoNovidade
 import pt.jorges15.palavrame.ui.DialogoNovidades
 import pt.jorges15.palavrame.ui.NOVIDADES
 import pt.jorges15.palavrame.ui.mostrarNovidades
+import pt.jorges15.palavrame.ui.notasPorVer
 import pt.jorges15.palavrame.ui.BotaoPrincipal
 import pt.jorges15.palavrame.ui.Logotipo
 import pt.jorges15.palavrame.ui.theme.Cores
@@ -82,8 +84,20 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(app.dicionario != null && !app.temDicionarioEmpacotado())
                 }
 
+                // A atualização do dicionário falhou, mas a base antiga abriu:
+                // a app segue com ela e diz o que se passou. Volta a tentar no
+                // arranque seguinte (a versão instalada não mudou).
+                var falhaDaAtualizacao by rememberSaveable { mutableStateOf<String?>(null) }
+
                 if (!temDicionario) {
-                    EcraInstalarDicionario(app, aoFicarPronto = { temDicionario = true })
+                    EcraInstalarDicionario(
+                        app,
+                        aoFicarPronto = { temDicionario = true },
+                        aoFalharComBaseAntiga = { motivo ->
+                            falhaDaAtualizacao = motivo
+                            temDicionario = true
+                        },
+                    )
                     return@TemaPalavrame
                 }
 
@@ -104,6 +118,14 @@ class MainActivity : ComponentActivity() {
                 // nele e depois esquece-o (volta a nulo), para a visita seguinte
                 // pelo separador abrir como sempre.
                 var livroPedido by rememberSaveable { mutableStateOf<String?>(null) }
+                // A nota de novidades "Ver o Aspeto" abre as Definições com essa
+                // secção aberta, só dessa vez: ao sair das Definições esquece-se.
+                var abrirAspeto by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(ecra) { if (ecra != Ecra.DEFINICOES) abrirAspeto = false }
+                // Cada abertura do jogo é uma sessão nova (um ViewModel novo).
+                // A sessão 0, quando a app abriu pela notificação, é a do
+                // lembrete; as outras são revisões à mão ("Rever agora").
+                var sessaoJogo by rememberSaveable { mutableStateOf(0) }
                 // A palavra aberta veio da Coleção: o "retroceder" da palavra
                 // leva de volta para lá, e não para o ecrã inicial.
                 var palavraDaColecao by rememberSaveable { mutableStateOf(false) }
@@ -148,31 +170,64 @@ class MainActivity : ComponentActivity() {
                 // Rever ou com uma palavra do leitor: nesse caso fica para a
                 // próxima vez que a app se abrir normalmente (e por isso a
                 // versão só se marca como vista quando a nota aparece).
-                var novidadesAbertas by rememberSaveable { mutableStateOf(false) }
+                // O código da versão cujas notas estão abertas (nulo: nenhuma).
+                var notasAbertas by rememberSaveable { mutableStateOf<Int?>(null) }
                 LaunchedEffect(Unit) {
                     if (!primeiraCriacao || daNotificacao || textoRecebido() != null) {
                         return@LaunchedEffect
                     }
                     val atual = BuildConfig.VERSION_CODE
-                    if (!mostrarNovidades(atual, preferencias.versaoVista(), foiAtualizacao())) {
-                        // Instalação nova (ou já vista): nada a mostrar, e as
-                        // notas desta versão ficam dadas como vistas.
-                        preferencias.marcarVersaoVista(atual)
-                        return@LaunchedEffect
-                    }
+                    val vista = preferencias.versaoVista()
                     preferencias.marcarVersaoVista(atual)
-                    novidadesAbertas = NOVIDADES[BuildConfig.VERSION_NAME] != null
+                    // Instalação nova (ou já vista): nada a mostrar, e as notas
+                    // ficam dadas como vistas. Senão, as mais recentes por ver,
+                    // mesmo que sejam de uma versão que não chegou a sair.
+                    if (mostrarNovidades(atual, vista, foiAtualizacao())) {
+                        notasAbertas = notasPorVer(atual, vista)
+                    }
                 }
-                if (novidadesAbertas) {
-                    NOVIDADES[BuildConfig.VERSION_NAME]?.let { notas ->
+                falhaDaAtualizacao?.let { motivo ->
+                    AlertDialog(
+                        onDismissRequest = { falhaDaAtualizacao = null },
+                        containerColor = Cores.card,
+                        title = {
+                            Text(
+                                "O dicionário não foi atualizado",
+                                style = Estilo.grupoTitulo, color = Cores.ink,
+                            )
+                        },
+                        text = {
+                            Text(
+                                "$motivo\n\nContinuas a usar o dicionário que já tinhas, e as "
+                                    + "tuas palavras estão todas aqui. A app volta a tentar "
+                                    + "da próxima vez que a abrires.",
+                                style = Estilo.texto, color = Cores.ink2,
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = { falhaDaAtualizacao = null },
+                                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+                            ) { Text("Continuar", style = Estilo.controloForte) }
+                        },
+                    )
+                }
+
+                // As novidades esperam que o aviso acima feche: dois diálogos
+                // de uma vez era demais.
+                if (falhaDaAtualizacao == null) {
+                    notasAbertas?.let { NOVIDADES[it] }?.let { notas ->
                         DialogoNovidades(
                             versao = BuildConfig.VERSION_NAME,
                             novidades = notas,
-                            aoFechar = { novidadesAbertas = false },
+                            aoFechar = { notasAbertas = null },
                             aoAgir = { acao ->
-                                novidadesAbertas = false
+                                notasAbertas = null
                                 when (acao) {
-                                    AcaoNovidade.ASPETO -> ecra = Ecra.DEFINICOES
+                                    AcaoNovidade.ASPETO -> {
+                                        abrirAspeto = true
+                                        ecra = Ecra.DEFINICOES
+                                    }
                                 }
                             },
                         )
@@ -229,16 +284,22 @@ class MainActivity : ComponentActivity() {
                                     preferencias,
                                     aoAbrirLicencas = { ecra = Ecra.LICENCAS },
                                     aoVoltar = { ecra = Ecra.PESQUISA },
+                                    aspetoAberto = abrirAspeto,
                                 )
                                 Ecra.LICENCAS -> EcraLicencas(aoVoltar = { ecra = Ecra.DEFINICOES })
                                 Ecra.JOGO -> {
-                                    // A chave leva o modo dentro: sem isso, ligar o Modo
-                                    // Desenvolvedor e voltar ao jogo reaproveitava o
-                                    // ViewModel antigo e o modo só fazia efeito depois
-                                    // de fechar a app.
+                                    // A chave leva a sessão e o modo dentro: cada abertura
+                                    // começa do zero (a fila mudou, o limite do dia
+                                    // também), e ligar o Modo Desenvolvedor faz efeito
+                                    // logo, sem fechar a app.
+                                    val doLembrete = daNotificacao && sessaoJogo == 0
                                     val jogo: JogoViewModel = viewModel(
-                                        key = "jogo-$desenvolvedor-$lemaDaNotificacao",
-                                        factory = fabricaJogo(app, desenvolvedor, lemaDaNotificacao),
+                                        key = "jogo-$sessaoJogo-$desenvolvedor",
+                                        factory = fabricaJogo(
+                                            app, preferencias, desenvolvedor,
+                                            lemaPreferido = if (doLembrete) lemaDaNotificacao else null,
+                                            deLembrete = doLembrete,
+                                        ),
                                     )
                                     EcraJogo(jogo, aoVoltar = { ecra = Ecra.PESQUISA })
                                 }
@@ -246,7 +307,10 @@ class MainActivity : ComponentActivity() {
                                     vm,
                                     preferencias,
                                     aoAbrirColecao = { ecra = Ecra.COLECAO },
-                                    aoAbrirJogo = { ecra = Ecra.JOGO },
+                                    aoAbrirJogo = {
+                                        sessaoJogo++
+                                        ecra = Ecra.JOGO
+                                    },
                                     aoAbrirLivro = { titulo ->
                                         livroPedido = titulo
                                         ecra = Ecra.COLECAO
@@ -294,8 +358,10 @@ class MainActivity : ComponentActivity() {
 
     private fun fabricaJogo(
         app: PalavrameApp,
+        preferencias: Preferencias,
         treinoLivre: Boolean,
         lemaPreferido: String?,
+        deLembrete: Boolean,
     ) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -303,6 +369,9 @@ class MainActivity : ComponentActivity() {
                 { app.dicionario }, app.utilizador,
                 treinoLivre = treinoLivre,
                 lemaPreferido = lemaPreferido,
+                deLembrete = deLembrete,
+                cotaRestante = { preferencias.cotaManual.value.restantes(LocalDate.now()) },
+                gastarCota = { preferencias.usarCotaManual() },
             ) as T
     }
 }
@@ -385,18 +454,32 @@ private fun LarguraDeLeitura(conteudo: @Composable () -> Unit) {
  * base por uma versao nova sem recompilar a app.
  */
 @Composable
-private fun EcraInstalarDicionario(app: PalavrameApp, aoFicarPronto: () -> Unit) {
+private fun EcraInstalarDicionario(
+    app: PalavrameApp,
+    aoFicarPronto: () -> Unit,
+    /**
+     * A atualização falhou mas havia uma base a funcionar. Antes, a pessoa
+     * ficava presa neste ecrã, com a mensagem de erro e as palavras todas
+     * guardadas mas sem app; agora segue com o dicionário que já tinha.
+     */
+    aoFalharComBaseAntiga: (String) -> Unit,
+) {
     var aCopiar by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
     val ambito = rememberCoroutineScope()
     val empacotado = remember { app.temDicionarioEmpacotado() }
+    // O tamanho real, para o texto de espera (era "São 200 MB", escrito à mão).
+    val tamanhoMb = remember { app.tamanhoDoDicionarioEmpacotado()?.let { (it + (1 shl 20) - 1) shr 20 } }
 
     LaunchedEffect(empacotado) {
         if (!empacotado) return@LaunchedEffect
         aCopiar = true
         when (val r = app.instalarDicionarioEmpacotado()) {
             is ResultadoImportacao.Feito -> { aCopiar = false; aoFicarPronto() }
-            is ResultadoImportacao.Erro -> { aCopiar = false; erro = r.motivo }
+            is ResultadoImportacao.Erro -> {
+                aCopiar = false
+                if (app.dicionario != null) aoFalharComBaseAntiga(r.motivo) else erro = r.motivo
+            }
         }
     }
 
@@ -434,7 +517,9 @@ private fun EcraInstalarDicionario(app: PalavrameApp, aoFicarPronto: () -> Unit)
                 CircularProgressIndicator(color = Cores.accent)
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "São 200 MB. Demora alguns segundos e só acontece uma vez.",
+                    if (tamanhoMb != null)
+                        "São $tamanhoMb MB. Demora alguns segundos e só acontece uma vez."
+                    else "Demora alguns segundos e só acontece uma vez.",
                     style = Estilo.texto,
                     color = Cores.ink2,
                 )

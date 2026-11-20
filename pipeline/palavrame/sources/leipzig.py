@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from ..config import EXAMPLE_MAX_CHARS, EXAMPLE_MIN_CHARS
-from ..text import normalize, tokens
+from ..text import nomes_proprios, normalize, surface_words
 from ..schema import Example, SourceEntry
 from .base import License, Source, SourceInfo, SourceUnavailable
 
@@ -116,8 +116,14 @@ class Leipzig(Source):
         for corpus, num, sentence in self._sentences(base):
             if not (EXAMPLE_MIN_CHARS <= len(sentence) <= EXAMPLE_MAX_CHARS):
                 continue
-            words = set(tokens(sentence))
-            hits = words & wanted if wanted is not None else words
+            # Forma de superfície, com acentos: o exemplo liga-se ao lema pela
+            # grafia exata (ver `_aplicar_exemplos_por_forma` no merge). Fora os
+            # nomes próprios — o Leipzig é jornal, e está cheio deles.
+            palavras = surface_words(sentence)
+            proprios = nomes_proprios(palavras)
+            surface = {w.lower() for w in palavras} - proprios
+            hits = ({w for w in surface if normalize(w) in wanted}
+                    if wanted is not None else surface)
             for word in hits:
                 if len(by_word[word]) >= 20:      # teto por palavra
                     continue
@@ -130,19 +136,22 @@ class Leipzig(Source):
                     )
                 )
 
-        seen = set()
+        # `ranks` está indexado pela forma normalizada; `by_word` pela forma de
+        # superfície. A frequência de uma forma de superfície procura-se pela
+        # sua normalizada, e o registo do que já saiu também é por normalizada.
+        seen_norm = set()
         for word, examples in by_word.items():
-            seen.add(word)
+            seen_norm.add(normalize(word))
             yield SourceEntry(
                 lemma=word,
                 source=self.slug,
                 examples=examples,
-                frequency_rank=ranks.get(word),
+                frequency_rank=ranks.get(normalize(word)),
             )
         # Palavras com frequência mas sem frase aproveitável continuam a valer:
         # o `frequency_rank` sozinho já ordena desambiguações.
         for word, rank in ranks.items():
-            if word not in seen and (wanted is None or word in wanted):
+            if word not in seen_norm and (wanted is None or word in wanted):
                 yield SourceEntry(lemma=word, source=self.slug, frequency_rank=rank)
 
     # --- leitura ----------------------------------------------------------

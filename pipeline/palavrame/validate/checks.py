@@ -78,6 +78,7 @@ def validate_database(
     *,
     distribution: bool = False,
     probes: Iterable[tuple[str, str]] = (),
+    acrescentos: Iterable[str] = (),
 ) -> ValidationReport:
     """Valida uma DB construída.
 
@@ -85,6 +86,10 @@ def validate_database(
     ponta a ponta, exatamente como a app a faz: normaliza, procura em `forms`,
     salta para `lemmas`. É a verificação que apanha uma tabela `forms` vazia
     ou mal ligada, que de outra forma só se descobria com a app na mão.
+
+    `acrescentos` são os lemas normalizados que a curadoria marcou como
+    acrescento (ver `sources/curadoria.py`): ter também definição publicada
+    é o esperado, e não contam como curadoria redundante.
     """
     report = ValidationReport()
     if not path.exists():
@@ -98,7 +103,7 @@ def validate_database(
         _check_contents(conn, report)
         _check_search(conn, report, probes)
         _check_provenance(conn, report)
-        _check_curadoria(conn, report)
+        _check_curadoria(conn, report, set(acrescentos))
         _check_preenchimento(conn, report)
         _check_licenses(conn, report, infos, distribution)
     finally:
@@ -283,8 +288,12 @@ def _check_preenchimento(conn: sqlite3.Connection, report: ValidationReport) -> 
         )
 
 
-def _check_curadoria(conn: sqlite3.Connection, report: ValidationReport) -> None:
-    """A curadoria manual só deve preencher lacunas.
+def _check_curadoria(
+    conn: sqlite3.Connection,
+    report: ValidationReport,
+    acrescentos: "set[str]" = frozenset(),
+) -> None:
+    """A curadoria manual só deve preencher lacunas (ou acrescentar de propósito).
 
     Regra dada pelo Jorge quando aprovou a fonte: escreve-se à mão *só* o que
     não está disponível em mais nenhuma fonte aberta. Uma palavra curada que
@@ -292,6 +301,10 @@ def _check_curadoria(conn: sqlite3.Connection, report: ValidationReport) -> None
     porque uma fonte nova entrou — deixou de precisar da linha, e é isso que
     este aviso serve para dizer. Nunca bloqueia: a definição curada continua
     válida e fica em segundo lugar, mas a linha pode sair do CSV.
+
+    Os acrescentos (sentidos em falta numa palavra que já tem definição) ficam
+    de fora do aviso: aí a definição publicada existe e é isso mesmo que se
+    quer completar.
     """
     curadas = conn.execute(
         "SELECT COUNT(*) FROM senses s JOIN sources src ON src.id = s.source_id"
@@ -314,6 +327,15 @@ def _check_curadoria(conn: sqlite3.Connection, report: ValidationReport) -> None
             (CURADORIA, CURADORIA),
         )
     ]
+    acrescentadas = [l for l in redundantes if normalize(l) in acrescentos]
+    redundantes = [l for l in redundantes if normalize(l) not in acrescentos]
+    if acrescentadas:
+        report.add(
+            "curadoria: acrescentos", "info",
+            f"{len(acrescentadas)} palavras com um sentido acrescentado à mão "
+            "ao lado da definição publicada",
+            ", ".join(acrescentadas[:12]) + (" …" if len(acrescentadas) > 12 else ""),
+        )
     if redundantes:
         report.add(
             "curadoria redundante", "aviso",

@@ -36,6 +36,9 @@ sealed interface EstadoJogo {
      */
     data object NadaARever : EstadoJogo
 
+    /** Já se reviram à mão as do dia (`LIMITE_MANUAL_POR_DIA`). */
+    data class LimiteDoDia(val limite: Int) : EstadoJogo
+
     data class AJogar(
         val pergunta: Pergunta,
         val respondida: Int? = null,
@@ -54,14 +57,15 @@ sealed interface EstadoJogo {
         /** Não havia nada vencido: joga-se, mas o calendário não mexe. */
         val treinoLivre: Boolean = false,
         /**
-         * Deixa encadear palavras.
-         *
-         * Só no Modo Desenvolvedor, e a razão é prática: verificar perguntas
-         * uma a uma, fechando e reabrindo a app entre cada, é trabalho a
-         * mais para quem está a caçar defeitos. Foi assim que apareceram os
-         * seis problemas de 5 de agosto.
+         * Deixa seguir para outra palavra depois de responder: há mais
+         * vencidas e o limite do dia ainda o permite (no Modo Desenvolvedor,
+         * sempre).
          */
         val podeSeguir: Boolean = false,
+        /** O texto do botão de seguir: "Palavra seguinte" ou, depois de um lembrete, "Rever mais". */
+        val rotuloSeguir: String = "Palavra seguinte",
+        /** Quantas ainda se podem rever à mão hoje, para uma linha discreta; nulo sem limite. */
+        val restamHoje: Int? = null,
     ) : EstadoJogo {
         val acertou: Boolean? get() = respondida?.let { it == pergunta.indiceCerto }
     }
@@ -85,10 +89,10 @@ class JogoViewModel(
      * O Modo Desenvolvedor está ligado.
      *
      * Muda duas coisas, ambas para quem está a caçar defeitos e nenhuma para
-     * quem lê: deixa jogar **mesmo sem nada vencido** — sem esperar dias que
-     * uma palavra volte — e deixa **encadear palavras** em vez de uma por
-     * sessão. Para quem lê, o jogo é uma pergunta que chega pelo lembrete, e
-     * "não há nada a rever" é uma resposta boa.
+     * quem lê: deixa jogar **mesmo sem nada vencido** (sem esperar dias que
+     * uma palavra volte, e sem mexer no calendário) e **sem o limite do
+     * dia**. Para quem lê, revê-se o que está vencido, e "não há nada a
+     * rever" é uma resposta boa.
      */
     private val treinoLivre: Boolean = false,
     /**
@@ -100,6 +104,16 @@ class JogoViewModel(
      * acabadas de registar são as primeiras da fila.
      */
     private val lemaPreferido: String? = null,
+    /**
+     * A sessão abriu pelo lembrete. A primeira pergunta é a do lembrete e não
+     * conta para o limite do dia; se a pessoa quiser continuar ("Rever
+     * mais"), as seguintes já contam.
+     */
+    deLembrete: Boolean = false,
+    /** Quantas revisões à mão ainda se podem fazer hoje. */
+    private val cotaRestante: () -> Int = { Int.MAX_VALUE },
+    /** Conta uma revisão à mão (uma resposta). */
+    private val gastarCota: () -> Unit = {},
     private val aleatorio: Random = Random.Default,
     private val agora: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -114,17 +128,28 @@ class JogoViewModel(
     private var todas: Map<String, Candidata> = emptyMap()
     private var semCalendario = false
 
+    /**
+     * As respostas contam para o limite do dia: é uma revisão à mão (aberta
+     * em "Rever agora", ou continuada depois de um lembrete). O treino livre
+     * do Modo Desenvolvedor não conta nem tem limite.
+     */
+    private var manual = !deLembrete && !treinoLivre
+
+    /** A palavra do lembrete só vale para a primeira pergunta. */
+    private var preferido = lemaPreferido
+
     init { comecar() }
 
     /**
-     * Uma sessão é **uma pergunta**.
+     * Uma pergunta de cada vez, e a pessoa decide se segue.
      *
-     * Foi assim que o jogo foi pensado e é assim que se comporta: chega a
-     * notificação, responde-se, acabou. Um "palavra seguinte" transformava
-     * um gesto de dez segundos numa sessão de estudo, e a app deixava de
-     * caber no intervalo em que se pousa o livro.
-     *
-     * Quem quiser mais responde à notificação seguinte.
+     * Até à 1.19 uma sessão era **uma** pergunta, só pelo lembrete: chega a
+     * notificação, responde-se, acabou. Não acompanhava quem lê muito: com
+     * no máximo 6 lembretes por dia e umas 6 revisões por palavra nos
+     * primeiros dois meses, quem registava várias palavras por dia acumulava
+     * uma fila sem fim, e quem não ligava as notificações não tinha jogo
+     * nenhum. Agora pode-se rever à mão, encadeando perguntas, até um limite
+     * diário (`LIMITE_MANUAL_POR_DIA`) que mantém a app calma.
      */
     fun comecar() {
         viewModelScope.launch {
@@ -133,7 +158,14 @@ class JogoViewModel(
         }
     }
 
+    /** "Palavra seguinte" ou "Rever mais": a partir daqui, as respostas contam para o limite. */
+    fun continuar() {
+        if (!treinoLivre) manual = true
+        comecar()
+    }
+
     private suspend fun montar(): EstadoJogo {
+        if (manual && cotaRestante() <= 0) return EstadoJogo.LimiteDoDia(LIMITE_MANUAL_POR_DIA)
         val guardadas = utilizador.palavras().todasAgora()
         // As mesmas funções que o lembrete usa (ver `Escolha.kt`): a palavra
         // anunciada na notificação é sempre uma que o jogo consegue perguntar.
@@ -159,7 +191,8 @@ class JogoViewModel(
         // A palavra anunciada pela notificação passa à frente. Se já não
         // estiver na fila — porque foi respondida entretanto, ou esquecida —
         // segue-se a ordem normal, sem drama.
-        val fila = bruta.sortedByDescending { it.lemma == lemaPreferido }
+        val fila = bruta.sortedByDescending { it.lemma == preferido }
+        preferido = null
 
         // Percorre-se a fila até uma palavra dar pergunta. Uma que não dê
         // não é falha nenhuma: quer dizer que não havia distrações à altura.
@@ -169,7 +202,6 @@ class JogoViewModel(
             return EstadoJogo.AJogar(
                 pergunta = pergunta,
                 treinoLivre = semCalendario,
-                podeSeguir = treinoLivre,
             )
         }
         return EstadoJogo.SemPerguntaPossivel
@@ -204,11 +236,18 @@ class JogoViewModel(
                     contaParaOCalendario = !semCalendario,
                 )
                 gravar(guardada, avanco)
+                if (manual && !semCalendario) gastarCota()
+                // Há mais para rever? (Esta já não está vencida.)
+                val maisVencidas = utilizador.palavras().vencidas(agora())
+                    .count { it.lemma in todas && it.lemma != lemma }
                 Resultado(
                     dicionario?.entradaPorLema(lemma), avanco, avanco.ganho(anterior),
                     Niveis.subiu(anterior.acertos, avanco.pontuacao.acertos),
+                    maisVencidas,
                 )
             }
+            val restantes = cotaRestante()
+            val podeSeguir = treinoLivre || (resultado.maisVencidas > 0 && restantes > 0)
 
             _estado.value = atual.copy(
                 respondida = opcao,
@@ -222,6 +261,9 @@ class JogoViewModel(
                 total = resultado.avanco.pontuacao.pontos,
                 sequencia = resultado.avanco.pontuacao.sequencia,
                 subiuDeNivel = resultado.subiuDeNivel,
+                podeSeguir = podeSeguir,
+                rotuloSeguir = if (manual || treinoLivre) "Palavra seguinte" else "Rever mais",
+                restamHoje = if (podeSeguir && !treinoLivre) restantes else null,
             )
           } finally {
             aResponder = false
@@ -235,6 +277,7 @@ class JogoViewModel(
         val avanco: Avanco,
         val ganho: Int,
         val subiuDeNivel: Nivel?,
+        val maisVencidas: Int,
     )
 
     private suspend fun pontuacaoAtual(): Pontuacao {

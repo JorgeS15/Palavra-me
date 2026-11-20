@@ -1,6 +1,7 @@
 package pt.jorges15.palavrame.jogo
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -279,5 +280,52 @@ class PerguntasTest {
             "cárcere que fica de baixo, escuro e húmido",
         )
         assertTrue("semelhança inesperada: $baixa", baixa < 0.34)
+    }
+
+    // --- remissões ("Vide ação") -------------------------------------------
+
+    @Test
+    fun `reconhece as remissoes das tres fontes`() {
+        assertTrue(Perguntas.eRemissao("Vide ação"))
+        assertTrue(Perguntas.eRemissao("V. rhizophoráceas."))
+        assertTrue(Perguntas.eRemissao("V. t. (e der.)"))
+        assertTrue(Perguntas.eRemissao("Ver bulevar"))
+        assertTrue(Perguntas.eRemissao("Ver roquefor (variedade de queijo)"))
+    }
+
+    @Test
+    fun `definicoes que comecam como remissoes nao sao remissoes`() {
+        assertFalse(Perguntas.eRemissao("Ver com atenção."))
+        assertFalse(Perguntas.eRemissao("Videira pequena."))
+        assertFalse(Perguntas.eRemissao("Vista; visão."))
+    }
+
+    @Test
+    fun `o jogo nunca usa uma remissao como definicao`() {
+        // "acção": a remissão vinha à frente e dava "Vide ação; modo de
+        // actuar", uma opção que entregava a resposta.
+        val d = Perguntas.definicaoParaJogo(
+            listOf("Vide ação", "Modo de actuar; maneira de agir sobre alguma coisa."),
+            "acção",
+        )
+        assertNotNull(d)
+        assertFalse("ficou a remissão: $d", d!!.contains("Vide") || d.contains("ação;"))
+    }
+
+    @Test
+    fun `palavra so com remissoes nao joga`() {
+        assertNull(Perguntas.definicaoParaJogo(listOf("Vide ótimo"), "óptimo"))
+    }
+
+    @Test
+    fun `remissao para a propria palavra reconhece-se, mesmo com outra grafia`() {
+        assertTrue(Perguntas.eAutoRemissao("Vide lacónico", "lacónico"))
+        assertTrue(Perguntas.eAutoRemissao("Vide abril", "Abril"))
+        assertTrue(Perguntas.eAutoRemissao("Vide alcaloide", "alcalóide"))
+        // Uma remissão para outra palavra fica: é a única pista que há.
+        assertFalse(Perguntas.eAutoRemissao("Vide ação", "acção"))
+        assertFalse(Perguntas.eAutoRemissao("Ver bulevar", "boulevard"))
+        // E uma definição a sério nunca é remissão.
+        assertFalse(Perguntas.eAutoRemissao("Que fala pouco.", "lacónico"))
     }
 }

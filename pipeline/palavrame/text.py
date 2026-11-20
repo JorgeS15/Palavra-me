@@ -40,6 +40,18 @@ _CITACAO = re.compile(
 # `Freqüente`, `agüenta`. São 54 aceções, mas destoam à vista.
 _TREMA = str.maketrans("üïÜÏ", "uiUI")
 
+# Ligações de wikitexto que escapam à extração do Wikcionário e chegam ao ecrã
+# cruas: `[[manguito:2]]`, `[[fruto|manga]]`. Fica só o texto legível — o texto
+# de apresentação quando há `|`, senão o alvo sem a âncora de secção (`:2`, `#`).
+_WIKILINK = re.compile(r"\[\[(.+?)\]\]")
+
+
+def _texto_de_wikilink(m: "re.Match[str]") -> str:
+    interior = m.group(1)
+    if "|" in interior:
+        return interior.split("|")[-1]
+    return re.split(r"[:#]", interior, 1)[0]
+
 
 def strip_accents(s: str) -> str:
     """Remove diacríticos, preservando o resto.
@@ -69,6 +81,8 @@ def clean_definition(s: str) -> str:
     nunca um efeito secundário da limpeza.
     """
     s = _ESPACOS.sub(" ", s.replace("\n", " ")).strip()
+    # Ligações de wikitexto que sobraram: `[[manguito:2]]` -> `manguito`.
+    s = _WIKILINK.sub(_texto_de_wikilink, s)
     # O Dicionário Aberto marca itálicos com sublinhados — `_autor_` — que
     # são marcação da fonte, não texto. Chegavam intactos ao ecrã da app em
     # 48 mil aceções (13% do total). Tira-se o sublinhado e guarda-se a
@@ -112,9 +126,97 @@ def clean_definition(s: str) -> str:
     return s
 
 
+def sem_trema(s: str) -> str:
+    """Remove o trema, abolido no português (`reünir` -> `reunir`, `lângüido`
+    -> `lânguido`). Ao contrário do acento, o trema não distingue palavras: é
+    sempre grafia velha da mesma palavra."""
+    return s.translate(_TREMA)
+
+
 def tokens(s: str) -> list[str]:
     """Palavras normalizadas de uma frase, para validação de exemplos."""
     return [t for t in normalize(s).replace("-", " ").split(" ") if t]
+
+
+def surface_words(s: str) -> list[str]:
+    """Palavras de uma frase, com acentos e **com a caixa original**.
+
+    Preserva a maiúscula para se poder distinguir um nome próprio a meio da
+    frase (*Nené*, o jogador) do substantivo comum (*nené*). É NFC para a
+    grafia bater certo com a das formas na fusão.
+    """
+    limpa = _LIMPEZA.sub(" ", unicodedata.normalize("NFC", s).translate(_TREMA))
+    return [t for t in limpa.replace("-", " ").split(" ") if t]
+
+
+def nomes_proprios(palavras: list[str]) -> set[str]:
+    """Palavras (minúsculas) que na frase só aparecem como nome próprio.
+
+    Uma palavra capitalizada **a meio** da frase, e que nunca aparece em
+    minúscula nem no início, é quase de certeza um nome próprio — *Nené* o
+    jogador, e não o substantivo *nené*. Ligar um exemplo desses ao
+    substantivo comum não ensina nada. Maiúsculas por inteiro (siglas, ADN)
+    não contam.
+    """
+    proprias: set[str] = set()
+    comuns: set[str] = set()
+    for i, w in enumerate(palavras):
+        base = w.lower()
+        if i > 0 and w[:1].isupper() and w != w.upper():
+            proprias.add(base)
+        else:
+            comuns.add(base)
+    return proprias - comuns
+
+
+def surface_tokens(s: str) -> list[str]:
+    """Palavras de uma frase em minúsculas, mas **com os acentos**.
+
+    Ao contrário de `tokens`, não remove diacríticos. Serve para ligar um
+    exemplo ao lema pela forma exata: "bebe" (flexão de *beber*) e "bebé" (o
+    nome) normalizam para a mesma coisa, mas são palavras diferentes, e uma
+    frase com "bebe" não pode ir parar à entrada de "bebé". A ligação por
+    forma normalizada colava-as; esta preserva a distinção.
+    """
+    return [w.lower() for w in surface_words(s)]
+
+
+# Sinais de que uma "frase" é na verdade uma fórmula ou uma remissão, e não um
+# exemplo de uso: `reciclar + -abilidade = reciclabilidade`, `a → b`.
+_FORMULA = re.compile(r"\s[=+]\s|→|::")
+_PALAVRA = re.compile(r"[^\W\d_]{2,}")
+
+
+def frase_utilizavel(texto: str, minimo: int = 20, maximo: int = 140) -> bool:
+    """Serve esta frase para mostrar como exemplo de uso?
+
+    O Wikcionário aceita como exemplo qualquer coisa que um editor lá tenha
+    posto, e nem tudo é uma frase: apanhava fragmentos de verso (*"26 poetas
+    hoje"*, cortado a meio), fórmulas de derivação, listas de números, títulos
+    de livros e palavras soltas. Nenhuma dessas ensina a palavra a quem a
+    encontrou a ler.
+
+    As regras são deliberadamente tolerantes com a **pontuação**: muitas frases
+    boas do Wikcionário não acabam em ponto (*"o prisioneiro foi atado"*), e
+    exigi-lo deitava fora exemplos perfeitamente úteis. O que se exige é que
+    aquilo *pareça* uma frase — comprimento de leitura, palavras que cheguem,
+    e texto e não símbolos.
+    """
+    t = texto.strip()
+    if not (minimo <= len(t) <= maximo):
+        return False
+    # Menos de quatro palavras de verdade não demonstra uso — é um termo, um
+    # título, um par ("cebolada, papelada"), não uma frase.
+    if len(_PALAVRA.findall(t)) < 4:
+        return False
+    # Dominado por dígitos ou símbolos: "1, 2, 3, ..., 99, 100".
+    if sum(ch.isalpha() for ch in t) < len(t) * 0.55:
+        return False
+    if t == t.upper():                     # TÍTULO OU CABEÇALHO EM MAIÚSCULAS
+        return False
+    if _FORMULA.search(t):
+        return False
+    return True
 
 
 # --- glosas de wordnet -----------------------------------------------------
@@ -144,26 +246,27 @@ _EXEMPLO_EM_ASPAS = re.compile(r'[;,]?\s*"[^"]*"')
 def parece_do_brasil(texto: str) -> bool:
     """A glosa está em português do Brasil?
 
-    Não é um detetor de variante a sério — é um filtro de ortografia, e só
-    isso. Chega para o que se lhe pede: tirar da base as glosas que se
-    denunciam à primeira leitura.
+    Não é um detetor de variante a sério — é um crivo estreito de marcas
+    ortográficas inequívocas (ver `_BRASILEIRO`). Um falso positivo perde uma
+    glosa boa, o que é barato; um falso negativo põe *oxigênio* no ecrã de uma
+    app de literatura portuguesa, o que custa a credibilidade. Na dúvida,
+    rejeita-se.
     """
     return bool(_BRASILEIRO.search(texto))
 
 
 def limpar_glosa(texto: str) -> str:
-    """Reduz uma glosa de wordnet a uma definição apresentável.
+    """Dá a uma glosa do wordnet o aspeto de uma definição de dicionário.
 
-    Tira os exemplos entre aspas, normaliza espaços, começa por maiúscula e
-    acaba em ponto — para ficar ao lado das aceções do Dicionário Aberto sem
-    se distinguir pela pontuação.
+    Tira o exemplo entre aspas do formato de Princeton (*definição; "frase"*),
+    e o que sobra ganha inicial maiúscula e um ponto final — para, ao lado das
+    aceções de 1913, não se distinguir pela pontuação. Uma glosa que era só um
+    exemplo entre aspas fica vazia, e nesse caso não dá definição nenhuma.
     """
-    s = _EXEMPLO_EM_ASPAS.sub("", texto)
-    s = clean_definition(s)
-    if not s:
+    t = _EXEMPLO_EM_ASPAS.sub("", texto).strip()
+    t = t.rstrip(" ;,.")
+    if not t:
         return ""
-    if s[0].islower():
-        s = s[0].upper() + s[1:]
-    if s[-1] not in ".!?":
-        s += "."
-    return s
+    if t[0].islower():
+        t = t[0].upper() + t[1:]
+    return t + "." 

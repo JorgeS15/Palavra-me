@@ -1,5 +1,6 @@
 package pt.jorges15.palavrame.data
 
+import androidx.room.withTransaction
 import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +88,10 @@ object Backup {
     ): Resultado = withContext(Dispatchers.IO) {
         try {
             val json = serializar(palavras, progresso, versaoDaApp)
-            context.contentResolver.openOutputStream(destino)?.use { saida ->
+            // "wt": truncar. Sem o modo, escrever por cima de uma cópia mais
+            // comprida deixava o resto da antiga no fim, e o JSON ficava
+            // inválido sem ninguém dar por isso até precisar dele.
+            context.contentResolver.openOutputStream(destino, "wt")?.use { saida ->
                 saida.write(json.toByteArray(Charsets.UTF_8))
             } ?: return@withContext Resultado.Erro("Não consegui escrever no ficheiro.")
             Resultado.Feito(palavras.size, 0)
@@ -106,12 +110,15 @@ object Backup {
      * restaura numa mudança de telemóvel, mas nunca esmaga um progresso já em
      * uso (por isso importar uma cópia velha por cima de uma coleção viva não
      * faz recuar a sequência).
+     *
+     * Numa transação só: ou entra a cópia inteira, ou nada. Antes, uma falha a
+     * meio deixava uma importação parcial, e repetir dava "N já existiam" sem
+     * se saber o que faltava.
      */
     suspend fun importar(
         context: Context,
         origem: Uri,
-        palavrasDao: PalavrasDao,
-        progressoDao: ProgressoDao,
+        db: UtilizadorDb,
     ): Resultado = withContext(Dispatchers.IO) {
         try {
             val texto = context.contentResolver.openInputStream(origem)
@@ -123,8 +130,11 @@ object Backup {
                     "Isto não parece uma cópia do Palavra-me."
                 )
 
+            val palavrasDao = db.palavras()
+            val progressoDao = db.progresso()
             var novas = 0
             var jaExistiam = 0
+            db.withTransaction {
             for (palavra in conteudo.palavras) {
                 if (palavrasDao.porLema(palavra.lemma) != null) {
                     jaExistiam++
@@ -141,6 +151,7 @@ object Backup {
                 if (atual == null || atual.estaVazio()) {
                     progressoDao.guardar(importado.copy(id = 1))
                 }
+            }
             }
 
             Resultado.Feito(novas, jaExistiam)
@@ -178,7 +189,9 @@ object Backup {
             frase = o.optString("frase").takeIf { it.isNotBlank() },
             note = o.optString("nota").takeIf { it.isNotBlank() },
             significado = o.optString("significado").takeIf { it.isNotBlank() },
-            mastery = o.optInt("dominio", 0),
+            // A caixa de Leitner vai de 0 a 5; um ficheiro editado à mão (ou
+            // estragado) não pode pôr a palavra numa caixa que não existe.
+            mastery = o.optInt("dominio", 0).coerceIn(0, 5),
             revistaEm = if (o.has("revista_em")) o.optLong("revista_em") else null,
             proximaRevisao = if (o.has("proxima_revisao")) o.optLong("proxima_revisao") else null,
         )

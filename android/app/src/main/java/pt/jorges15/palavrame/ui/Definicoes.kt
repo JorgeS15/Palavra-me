@@ -24,6 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Remove
@@ -35,6 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.BuildConfig
@@ -63,6 +69,8 @@ fun EcraDefinicoes(
     preferencias: Preferencias,
     aoAbrirLicencas: () -> Unit,
     @Suppress("UNUSED_PARAMETER") aoVoltar: () -> Unit,
+    // Vindo da nota de novidades ("Ver o Aspeto"), abre já a secção.
+    aspetoAberto: Boolean = false,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as PalavrameApp
@@ -95,10 +103,7 @@ fun EcraDefinicoes(
         if (origem == null) return@rememberLauncherForActivityResult
         ambito.launch {
             mensagemBackup = when (
-                val r = Backup.importar(
-                    context, origem,
-                    app.utilizador.palavras(), app.utilizador.progresso(),
-                )
+                val r = Backup.importar(context, origem, app.utilizador)
             ) {
                 is Backup.Resultado.Feito -> buildString {
                     append("Importadas ${r.novas} palavras")
@@ -129,7 +134,7 @@ fun EcraDefinicoes(
             Text("Definições", style = Estilo.tituloEcra, color = Cores.ink)
 
             Seccao("Aspeto")
-            SeccaoAspeto(preferencias, tema)
+            SeccaoAspeto(preferencias, tema, abertaDeInicio = aspetoAberto)
 
             Seccao("Rever")
             GrupoCartao { SeccaoJogo(preferencias) }
@@ -285,18 +290,68 @@ fun EcraDefinicoes(
  * Responde a duas queixas de quem usa a app: o tom "amarelado" e a serifa.
  */
 @Composable
-private fun SeccaoAspeto(preferencias: Preferencias, tema: Tema) {
+private fun SeccaoAspeto(preferencias: Preferencias, tema: Tema, abertaDeInicio: Boolean) {
     val paleta by preferencias.paleta.collectAsState()
     val letra by preferencias.letra.collectAsState()
     val escuro = LocalModoEscuro.current
     val forma = RoundedCornerShape(20.dp)
+    // Fechada por omissão: escolhe-se uma vez e raramente se volta cá, e
+    // aberta ocupava o ecrã inteiro antes de tudo o resto. Fechada mostra o
+    // que está escolhido, numa linha.
+    var aberta by rememberSaveable { mutableStateOf(abertaDeInicio) }
     Column(
         Modifier
             .fillMaxWidth()
             .clip(forma)
             .background(Cores.card)
             .border(1.dp, Cores.line, forma)
-            .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 16.dp),
+            .animateContentSize(),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { aberta = !aberta }
+                .padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    listOf(
+                        if (tema == Tema.SISTEMA) "Sistema" else tema.etiqueta,
+                        paleta.nome,
+                        letra.nome,
+                    ).joinToString(" · "),
+                    style = Estilo.corpo.copy(fontSize = 16.sp),
+                    color = Cores.ink,
+                )
+                Text(
+                    "Modo, cores e letra",
+                    style = Estilo.ajuda.copy(fontSize = 12.5.sp),
+                    color = Cores.ink2,
+                )
+            }
+            Icon(
+                if (aberta) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                contentDescription = if (aberta) "Ocultar o aspeto" else "Mostrar o aspeto",
+                tint = Cores.ink3,
+            )
+        }
+        if (aberta) AspetoAberto(preferencias, tema, paleta, letra, escuro)
+    }
+}
+
+@Composable
+private fun AspetoAberto(
+    preferencias: Preferencias,
+    tema: Tema,
+    paleta: PaletaId,
+    letra: LetraId,
+    escuro: Boolean,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // O modo. "Como o telemóvel" encurta-se para "Sistema": não cabia, e
@@ -585,12 +640,24 @@ private fun SeccaoJogo(preferencias: Preferencias) {
 
     fun reagendar() = Lembrete.agendar(context, quantos, inicio, fim)
 
+    // A autorização pode mudar fora da app (nas definições do sistema), por
+    // isso confere-se cada vez que se volta a este ecrã.
+    var notificacoesAtivas by remember { mutableStateOf(Lembrete.notificacoesAtivas(context)) }
+    var recusada by rememberSaveable { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        notificacoesAtivas = Lembrete.notificacoesAtivas(context)
+        if (notificacoesAtivas) recusada = false
+    }
+
     val pedido = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { concedida ->
         // Sem permissão não se liga: um interruptor ligado que não notifica
-        // seria uma mentira na interface.
+        // seria uma mentira na interface. Mas diz-se porquê: antes ficava só
+        // desligado, e numa segunda recusa o Android nem volta a perguntar.
         preferencias.definirJogoLigado(concedida)
+        recusada = !concedida
+        notificacoesAtivas = Lembrete.notificacoesAtivas(context)
         if (concedida) reagendar()
     }
 
@@ -612,6 +679,37 @@ private fun SeccaoJogo(preferencias: Preferencias) {
             }
         },
     )
+
+    // Recusada agora, ou retirada depois no sistema com os lembretes ligados:
+    // os lembretes não chegam, e diz-se, com o atalho para resolver.
+    val aviso = when {
+        // Entre parênteses: num ramo do `when`, uma linha começada por "+"
+        // seria lida como uma instrução nova e não como a continuação.
+        recusada && !ligado -> (
+            "Sem autorização para notificações, os lembretes não podem chegar. "
+                + "Podes dá-la nas definições da app, ou rever à mão no ecrã inicial."
+            )
+        ligado && !notificacoesAtivas -> (
+            "As notificações da Palavra-me estão desligadas no telemóvel, por isso "
+                + "os lembretes não estão a chegar."
+            )
+        else -> null
+    }
+    if (aviso != null) {
+        Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp)) {
+            Text(aviso, style = Estilo.ajuda, color = Cores.err)
+            TextButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    )
+                },
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+            ) { Text("Abrir definições das notificações", style = Estilo.controloForte) }
+        }
+    }
 
     if (!ligado) return
 

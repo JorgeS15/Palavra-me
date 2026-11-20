@@ -166,6 +166,73 @@ def test_conteudo_curado_declara_licenca_e_atribuicao():
     assert "BY-SA" in licenca.name.upper()   # acompanha a base derivada
 
 
+def test_curadoria_abre_lema_novo_quando_falta_a_todas_as_fontes():
+    """`adelgaçante` não está no VOC nem em fonte aberta nenhuma. A curadoria
+    é o único canal para o acrescentar — e, em modo estrito (a F1), tem de
+    conseguir CRIAR o lema, não só preencher um que já exista. É a regra 2 da
+    fonte: abre lema novo quando ninguém reclamou aquela grafia.
+    """
+    voc = SourceEntry(lemma="casa", source="voc_cplp", pos="substantivo")
+    curada = SourceEntry(
+        lemma="adelgaçante", source="curadoria", pos="adjetivo",
+        senses=[Sense("Que adelgaça.", "curadoria", ord=1)],
+    )
+    resultado = merge_entries([voc, curada], strict_backbone=True)
+    porlema = {e.lemma: e for e in resultado.entries}
+    assert "adelgaçante" in porlema
+    assert porlema["adelgaçante"].pos == "adjetivo"
+    assert [s.definition for s in porlema["adelgaçante"].senses] == ["Que adelgaça."]
+
+
+def test_curadoria_nao_duplica_lema_da_autoridade():
+    """Se a palavra curada já está no VOC, a curadoria PREENCHE — não abre uma
+    segunda entrada. `so_grupo_vazio` garante-o."""
+    voc = SourceEntry(lemma="exultar", source="voc_cplp", pos="verbo")
+    curada = SourceEntry(
+        lemma="exultar", source="curadoria", pos="verbo",
+        senses=[Sense("Ter grande alegria.", "curadoria", ord=1)],
+    )
+    resultado = merge_entries([voc, curada], strict_backbone=True)
+    assert [e.lemma for e in resultado.entries] == ["exultar"]
+
+
+def test_coluna_formas_e_opcional_e_le_varias(cache, paths):
+    _escrever(paths, (
+        "lema,classe,definicao,nota,formas\n"
+        'adelgaçante,adjetivo,"Que adelgaça.",,adelgaçantes\n'
+        'sesgo,substantivo,"Corte em viés.",,sesgos; sesgas ;sesgo\n'
+        'ensonado,adjetivo,"Que tem sono.",\n'
+    ))
+    entries = {e.lemma: e for e in build_source("curadoria", cache).parse()}
+    assert [f.form for f in entries["adelgaçante"].forms] == ["adelgaçantes"]
+    # Separadas por ";", sem espaços, e sem repetir o próprio lema.
+    assert [f.form for f in entries["sesgo"].forms] == ["sesgos", "sesgas"]
+    # Linha sem a coluna: continua válida, sem formas.
+    assert entries["ensonado"].forms == []
+
+
+def test_forma_curada_leva_a_pesquisa_ao_lema(tmp_path):
+    """O caminho completo: "adelgaçantes" na tabela `forms` aponta para o lema
+    "adelgaçante", que só a curadoria conhece."""
+    from palavrame.schema import Form
+
+    voc = SourceEntry(lemma="casa", source="voc_cplp", pos="substantivo")
+    curada = SourceEntry(
+        lemma="adelgaçante", source="curadoria", pos="adjetivo",
+        senses=[Sense("Que adelgaça.", "curadoria", ord=1)],
+        forms=[Form("adelgaçantes", "curadoria")],
+    )
+    resultado = merge_entries([voc, curada], strict_backbone=True)
+    caminho = tmp_path / "d.db"
+    build_database(caminho, resultado.entries, [CURADORIA_INFO], db_version="t")
+    conn = sqlite3.connect(caminho)
+    lemas = [r[0] for r in conn.execute(
+        "SELECT l.lemma FROM forms f JOIN lemmas l ON l.id = f.lemma_id"
+        " WHERE f.normalized = ?", ("adelgacantes",))]
+    conn.close()
+    assert lemas == ["adelgaçante"]
+
+
 def test_ficheiro_do_repositorio_e_valido(cache):
     """O `seeds/curadoria.csv` que vai no repositório tem de ler-se.
 
@@ -178,3 +245,57 @@ def test_ficheiro_do_repositorio_e_valido(cache):
             assert sense.definition.strip()
             assert sense.definition[0].isupper()
             assert sense.definition.rstrip().endswith(".")
+
+
+# --- acrescentos: sentidos em falta numa palavra que já tem definição --------
+
+
+def test_le_os_lemas_marcados_como_acrescento(paths):
+    from palavrame.sources.curadoria import lemas_acrescentados
+
+    _escrever(paths, (
+        "lema,classe,definicao,nota\n"
+        'ensonado,adjetivo,"Que tem sono.",\n'
+        'rebarbativo,adjetivo,"Antipático.",acrescenta: sentido moderno\n'
+        'Fanico,substantivo,"Desmaio.",Acrescenta\n'
+        '#comentado,adjetivo,"X.",acrescenta\n'
+    ))
+    assert lemas_acrescentados(paths.seeds / "curadoria.csv") == {"rebarbativo", "fanico"}
+
+
+def test_sem_ficheiro_nao_ha_acrescentos(tmp_path):
+    from palavrame.sources.curadoria import lemas_acrescentados
+
+    assert lemas_acrescentados(tmp_path / "nao-existe.csv") == set()
+
+
+def test_acrescento_nao_conta_como_curadoria_redundante(tmp_path):
+    """`rebarbativo`: o Dicionário Aberto só tem o sentido de 1913, e a linha
+    curada acrescenta o corrente de propósito. Não é redundância."""
+    from palavrame.schema import MergedEntry
+    from palavrame.sources.base import License, SourceInfo
+
+    da = SourceInfo(
+        slug="dicionario_aberto", name="Dicionário Aberto", url="https://dicionario-aberto.net/",
+        license=License(name="CC BY-SA 2.5 PT", attribution="Dicionário Aberto.",
+                        redistributable=True, verified=True),
+    )
+    entrada = MergedEntry(
+        lemma="rebarbativo", pos="adjetivo",
+        senses=[
+            Sense("Que parece ter duas barbas.", "dicionario_aberto", ord=1),
+            Sense("Antipático, carrancudo.", "curadoria", ord=2),
+        ],
+        contributors=["dicionario_aberto", "curadoria"],
+    )
+    caminho = tmp_path / "d.db"
+    build_database(caminho, [entrada], [da, CURADORIA_INFO], db_version="t")
+
+    marcado = validate_database(caminho, [da, CURADORIA_INFO], acrescentos={"rebarbativo"})
+    nomes = {c.name for c in marcado.checks}
+    assert "curadoria redundante" not in nomes
+    assert "curadoria: acrescentos" in nomes
+
+    # Sem a marca, a mesma base continua a dar o aviso de sempre.
+    sem_marca = validate_database(caminho, [da, CURADORIA_INFO])
+    assert "curadoria redundante" in {c.name for c in sem_marca.warnings}

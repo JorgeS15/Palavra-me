@@ -16,6 +16,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import pt.jorges15.palavrame.MainActivity
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.R
@@ -71,17 +72,9 @@ object Lembrete {
         val horas = horasDosLembretes(quantos, inicio, fim)
         (0..23).filter { it !in horas }.forEach { gestor.cancelUniqueWork("$TRABALHO-$it") }
 
-        val restricoes = Constraints.Builder()
-            // Só quando a bateria não está em apuros. Um jogo de vocabulário
-            // não vale a última percentagem de ninguém.
-            .setRequiresBatteryNotLow(true)
-            .build()
-
         horas.forEach { hora ->
-            val pedido = PeriodicWorkRequestBuilder<LembreteWorker>(1, TimeUnit.DAYS)
+            val pedido = pedidoPara(hora)
                 .setInitialDelay(minutosAte(hora), TimeUnit.MINUTES)
-                .setConstraints(restricoes)
-                .addTag(ETIQUETA)
                 .build()
             gestor.enqueueUniquePeriodicWork(
                 "$TRABALHO-$hora", ExistingPeriodicWorkPolicy.UPDATE, pedido
@@ -90,6 +83,45 @@ object Lembrete {
         preferenciasInternas(context).edit()
             .putString(CHAVE_AGENDADO, assinatura(quantos, inicio, fim)).apply()
     }
+
+    /**
+     * Volta a pôr o lembrete de uma hora à hora certa. O worker chama isto ao
+     * acabar cada execução.
+     *
+     * O trabalho periódico conta as 24 h a partir da última execução, não da
+     * hora marcada. Se o sistema atrasava o das 9h para as 11h (Doze, bateria
+     * fraca), passava a correr às 11h daí em diante, e a mudança da hora
+     * deslocava tudo uma hora; nada o corrigia. Aqui marca-se a execução
+     * seguinte para a próxima ocorrência da hora escolhida
+     * (`setNextScheduleTimeOverride`, WorkManager 2.9 em diante).
+     *
+     * Com `UPDATE`, como em `agendar`: não se cancela o trabalho que está a
+     * correr (é o próprio que chama isto). E continua sem alarmes exatos.
+     */
+    fun realinhar(context: Context, hora: Int) {
+        val pedido = pedidoPara(hora)
+            .setNextScheduleTimeOverride(proximaOcorrencia(hora, System.currentTimeMillis()))
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "$TRABALHO-$hora", ExistingPeriodicWorkPolicy.UPDATE, pedido
+        )
+    }
+
+    /** O pedido periódico de uma hora, com a hora nos dados (para o realinhar). */
+    private fun pedidoPara(hora: Int) =
+        PeriodicWorkRequestBuilder<LembreteWorker>(1, TimeUnit.DAYS)
+            .setConstraints(
+                Constraints.Builder()
+                    // Só quando a bateria não está em apuros. Um jogo de
+                    // vocabulário não vale a última percentagem de ninguém.
+                    .setRequiresBatteryNotLow(true)
+                    .build()
+            )
+            .setInputData(workDataOf(DADO_HORA to hora))
+            .addTag(ETIQUETA)
+
+    /** A hora de cada trabalho, nos dados do pedido. */
+    const val DADO_HORA = "hora"
 
     fun cancelar(context: Context) {
         WorkManager.getInstance(context).cancelAllWorkByTag(ETIQUETA)
@@ -115,8 +147,11 @@ object Lembrete {
         }
     }
 
+    // O "v2:" força um reagendamento único em quem atualiza: os trabalhos
+    // agendados pelas versões anteriores não levam a hora nos dados, e sem
+    // ela o worker não se consegue realinhar.
     private fun assinatura(quantos: Int, inicio: Int, fim: Int) =
-        horasDosLembretes(quantos, inicio, fim).joinToString(",")
+        "v2:" + horasDosLembretes(quantos, inicio, fim).joinToString(",")
 
     private fun preferenciasInternas(context: Context) =
         context.getSharedPreferences("palavrame", Context.MODE_PRIVATE)
@@ -133,6 +168,14 @@ object Lembrete {
         context.getSystemService(NotificationManager::class.java)
             ?.createNotificationChannel(canal)
     }
+
+    /**
+     * As notificações da app chegam mesmo: há autorização e não estão
+     * desligadas nas definições do sistema (o que também pode acontecer em
+     * versões do Android sem pedido de autorização).
+     */
+    fun notificacoesAtivas(context: Context): Boolean =
+        temPermissao(context) && NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     fun temPermissao(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -184,7 +227,16 @@ class LembreteWorker(
     parametros: WorkerParameters,
 ) : CoroutineWorker(context, parametros) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = try {
+        lembrar()
+    } finally {
+        // Haja ou não palavra para anunciar, a execução seguinte volta à hora
+        // escolhida (ver `Lembrete.realinhar`).
+        val hora = inputData.getInt(Lembrete.DADO_HORA, -1)
+        if (hora >= 0) Lembrete.realinhar(applicationContext, hora)
+    }
+
+    private suspend fun lembrar(): Result {
         // O dicionário é preciso para saber se a palavra é **jogável** — sem
         // isso, o lembrete anunciava palavras que o jogo depois descartava.
         // Ver `escolherPalavra`.

@@ -113,13 +113,16 @@ interface PalavrasDao {
     /**
      * Palavras vencidas, a mais atrasada primeiro.
      *
-     * `proxima_revisao IS NULL` são as que nunca foram jogadas: estão
-     * vencidas desde sempre, e é por elas que se começa.
+     * `proxima_revisao IS NULL` são as que nunca foram jogadas. Contam como
+     * vencidas desde que foram registadas (`saved_at`) e entram na fila por
+     * essa data, misturadas com as que estão em atraso. Antes vinham todas à
+     * frente: quem registava muito nunca chegava a rever as antigas, e os
+     * intervalos da repetição espaçada deixavam de valer.
      */
     @Query(
         "SELECT * FROM saved_words WHERE proxima_revisao IS NULL"
         + " OR proxima_revisao <= :agora"
-        + " ORDER BY proxima_revisao IS NOT NULL, proxima_revisao, saved_at"
+        + " ORDER BY COALESCE(proxima_revisao, saved_at), saved_at"
     )
     suspend fun vencidas(agora: Long): List<PalavraGuardada>
 }
