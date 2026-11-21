@@ -372,6 +372,7 @@ class MainActivity : ComponentActivity() {
                 deLembrete = deLembrete,
                 cotaRestante = { preferencias.cotaManual.value.restantes(LocalDate.now()) },
                 gastarCota = { preferencias.usarCotaManual() },
+                aoResponder = { lemma -> Lembrete.esquecerSeAnunciou(app, lemma) },
             ) as T
     }
 }

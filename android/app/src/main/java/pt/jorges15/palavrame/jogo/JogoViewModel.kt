@@ -120,6 +120,8 @@ class JogoViewModel(
     private val cotaRestante: () -> Int = { Int.MAX_VALUE },
     /** Conta uma revisão à mão (uma resposta). */
     private val gastarCota: () -> Unit = {},
+    /** Uma palavra acabou de ser respondida (para tirar a notificação que a anunciava). */
+    private val aoResponder: (lemma: String) -> Unit = {},
     private val aleatorio: Random = Random.Default,
     private val agora: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -243,6 +245,7 @@ class JogoViewModel(
                 )
                 gravar(guardada, avanco)
                 if (manual && !semCalendario) gastarCota()
+                aoResponder(lemma)
                 // Há mais para rever? (Esta já não está vencida.)
                 val maisVencidas = utilizador.palavras().vencidas(agora())
                     .count { it.lemma in todas && it.lemma != lemma }

@@ -213,7 +213,27 @@ object Lembrete {
             .build()
 
         NotificationManagerCompat.from(context).notify(ID_NOTIFICACAO, notificacao)
+        preferenciasInternas(context).edit().putString(CHAVE_ANUNCIADA, lemma).apply()
     }
+
+    /**
+     * Tira a notificação da barra se anunciava `lemma`. O jogo chama isto a
+     * cada resposta.
+     *
+     * Sem isto, quem revia em "Rever" a palavra que a notificação anunciava
+     * ficava com o aviso lá, e tocar-lhe abria outra palavra (ou "Nada a
+     * rever"): a notificação prometia uma coisa que já não existia. Só se tira
+     * a da mesma palavra; uma notificação de outra continua a ser verdade.
+     */
+    fun esquecerSeAnunciou(context: Context, lemma: String) {
+        val prefs = preferenciasInternas(context)
+        if (prefs.getString(CHAVE_ANUNCIADA, null) != lemma) return
+        NotificationManagerCompat.from(context).cancel(ID_NOTIFICACAO)
+        prefs.edit().remove(CHAVE_ANUNCIADA).apply()
+    }
+
+    /** A palavra da última notificação mostrada. */
+    private const val CHAVE_ANUNCIADA = "lembrete_anunciado"
 }
 
 /**

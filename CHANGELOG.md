@@ -100,6 +100,9 @@ antes de reconstruir e empacotar o dicionário.**
 - **Jogo aberto pela notificação: "Feito" passa a ser o botão grande**, e
   "Rever mais" fica por baixo, discreto. Quem veio pelo lembrete veio por
   uma palavra. Em "Rever" fica como estava: "Palavra seguinte" em destaque.
+- **A notificação sai da barra quando se responde à palavra que anunciava**,
+  também em "Rever". Antes ficava lá, e tocar-lhe abria outra palavra ou
+  "Nada a rever". A notificação de outra palavra não se toca.
 
 ## [app v1.20.1] - 2026-11-15
 
