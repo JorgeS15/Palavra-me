@@ -203,7 +203,26 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
             Spacer(Modifier.height(24.dp))
             // Segue-se só se houver mais vencidas e o limite do dia o deixar.
             // "Feito" está sempre à mão: parar é tão normal como continuar.
-            if (e.podeSeguir) {
+            // Vindo do lembrete, "Feito" é o grande e "Rever mais" o discreto;
+            // vindo de "Rever", ao contrário.
+            if (e.podeSeguir && e.feitoEmDestaque) {
+                BotaoPrincipal("Feito", aoVoltar, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = vm::continuar,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+                ) { Text(e.rotuloSeguir, style = Estilo.botao) }
+                e.restamHoje?.let { n ->
+                    Text(
+                        if (n == 1) "Podes rever mais 1 hoje." else "Podes rever mais $n hoje.",
+                        style = Estilo.ajuda,
+                        color = Cores.ink3,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            } else if (e.podeSeguir) {
                 BotaoPrincipal(e.rotuloSeguir, vm::continuar, Modifier.fillMaxWidth())
                 e.restamHoje?.let { n ->
                     Spacer(Modifier.height(6.dp))

@@ -97,6 +97,9 @@ antes de reconstruir e empacotar o dicionário.**
 - **O pipeline tira também as remissões "Vide X" e "V. X" para o próprio
   lema** ("lacónico: Vide lacónico"); só conhecia "Ver X", "O mesmo que X"
   e "Idem". A app já as escondia desde a 1.20.1.
+- **Jogo aberto pela notificação: "Feito" passa a ser o botão grande**, e
+  "Rever mais" fica por baixo, discreto. Quem veio pelo lembrete veio por
+  uma palavra. Em "Rever" fica como estava: "Palavra seguinte" em destaque.
 
 ## [app v1.20.1] - 2026-11-15
 

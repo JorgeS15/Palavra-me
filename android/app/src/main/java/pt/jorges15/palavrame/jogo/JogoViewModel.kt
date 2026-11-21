@@ -64,6 +64,12 @@ sealed interface EstadoJogo {
         val podeSeguir: Boolean = false,
         /** O texto do botão de seguir: "Palavra seguinte" ou, depois de um lembrete, "Rever mais". */
         val rotuloSeguir: String = "Palavra seguinte",
+        /**
+         * "Feito" é o botão grande e seguir fica discreto. Na pergunta do
+         * lembrete: quem veio da notificação veio por uma palavra, e o normal
+         * é acabar. Em "Rever" é ao contrário: veio-se para rever.
+         */
+        val feitoEmDestaque: Boolean = false,
         /** Quantas ainda se podem rever à mão hoje, para uma linha discreta; nulo sem limite. */
         val restamHoje: Int? = null,
     ) : EstadoJogo {
@@ -263,6 +269,7 @@ class JogoViewModel(
                 subiuDeNivel = resultado.subiuDeNivel,
                 podeSeguir = podeSeguir,
                 rotuloSeguir = if (manual || treinoLivre) "Palavra seguinte" else "Rever mais",
+                feitoEmDestaque = !manual && !treinoLivre,
                 restamHoje = if (podeSeguir && !treinoLivre) restantes else null,
             )
           } finally {
