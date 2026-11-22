@@ -42,6 +42,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
@@ -49,6 +50,7 @@ import pt.jorges15.palavrame.ResultadoImportacao
 import pt.jorges15.palavrame.data.Backup
 import pt.jorges15.palavrame.data.livrosCompletos
 import pt.jorges15.palavrame.data.Preferencias
+import pt.jorges15.palavrame.data.Progresso
 import pt.jorges15.palavrame.data.LetraId
 import pt.jorges15.palavrame.data.PaletaId
 import pt.jorges15.palavrame.data.Tema
@@ -101,13 +103,26 @@ fun EcraDefinicoes(
         }
     }
 
+    // A pergunta da importação: o progresso daqui, o da cópia e a resposta.
+    var escolhaProgresso by remember {
+        mutableStateOf<Triple<Progresso, Progresso, CompletableDeferred<Boolean>>?>(null)
+    }
+    escolhaProgresso?.let { (local, daCopia, resposta) ->
+        DialogoProgresso(local, daCopia, aoEscolher = { resposta.complete(it) })
+    }
+
     val importador = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { origem ->
         if (origem == null) return@rememberLauncherForActivityResult
         ambito.launch {
             mensagemBackup = when (
-                val r = Backup.importar(context, origem, app.utilizador)
+                val r = Backup.importar(context, origem, app.utilizador) { local, daCopia ->
+                    // Os dois progressos em uso: pergunta-se qual fica.
+                    val resposta = CompletableDeferred<Boolean>()
+                    escolhaProgresso = Triple(local, daCopia, resposta)
+                    resposta.await().also { escolhaProgresso = null }
+                }
             ) {
                 is Backup.Resultado.Feito -> buildString {
                     append("Importadas ${r.novas} palavras")
@@ -1045,3 +1060,62 @@ internal fun intentEmail(para: String, assunto: String, corpo: String): Intent {
     }
 }
 
+/**
+ * Ao importar uma cópia com outro progresso: qual fica? As palavras juntam-se
+ * sempre; o progresso (pontos, sequência, respostas) é um ou outro.
+ */
+@Composable
+private fun DialogoProgresso(local: Progresso, daCopia: Progresso, aoEscolher: (Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { aoEscolher(false) },
+        containerColor = Cores.card,
+        title = { Text("Que progresso fica?", style = Estilo.grupoTitulo.copy(fontSize = 22.sp), color = Cores.ink) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "As palavras da cópia juntam-se às tuas. O progresso das revisões "
+                        + "é um ou outro: escolhe qual fica.",
+                    style = Estilo.texto,
+                    color = Cores.ink2,
+                )
+                LinhaProgresso("Neste telemóvel", local)
+                LinhaProgresso("Na cópia", daCopia)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { aoEscolher(true) },
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+            ) { Text("Usar o da cópia", style = Estilo.controloForte) }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { aoEscolher(false) },
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+            ) { Text("Manter o deste", style = Estilo.controlo) }
+        },
+    )
+}
+
+@Composable
+private fun LinhaProgresso(rotulo: String, p: Progresso) {
+    Column {
+        Text(rotulo, style = Estilo.rotulo.copy(fontSize = 13.sp), color = Cores.ink2)
+        Text(resumoProgresso(p), style = Estilo.texto, color = Cores.ink)
+    }
+}
+
+/** "2704 pontos · 266 respostas · sequência de 34 dias, até 1 de novembro". */
+internal fun resumoProgresso(p: Progresso): String = buildList {
+    add("${p.pontos} pontos")
+    val respostas = p.acertos + p.erros
+    add(if (respostas == 1) "1 resposta" else "$respostas respostas")
+    if (p.sequencia > 0) {
+        val ate = p.ultimoDia?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            ?.format(java.time.format.DateTimeFormatter.ofPattern("d 'de' MMMM", java.util.Locale.forLanguageTag("pt-PT")))
+        add(
+            (if (p.sequencia == 1) "sequência de 1 dia" else "sequência de ${p.sequencia} dias")
+                + (ate?.let { ", até $it" } ?: "")
+        )
+    }
+}.joinToString(" · ")

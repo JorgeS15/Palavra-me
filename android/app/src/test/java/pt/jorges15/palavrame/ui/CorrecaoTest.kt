@@ -48,4 +48,16 @@ class CorrecaoTest {
         assertTrue(corpo.contains("Falta um significado:\nQuem empresta dinheiro.\n"))
         assertTrue(!corpo.contains("Fonte:"))
     }
+
+    @Test
+    fun `o resumo do progresso diz pontos, respostas e a sequencia`() {
+        val p = pt.jorges15.palavrame.data.Progresso(
+            pontos = 2704, sequencia = 34, ultimoDia = "2026-11-01", acertos = 241, erros = 25,
+        )
+        assertEquals(
+            "2704 pontos · 266 respostas · sequência de 34 dias, até 1 de novembro",
+            resumoProgresso(p),
+        )
+        assertEquals("0 pontos · 1 resposta", resumoProgresso(pt.jorges15.palavrame.data.Progresso(acertos = 1)))
+    }
 }

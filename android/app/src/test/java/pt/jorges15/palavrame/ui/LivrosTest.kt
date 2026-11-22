@@ -38,7 +38,7 @@ class LivrosTest {
 
     @Test
     fun `parado diz so parado`() {
-        assertEquals("Parado", periodo(livro(leitura(1, dia(2026, 3, 3), parada = true))))
+        assertEquals("Em pausa", periodo(livro(leitura(1, dia(2026, 3, 3), parada = true))))
     }
 
     @Test
@@ -75,7 +75,7 @@ class LivrosTest {
             textoDaLeitura(leitura(1, dia(2025, 12, 20), dia(2026, 2, 2)), zona),
         )
         assertEquals("Desde 3 de março de 2026", textoDaLeitura(leitura(1, dia(2026, 3, 3)), zona))
-        assertEquals("Desde 3 de março de 2026, parada", textoDaLeitura(leitura(1, dia(2026, 3, 3), parada = true), zona))
+        assertEquals("Desde 3 de março de 2026, em pausa", textoDaLeitura(leitura(1, dia(2026, 3, 3), parada = true), zona))
         assertEquals("Acabada a 20 de maio de 2026", textoDaLeitura(leitura(1, null, dia(2026, 5, 20)), zona))
     }
 
@@ -122,6 +122,39 @@ class LivrosTest {
         assertNull(progressoDoLivro(listOf(PalavraGuardada(lemma = "x")), 480))
         // Uma página a mais (gralha) não passa do fim.
         assertEquals(100 to 100, progressoDoLivro(p, 100))
+    }
+
+    @Test
+    fun `a ler agora poe primeiro o livro em curso, depois o mais recente`() {
+        fun l(id: Long, titulo: String, inicio: Long, emCurso: Boolean = false, fim: Long? = null) =
+            LivroCompleto(
+                FichaLivro(id = id, titulo = titulo, criadoEm = 0, emCurso = emCurso),
+                listOf(Leitura(id = id, livroId = id, iniciadaEm = inicio, terminadaEm = fim)),
+            )
+        val livros = listOf(
+            l(1, "A", 100), l(2, "B", 300), l(3, "C", 200, emCurso = true), l(4, "D", 400, fim = 500),
+        ).associateBy { it.titulo }
+        assertEquals(listOf("C", "B", "A"), livrosALer(livros).map { it.titulo })
+    }
+
+    @Test
+    fun `a pagina onde vou e a mais recente entre a escrita a mao e a da ultima palavra`() {
+        val p = listOf(
+            PalavraGuardada(lemma = "a", page = 180, guardadaEm = 10),
+            PalavraGuardada(lemma = "b", page = 200, guardadaEm = 20),
+        )
+        assertEquals(200, paginaOndeVou(p))
+        // Pousou o livro na 214, depois da última palavra.
+        val depois = leitura(1, 1).copy(pagina = 214, paginaEm = 30)
+        assertEquals(214, paginaOndeVou(p, depois))
+        assertEquals(214 to 560, progressoDoLivro(p, 560, depois))
+        // Uma palavra guardada depois volta a mandar.
+        val antes = leitura(1, 1).copy(pagina = 214, paginaEm = 15)
+        assertEquals(200, paginaOndeVou(p, antes))
+        // Ao voltar a ler, as palavras da primeira leitura não contam.
+        assertEquals(null, paginaOndeVou(p, leitura(2, 25)))
+        // Sem palavras com página, só a escrita.
+        assertEquals(50, paginaOndeVou(emptyList(), leitura(1, 1).copy(pagina = 50, paginaEm = 1)))
     }
 
     // --- a imagem do livro lido ---

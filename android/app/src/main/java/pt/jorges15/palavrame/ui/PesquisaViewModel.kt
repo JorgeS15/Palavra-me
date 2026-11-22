@@ -27,6 +27,7 @@ import pt.jorges15.palavrame.data.editarLivro
 import pt.jorges15.palavrame.data.escolherEmCurso
 import pt.jorges15.palavrame.data.juntarLivros
 import pt.jorges15.palavrame.data.livrosCompletos
+import pt.jorges15.palavrame.data.marcarPagina
 import pt.jorges15.palavrame.data.pararLivro
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.Parecida
@@ -147,6 +148,11 @@ class PesquisaViewModel(
     /** "Estou a ler", "Retomar", "Voltar a ler". */
     fun comecarLivro(titulo: String) {
         viewModelScope.launch { utilizador.comecarLivro(titulo.trim(), agora()) }
+    }
+
+    /** "Em que página vais?" (e, se vier, as páginas do livro). */
+    fun marcarPagina(titulo: String, pagina: Int, paginasDoLivro: Int?) {
+        viewModelScope.launch { utilizador.marcarPagina(titulo.trim(), pagina, paginasDoLivro, agora()) }
     }
 
     fun pararLivro(titulo: String) {

@@ -26,7 +26,7 @@ Só app, com o dicionário da 1.21.0. Feita no GitHub (commits 2f0e187 e
   também em "Rever". Antes ficava lá, e tocar-lhe abria outra palavra ou
   "Nada a rever". A notificação de outra palavra não se toca.
 
-## [0.35.0] - em curso · app v1.22.0 (versionCode 35)
+## [0.35.0] - 2026-11-22 · app v1.22.0 (versionCode 35)
 
 O livro que estou a ler (`notas/roadmap-2.md`, 1.22.0), e uma correção ao
 dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
@@ -35,16 +35,23 @@ dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
 
 - **Os livros.** Separador novo, "Livros", ao estilo de um diário de
   leitura calmo (sem estrelas, metas nem desafios):
-  - **A lista:** "A ler", "Parados", "Lidos em 2026" (por ano) e "Outros
-    livros" (com palavras, sem leitura marcada). "Começar um livro" cria um
-    livro ainda sem palavras.
-  - **A página de cada livro:** capa tipográfica, título, autor, o estado
-    ("A ler desde 3 de março", "Lido de março a maio de 2026"), o resumo (há
-    quantos dias, ou em quantos se leu; palavras guardadas, sabidas e as que
-    ainda custam), as leituras com as datas, uma nota sobre o livro e as
-    palavras dele, tocáveis.
+  - **A estante:** no topo, "A ler agora", um cartão por livro (lado a lado
+    se houver vários) com a página, as palavras, o progresso e os botões
+    "Rever" e "Acabei de ler". Por baixo, as capas três a três, em
+    prateleiras: "Lidos em 2026" (por ano), "Em pausa" e "Outros livros" (com
+    palavras, sem leitura marcada), com os filtros Todos, Lidos e Em pausa.
+    O "+" ("Adicionar livro") cria um livro ainda sem palavras. Desenho no Claude Design
+    ("Palavra-me: separador Livros").
+  - **A página de cada livro:** capa tipográfica, título, autor e o estado
+    ("Lido de março a maio de 2026"); os números (dias, palavras, já
+    sabidas); a ação principal conforme o estado ("Rever as 11 palavras",
+    e, a ler, "Pausar leitura" e "Acabei de ler" lado a lado; "Retomar"
+    num livro em pausa); logo a seguir as palavras, com uma linha do
+    significado e "ainda custa" nas que custam; e no fim "Sobre a leitura":
+    as leituras com as datas, a nota e "Voltar a ler". Partilhar tem o mesmo
+    ícone em toda a app (o do ecrã da palavra).
   - **Leituras:** "Estou a ler este livro", "Acabei este livro" (com o
-    resumo), "Parar de ler", "Retomar" e "Voltar a ler". Voltar a ler abre
+    resumo), "Pausar leitura", "Retomar" e "Voltar a ler". Voltar a ler abre
     uma leitura nova e guarda as anteriores ("Lido 2 vezes"). As datas de
     cada leitura corrigem-se à mão, e pode acrescentar-se uma leitura antiga.
   - **Ficha:** título, autor, páginas e nota. Corrigir o título ou o autor
@@ -53,13 +60,18 @@ dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
     e as leituras passam para um, e o outro desaparece.
   - **Progresso pelas palavras:** com o número de páginas, a página do livro
     mostra "p. 214 de 480", da página da última palavra guardada, sem
-    atualizar nada à mão.
+    atualizar nada à mão. E "Em que página vais?": tocar no progresso (ou
+    "Página onde vais", na ficha, ou o lápis no cartão da estante) marca a
+    página onde se pousou o livro, que pode ser depois da última palavra;
+    vale a mais recente das duas. Ao voltar a ler, só contam as palavras da
+    leitura nova.
   - **Livro em curso:** o livro que vem já escolhido ao registar (antes vinha
     o último usado). É o que se começou a ler por último; muda-se no menu da
     página do livro, ou no diálogo de registar ("Estou a ler este livro").
-    O diálogo abre-se sempre, para a página, a frase e a nota. Na estante do
-    ecrã inicial vem primeiro, marcado "a ler", e tocar num livro da estante
-    abre a página dele.
+    O diálogo abre-se sempre, para a página, a frase e a nota.
+  - **No ecrã inicial**, em vez da estante de 12 livros, só o livro que se
+    está a ler (o cartão abre a página dele) e "Todos os livros", por cima
+    das últimas palavras registadas.
   - Na Coleção, cada livro tem um botão para a sua página, e mostra o estado
     da leitura por baixo do autor.
   - **A imagem do livro lido:** ao acabar um livro ("Partilhar imagem", no
@@ -104,6 +116,14 @@ dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
   perdem os espaços à volta. A v5 (tabela `livros` por título, só nas versões
   de teste) passa as datas a leituras. A cópia de segurança leva as fichas e
   as leituras; uma cópia anterior importa-se como antes.
+- **`utilizador.db` v7:** as leituras ganham a página onde se vai e quando
+  foi escrita (`pagina`, `pagina_em`). Só acrescenta colunas; vai na cópia.
+- **Importar com outro progresso:** se a cópia e o telemóvel têm os dois
+  progresso de revisões (pontos, sequência, respostas) e são diferentes, a
+  app pergunta qual fica, com os dois resumidos ("2704 pontos · 266
+  respostas · sequência de 34 dias, até 1 de novembro"). Antes ficava sempre
+  o do telemóvel, e quem restaurava uma cópia perdia a sequência sem saber.
+  As palavras continuam a juntar-se como antes.
 
 ### Fixed
 

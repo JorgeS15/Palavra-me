@@ -39,7 +39,14 @@ sequer de a copiar.
 - **Significados de várias fontes**, com sinónimos, antónimos e as palavras
   da mesma família, todos tocáveis.
 - **Coleção pessoal** agrupada por livro, com contagens, ordenação e notas.
+- **Os teus livros**, numa estante: o que estás a ler (com a página onde
+  vais), os lidos por ano, os que estão em pausa, as datas de cada leitura e
+  uma imagem para partilhar quando acabas um livro.
 - **Revisão espaçada** — o jogo diário que transforma a coleção em memória.
+  Também só das palavras de um livro, e, se quiseres, a escrever a palavra a
+  partir da definição.
+- **Corrigir uma definição** ou dizer que falta um significado, num email
+  preparado pela app.
 - **A tua coleção é tua** — exporta-a e importa-a num ficheiro, quando
   quiseres.
 - **Tudo offline**, sempre.

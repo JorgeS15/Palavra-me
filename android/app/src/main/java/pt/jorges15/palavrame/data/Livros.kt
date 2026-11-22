@@ -54,6 +54,13 @@ data class Leitura(
     @ColumnInfo(name = "terminada_em") val terminadaEm: Long? = null,
     /** Posta de lado sem acabar. */
     @ColumnInfo(defaultValue = "0") val parada: Boolean = false,
+    /**
+     * Onde se vai, escrito à mão ("Em que página vais?", 1.22): a página de
+     * quando se pousou o livro, que pode ser depois da última palavra.
+     */
+    val pagina: Int? = null,
+    /** Quando se escreveu a página: compara-se com a da última palavra guardada. */
+    @ColumnInfo(name = "pagina_em") val paginaEm: Long? = null,
 ) {
     val lida: Boolean get() = terminadaEm != null
 }
@@ -233,7 +240,7 @@ suspend fun UtilizadorDb.terminarLivro(titulo: String, agora: Long) = withTransa
     Unit
 }
 
-/** "Parar de ler": a leitura fica parada, e deixa de ser o livro em curso. */
+/** "Pausar leitura": a leitura fica em pausa, e deixa de ser o livro em curso. */
 suspend fun UtilizadorDb.pararLivro(titulo: String) = withTransaction {
     val dao = livros()
     val ficha = dao.porTitulo(titulo) ?: return@withTransaction
@@ -251,7 +258,25 @@ suspend fun UtilizadorDb.escolherEmCurso(titulo: String?) = withTransaction {
     Unit
 }
 
-/** Um livro novo, ainda sem palavras ("Começar um livro"). Falso se o título já existe. */
+/**
+ * "Em que página vais?": marca a página na leitura em curso (ou em pausa) e,
+ * se vier, o número de páginas do livro. Sem leitura aberta, não faz nada.
+ */
+suspend fun UtilizadorDb.marcarPagina(titulo: String, pagina: Int, paginasDoLivro: Int?, agora: Long) =
+    withTransaction {
+        val dao = livros()
+        val ficha = dao.porTitulo(titulo) ?: return@withTransaction
+        if (paginasDoLivro != null && paginasDoLivro != ficha.paginas) {
+            dao.atualizar(ficha.copy(paginas = paginasDoLivro))
+        }
+        val atual = LivroCompleto(ficha, dao.leiturasDe(ficha.id)).atual
+        if (atual != null && atual.terminadaEm == null) {
+            dao.atualizarLeitura(atual.copy(pagina = pagina, paginaEm = agora))
+        }
+        Unit
+    }
+
+/** Um livro novo, ainda sem palavras ("Adicionar livro"). Falso se o título já existe. */
 suspend fun UtilizadorDb.criarLivro(
     titulo: String,
     autor: String?,
@@ -388,5 +413,16 @@ val MIGRACAO_5_6 = object : Migration(5, 6) {
             + " WHERE v.em_curso = 1 OR v.terminado_em IS NOT NULL"
         )
         db.execSQL("DROP TABLE livros_v5")
+    }
+}
+
+/**
+ * v6 -> v7: a página onde se vai, escrita à mão, em cada leitura (com a data,
+ * para se comparar com a da última palavra). Só acrescenta colunas.
+ */
+val MIGRACAO_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE leituras ADD COLUMN `pagina` INTEGER")
+        db.execSQL("ALTER TABLE leituras ADD COLUMN `pagina_em` INTEGER")
     }
 }

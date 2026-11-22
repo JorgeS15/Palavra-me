@@ -346,6 +346,11 @@ class MainActivity : ComponentActivity() {
                                     vm,
                                     preferencias,
                                     aoAbrirColecao = { ecra = Ecra.COLECAO },
+                                    aoAbrirLivros = {
+                                        livroPedido = null
+                                        voltarAosLivros++
+                                        ecra = Ecra.LIVROS
+                                    },
                                     aoAbrirJogo = {
                                         livroARever = null
                                         sessaoJogo++

@@ -230,11 +230,11 @@ val MIGRACAO_4_5 = object : Migration(4, 5) {
  * (`androidTest/.../MigracoesTest`) usam esta mesma lista, para não haver uma
  * migração que a app corre e o teste não verifica.
  */
-val MIGRACOES = arrayOf(MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4, MIGRACAO_4_5, MIGRACAO_5_6)
+val MIGRACOES = arrayOf(MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4, MIGRACAO_4_5, MIGRACAO_5_6, MIGRACAO_6_7)
 
 @Database(
     entities = [PalavraGuardada::class, Progresso::class, FichaLivro::class, Leitura::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class UtilizadorDb : RoomDatabase() {

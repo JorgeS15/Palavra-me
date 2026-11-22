@@ -59,6 +59,8 @@ fun EcraPesquisa(
     aoAbrirJogo: () -> Unit = {},
     /** Abre a coleção já no livro tocado na estante. */
     aoAbrirLivro: (String) -> Unit = { aoAbrirColecao() },
+    /** O separador Livros, na lista (o "Todos os livros" do início). */
+    aoAbrirLivros: () -> Unit = {},
     /**
      * Não nulo quando a palavra aberta veio de outro ecrã (a Coleção): o
      * "retroceder" leva de volta para lá em vez de ir para o início.
@@ -68,6 +70,7 @@ fun EcraPesquisa(
     val estado by vm.estado.collectAsState()
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
     val livroEmCurso by vm.livroEmCurso.collectAsState()
+    val livrosCompletos by vm.livros.collectAsState()
     val guardados by vm.lemasGuardados.collectAsState(initial = emptySet())
     // Do ViewModel, já carregada: voltar a este ecrã não pisca vazio (ver
     // `PesquisaViewModel.colecao`). Nula só antes da primeira leitura.
@@ -199,9 +202,9 @@ fun EcraPesquisa(
                     },
                     aoLimpar = vm::limpar,
                     aoRever = aoAbrirJogo,
-                    aoAbrirColecao = aoAbrirColecao,
                     aoAbrirLivro = aoAbrirLivro,
-                    livroEmCurso = livroEmCurso?.titulo,
+                    aoAbrirLivros = aoAbrirLivros,
+                    livros = livrosCompletos,
                 )
             }
         }
@@ -373,9 +376,9 @@ private fun Inicio(
     aoProcurar: (String) -> Unit,
     aoLimpar: () -> Unit,
     aoRever: () -> Unit,
-    aoAbrirColecao: () -> Unit,
     aoAbrirLivro: (String) -> Unit,
-    livroEmCurso: String? = null,
+    aoAbrirLivros: () -> Unit = {},
+    livros: Map<String, LivroCompleto> = emptyMap(),
 ) {
     val sequencia = sequenciaAtiva(progresso)
     Column(
@@ -464,53 +467,36 @@ private fun Inicio(
                 )
             }
 
-            val estante = remember(palavras, livroEmCurso) { estanteDe(palavras, livroEmCurso) }
-            if (estante.isNotEmpty()) {
+            // O livro que se está a ler (o separador Livros tem a estante toda).
+            val aLer = remember(livros) { livrosALer(livros) }
+            aLer.firstOrNull()?.let { livro ->
                 Spacer(Modifier.height(22.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Overline("Na tua estante", Modifier.weight(1f))
+                    Overline("A ler agora", Modifier.weight(1f))
                     Text(
-                        "Ver coleção",
+                        "Todos os livros",
                         style = Estilo.controloForte.copy(fontSize = 14.sp),
                         color = Cores.accentInk,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = aoAbrirColecao)
+                            .clickable(onClick = aoAbrirLivros)
                             .padding(horizontal = 6.dp, vertical = 8.dp),
                     )
                 }
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    estante.forEach { livro ->
-                        Column(
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { aoAbrirLivro(livro.titulo) }
-                                .padding(bottom = 4.dp, top = 4.dp, end = 4.dp),
-                        ) {
-                            CapaLivro(livro.titulo, livro.autor)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                buildAnnotatedString {
-                                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Cores.ink)) {
-                                        append(livro.quantas.toString())
-                                    }
-                                    append(if (livro.quantas == 1) " palavra" else " palavras")
-                                    if (livro.titulo == livroEmCurso) {
-                                        append(" · ")
-                                        withStyle(SpanStyle(color = Cores.accentInk)) { append("a ler") }
-                                    }
-                                },
-                                style = Estilo.ajuda,
-                                color = Cores.ink2,
-                            )
-                        }
-                    }
+                Spacer(Modifier.height(8.dp))
+                CartaoALer(
+                    livro,
+                    palavras.filter { it.livro?.trim() == livro.titulo },
+                    aoAbrir = { aoAbrirLivro(livro.titulo) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (aLer.size > 1) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (aLer.size == 2) "E mais 1 livro a ler." else "E mais ${aLer.size - 1} livros a ler.",
+                        style = Estilo.ajuda,
+                        color = Cores.ink3,
+                    )
                 }
             }
 
@@ -617,26 +603,6 @@ private fun CartaoSugestoes(estado: EstadoPesquisa, aoProcurar: (String) -> Unit
         }
     }
 }
-
-/** Um livro da estante: o título, o autor que lhe ficou e quantas palavras tem. */
-private data class LivroNaEstante(val titulo: String, val autor: String?, val quantas: Int)
-
-/**
- * Os livros da coleção, o mais recente primeiro (a lista vem por data), com
- * o livro em curso à cabeça.
- */
-private fun estanteDe(palavras: List<PalavraGuardada>, emCurso: String? = null): List<LivroNaEstante> =
-    palavras.filter { !it.livro.isNullOrBlank() }
-        .groupBy { it.livro!!.trim() }
-        .map { (titulo, lista) ->
-            LivroNaEstante(
-                titulo,
-                lista.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
-                lista.size,
-            )
-        }
-        .sortedByDescending { it.titulo == emCurso }
-        .take(12)
 
 /**
  * A sequência que ainda conta: se o último dia jogado foi hoje ou ontem. Uma

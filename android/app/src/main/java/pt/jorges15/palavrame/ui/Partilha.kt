@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -932,7 +932,7 @@ private fun DialogoImagem(
                             }
                         },
                         ativo = !aGerar,
-                        icone = Icons.Rounded.IosShare,
+                        icone = Icons.Rounded.Share,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (aoPartilharTexto != null) {

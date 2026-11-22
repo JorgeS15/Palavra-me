@@ -136,6 +136,18 @@ class BackupTest {
     }
 
     @Test
+    fun `a pagina onde se vai viaja com a leitura`() {
+        val livro = LivroCompleto(
+            FichaLivro(titulo = "Revolução", criadoEm = 1),
+            listOf(Leitura(livroId = 1, iniciadaEm = 5, pagina = 214, paginaEm = 9)),
+        )
+        val json = Backup.serializar(emptyList(), null, "1.0", listOf(livro))
+        val volta = Backup.desserializar(json)!!.livros.single().leituras.single()
+        assertEquals(214, volta.pagina)
+        assertEquals(9L, volta.paginaEm)
+    }
+
+    @Test
     fun `uma copia anterior sem livros le-se com a lista vazia`() {
         val json = Backup.serializar(emptyList(), null, "1.0")
         assertEquals(emptyList<LivroCompleto>(), Backup.desserializar(json)!!.livros)

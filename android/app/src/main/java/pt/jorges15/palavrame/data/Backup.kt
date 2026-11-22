@@ -116,10 +116,10 @@ object Backup {
      * **Nunca substitui nem apaga.** As palavras que já estão na coleção ficam
      * como estão, e só entram as que faltam — importar é juntar, não trocar.
      *
-     * O progresso do jogo só é adotado da cópia se o local ainda estiver vazio:
-     * restaura numa mudança de telemóvel, mas nunca esmaga um progresso já em
-     * uso (por isso importar uma cópia velha por cima de uma coleção viva não
-     * faz recuar a sequência).
+     * O progresso do jogo (pontos, sequência, respostas) é um ou outro: com o
+     * deste telemóvel vazio, entra o da cópia; com os dois em uso e diferentes,
+     * pergunta-se (`escolherProgresso`, verdadeiro = o da cópia). Antes ficava
+     * sempre o daqui, e quem restaurava uma cópia perdia a sequência sem saber.
      *
      * Numa transação só: ou entra a cópia inteira, ou nada. Antes, uma falha a
      * meio deixava uma importação parcial, e repetir dava "N já existiam" sem
@@ -129,6 +129,7 @@ object Backup {
         context: Context,
         origem: Uri,
         db: UtilizadorDb,
+        escolherProgresso: suspend (local: Progresso, daCopia: Progresso) -> Boolean = { _, _ -> false },
     ): Resultado = withContext(Dispatchers.IO) {
         try {
             val texto = context.contentResolver.openInputStream(origem)
@@ -142,6 +143,16 @@ object Backup {
 
             val palavrasDao = db.palavras()
             val progressoDao = db.progresso()
+            // A pergunta, se for preciso, antes da transação: espera pela pessoa.
+            val local = progressoDao.atual()
+            val progressoDaCopia = conteudo.progresso?.takeIf { copia ->
+                when {
+                    copia.estaVazio() -> false
+                    local == null || local.estaVazio() -> true
+                    local.copy(id = 1) == copia.copy(id = 1) -> false
+                    else -> escolherProgresso(local, copia)
+                }
+            }
             var novas = 0
             var jaExistiam = 0
             db.withTransaction {
@@ -156,12 +167,7 @@ object Backup {
                 }
             }
 
-            conteudo.progresso?.let { importado ->
-                val atual = progressoDao.atual()
-                if (atual == null || atual.estaVazio()) {
-                    progressoDao.guardar(importado.copy(id = 1))
-                }
-            }
+            progressoDaCopia?.let { progressoDao.guardar(it.copy(id = 1)) }
 
             // As fichas da cópia só entram para os livros que ainda não existem
             // aqui (com as suas leituras); o livro em curso fica o desta
@@ -254,6 +260,8 @@ object Backup {
                     r.iniciadaEm?.let { put("iniciada_em", it) }
                     r.terminadaEm?.let { put("terminada_em", it) }
                     if (r.parada) put("parada", true)
+                    r.pagina?.let { put("pagina", it) }
+                    r.paginaEm?.let { put("pagina_em", it) }
                 })
             }
         })
@@ -280,6 +288,8 @@ object Backup {
                     iniciadaEm = r.longOuNulo("iniciada_em"),
                     terminadaEm = r.longOuNulo("terminada_em"),
                     parada = r.optBoolean("parada", false),
+                    pagina = if (r.has("pagina")) r.optInt("pagina").takeIf { it > 0 } else null,
+                    paginaEm = r.longOuNulo("pagina_em"),
                 )
             }
         } ?: run {

@@ -2,17 +2,22 @@ package pt.jorges15.palavrame.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.EditNote
-import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
@@ -22,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,7 +62,7 @@ import java.util.Locale
 
 // --- texto (puro, testado) -------------------------------------------------------
 
-private val PT = Locale("pt", "PT")
+private val PT = Locale.forLanguageTag("pt-PT")
 private val MES = DateTimeFormatter.ofPattern("MMMM", PT)
 private val MES_ANO = DateTimeFormatter.ofPattern("MMMM 'de' yyyy", PT)
 private val DIA_MES = DateTimeFormatter.ofPattern("d 'de' MMMM", PT)
@@ -97,7 +103,7 @@ internal fun periodoDeLeitura(
         EstadoLeitura.SEM_LEITURA -> null
         EstadoLeitura.A_LER -> if (inicio == null) "A ler" else
             "A ler desde " + inicio.format(if (inicio.year == hoje.year) DIA_MES else DIA_MES_ANO)
-        EstadoLeitura.PARADO -> "Parado"
+        EstadoLeitura.PARADO -> "Em pausa"
         EstadoLeitura.LIDO -> {
             val fim = diaDe(atual.terminadaEm!!, zona)
             if (livro.lidas.size > 1) "Lido ${livro.lidas.size} vezes, a última em ${fim.format(MES_ANO)}"
@@ -132,7 +138,7 @@ internal fun textoDaLeitura(l: Leitura, zona: ZoneId = ZoneId.systemDefault()): 
         inicio != null -> "Desde ${inicio.format(DIA_MES_ANO)}"
         else -> "Sem datas"
     }
-    return if (l.parada && fim == null) "$base, parada" else base
+    return if (l.parada && fim == null) "$base, em pausa" else base
 }
 
 /** Quantos dias levou a ler, contando o primeiro e o último. */
@@ -258,13 +264,34 @@ internal fun dadosLivroLido(
 }
 
 /**
- * O progresso pelas palavras (L6): a página da palavra guardada mais recente
- * que tem página, sobre o total do livro. Nulo sem total ou sem páginas.
+ * Onde se vai no livro: a página escrita à mão na leitura ("Em que página
+ * vais?") ou a da última palavra guardada com página, a mais recente das duas.
+ * Com a leitura, só contam as palavras dela (guardadas desde que começou): ao
+ * voltar a ler, a página da primeira leitura não manda na segunda.
  */
-internal fun progressoDoLivro(palavras: List<PalavraGuardada>, paginas: Int?): Pair<Int, Int>? {
+internal fun paginaOndeVou(palavras: List<PalavraGuardada>, leitura: Leitura? = null): Int? {
+    val desde = leitura?.iniciadaEm ?: Long.MIN_VALUE
+    val ultima = palavras.filter { it.page != null && it.guardadaEm >= desde }.maxByOrNull { it.guardadaEm }
+    val manual = leitura?.pagina
+    return when {
+        manual == null -> ultima?.page
+        ultima == null -> manual
+        (leitura.paginaEm ?: 0L) >= ultima.guardadaEm -> manual
+        else -> ultima.page
+    }
+}
+
+/**
+ * O progresso (L6): a página onde se vai (`paginaOndeVou`), sobre o total do
+ * livro. Nulo sem total ou sem página.
+ */
+internal fun progressoDoLivro(
+    palavras: List<PalavraGuardada>,
+    paginas: Int?,
+    leitura: Leitura? = null,
+): Pair<Int, Int>? {
     val total = paginas?.takeIf { it > 0 } ?: return null
-    val pagina = palavras.sortedByDescending { it.guardadaEm }.firstNotNullOfOrNull { it.page }
-        ?: return null
+    val pagina = paginaOndeVou(palavras, leitura) ?: return null
     return minOf(pagina, total) to total
 }
 
@@ -275,7 +302,7 @@ internal fun palavrasDoLivro(todas: List<PalavraGuardada>, titulo: String): List
 // --- o separador "Livros" ------------------------------------------------------------
 
 /**
- * Os livros: "A ler", "Parados", "Lidos" por ano e "Outros livros" (os que
+ * Os livros: "A ler", "Em pausa", "Lidos" por ano e "Outros livros" (os que
  * têm palavras mas nenhuma leitura marcada). Tocar abre a página do livro.
  */
 @Composable
@@ -314,6 +341,44 @@ fun EcraLivros(
     LaunchedEffect(aberto, livros) {
         if (aberto != null && livros.isNotEmpty() && livros[aberto] == null) aberto = null
     }
+    // Acabar um livro e partilhar a imagem: daqui, para servirem tanto a
+    // estante ("Acabei" no cartão) como a página do livro.
+    val ambito = rememberCoroutineScope()
+    var resumoAoAcabar by remember { mutableStateOf<Pair<ResumoLivro, LivroCompleto>?>(null) }
+    var aPartilhar by remember { mutableStateOf<DadosLivroLido?>(null) }
+    val partilhar: (LivroCompleto) -> Unit = { l ->
+        ambito.launch {
+            val doLivro = palavrasDoLivro(palavras, l.titulo)
+            val significados = palavrasParaImagem(doLivro).associate { p -> p.lemma to significadoCurto(vm, p) }
+            aPartilhar = dadosLivroLido(l, doLivro, significados)
+        }
+    }
+    val acabar: (LivroCompleto) -> Unit = { l ->
+        val doLivro = palavrasDoLivro(palavras, l.titulo)
+        val agora = System.currentTimeMillis()
+        vm.terminarLivro(l.titulo)
+        val lido = fecharLeitura(l, doLivro, agora)
+        resumoAoAcabar = resumoDoLivro(doLivro, lido, agora) to lido
+    }
+    resumoAoAcabar?.let { (resumo, lido) ->
+        DialogoResumoLivro(
+            lido.titulo, resumo,
+            aoFechar = { resumoAoAcabar = null },
+            aoPartilhar = { resumoAoAcabar = null; partilhar(lido) },
+        )
+    }
+    aPartilhar?.let { DialogoPartilharLivro(it, aoFechar = { aPartilhar = null }) }
+    // "Em que página vais?" a partir do cartão da estante.
+    var paginaDe by remember { mutableStateOf<LivroCompleto?>(null) }
+    paginaDe?.let { l ->
+        DialogoPagina(
+            paginaAtual = paginaOndeVou(palavrasDoLivro(palavras, l.titulo), l.atual),
+            paginasDoLivro = l.ficha.paginas,
+            aoCancelar = { paginaDe = null },
+            aoGuardar = { p, total -> vm.marcarPagina(l.titulo, p, total); paginaDe = null },
+        )
+    }
+
     if (livroAberto != null) {
         PaginaLivro(
             livro = livroAberto,
@@ -324,6 +389,8 @@ fun EcraLivros(
             aoMudarDeLivro = { aberto = it },
             aoAbrirPalavra = aoAbrirPalavra,
             aoRever = { aoReverLivro(livroAberto.titulo) },
+            aoAcabar = { acabar(livroAberto) },
+            aoPartilhar = { partilhar(livroAberto) },
         )
         return
     }
@@ -340,10 +407,12 @@ fun EcraLivros(
         )
     }
 
+    var filtro by rememberSaveable { mutableStateOf(FiltroLivros.TODOS) }
     val porEstado = livros.values.groupBy { it.estado }
     val contagem = remember(palavras) {
         palavras.mapNotNull { it.livro?.trim()?.takeIf(String::isNotEmpty) }.groupingBy { it }.eachCount()
     }
+    val aLer = livrosALer(livros)
 
     Scaffold(containerColor = Cores.bg) { padding ->
         Column(
@@ -351,103 +420,305 @@ fun EcraLivros(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 28.dp),
+                .padding(top = 18.dp, bottom = 28.dp),
         ) {
-            Text("Os meus livros", style = Estilo.tituloEcra, color = Cores.ink)
-            Spacer(Modifier.height(4.dp))
-            val lidos = porEstado[EstadoLeitura.LIDO].orEmpty().size
-            Text(
-                buildString {
-                    append(if (livros.size == 1) "1 livro" else "${livros.size} livros")
-                    if (lidos > 0) append(" · ").append(if (lidos == 1) "1 lido" else "$lidos lidos")
-                },
-                style = Estilo.texto.copy(fontSize = 14.sp),
-                color = Cores.ink2,
-            )
-            Spacer(Modifier.height(16.dp))
-            BotaoContornado("Começar um livro", { aCriar = true }, icone = Icons.Rounded.Add)
+            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    Text("Livros", style = Estilo.tituloEcra, color = Cores.ink)
+                    Spacer(Modifier.height(4.dp))
+                    val lidos = porEstado[EstadoLeitura.LIDO].orEmpty().size
+                    Text(
+                        buildString {
+                            append(if (livros.size == 1) "1 livro" else "${livros.size} livros")
+                            if (lidos > 0) append(" · ").append(if (lidos == 1) "1 lido" else "$lidos lidos")
+                        },
+                        style = Estilo.texto.copy(fontSize = 14.sp),
+                        color = Cores.ink2,
+                    )
+                }
+                IconButton(
+                    onClick = { aCriar = true },
+                    modifier = Modifier.size(44.dp).border(1.dp, Cores.line, CircleShape),
+                ) {
+                    Icon(Icons.Rounded.Add, "Adicionar livro", tint = Cores.ink)
+                }
+            }
 
             if (livros.isEmpty()) {
-                Spacer(Modifier.height(20.dp))
                 Text(
                     "Ainda não tens livros. Regista uma palavra com o livro onde a "
-                        + "encontraste, ou começa um livro aqui.",
+                        + "encontraste, ou começa um livro no \"+\".",
                     style = Estilo.corpo,
                     color = Cores.ink2,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp),
                 )
                 return@Column
             }
 
-            SeccaoLivros(
-                "A ler",
-                porEstado[EstadoLeitura.A_LER].orEmpty()
-                    .sortedByDescending { it.atual?.iniciadaEm ?: 0L },
-                contagem,
-            ) { aberto = it }
-            SeccaoLivros(
-                "Parados",
-                porEstado[EstadoLeitura.PARADO].orEmpty().sortedBy { it.titulo.lowercase() },
-                contagem,
-            ) { aberto = it }
-            porEstado[EstadoLeitura.LIDO].orEmpty()
-                .groupBy { l -> l.ultimaVezLido?.let { diaDe(it).year } ?: 0 }
-                .toSortedMap(compareByDescending { it })
-                .forEach { (ano, lista) ->
-                    SeccaoLivros(
-                        if (ano == 0) "Lidos" else "Lidos em $ano",
-                        lista.sortedByDescending { it.ultimaVezLido ?: 0L },
-                        contagem,
-                    ) { aberto = it }
+            // A ler agora: um cartão por livro, lado a lado se houver vários.
+            if (aLer.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                Overline("A ler agora", Modifier.padding(horizontal = 20.dp), cor = Cores.accentInk)
+                Spacer(Modifier.height(10.dp))
+                if (aLer.size == 1) {
+                    val l = aLer.single()
+                    CartaoALer(
+                        l, palavrasDoLivro(palavras, l.titulo),
+                        aoAbrir = { aberto = l.titulo },
+                        modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
+                        aoRever = { aoReverLivro(l.titulo) },
+                        aoAcabar = { acabar(l) },
+                        aoMarcarPagina = { paginaDe = l },
+                    )
+                } else {
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        aLer.forEach { l ->
+                            CartaoALer(
+                                l, palavrasDoLivro(palavras, l.titulo),
+                                aoAbrir = { aberto = l.titulo },
+                                modifier = Modifier.width(300.dp),
+                                aoRever = { aoReverLivro(l.titulo) },
+                                aoAcabar = { acabar(l) },
+                                aoMarcarPagina = { paginaDe = l },
+                            )
+                        }
+                    }
                 }
-            SeccaoLivros(
-                "Outros livros",
-                porEstado[EstadoLeitura.SEM_LEITURA].orEmpty().sortedByDescending { it.ficha.criadoEm },
-                contagem,
-            ) { aberto = it }
+            }
+
+            // A estante: os outros, em capas.
+            val lidos = porEstado[EstadoLeitura.LIDO].orEmpty()
+            val parados = porEstado[EstadoLeitura.PARADO].orEmpty()
+            val outros = porEstado[EstadoLeitura.SEM_LEITURA].orEmpty()
+            if (lidos.isNotEmpty() || parados.isNotEmpty() || outros.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    Modifier.padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FiltroLivros.entries.forEach { f ->
+                        ChipFiltro(f.rotulo, filtro == f) { filtro = f }
+                    }
+                }
+                val abrir: (String) -> Unit = { aberto = it }
+                if (filtro != FiltroLivros.PARADOS) {
+                    lidos.groupBy { l -> l.ultimaVezLido?.let { diaDe(it).year } ?: 0 }
+                        .toSortedMap(compareByDescending { it })
+                        .forEach { (ano, lista) ->
+                            GrelhaLivros(
+                                if (ano == 0) "Lidos" else "Lidos em $ano",
+                                if (lista.size == 1) "1 livro" else "${lista.size} livros",
+                                lista.sortedByDescending { it.ultimaVezLido ?: 0L },
+                                contagem, abrir,
+                            )
+                        }
+                }
+                if (filtro != FiltroLivros.LIDOS) {
+                    GrelhaLivros("Em pausa", null, parados.sortedBy { it.titulo.lowercase() }, contagem, abrir)
+                }
+                if (filtro == FiltroLivros.TODOS) {
+                    GrelhaLivros(
+                        "Outros livros", "sem leitura marcada",
+                        outros.sortedByDescending { it.ficha.criadoEm }, contagem, abrir,
+                    )
+                }
+                val vazio = when (filtro) {
+                    FiltroLivros.LIDOS -> lidos.isEmpty()
+                    FiltroLivros.PARADOS -> parados.isEmpty()
+                    FiltroLivros.TODOS -> false
+                }
+                if (vazio) {
+                    Text(
+                        if (filtro == FiltroLivros.LIDOS) "Ainda nenhum livro lido." else "Nenhum livro em pausa.",
+                        style = Estilo.texto,
+                        color = Cores.ink3,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private enum class FiltroLivros(val rotulo: String) { TODOS("Todos"), LIDOS("Lidos"), PARADOS("Em pausa") }
+
+/** Os livros a ler: o que vem escolhido ao registar primeiro, depois o começado mais tarde. */
+internal fun livrosALer(livros: Map<String, LivroCompleto>): List<LivroCompleto> =
+    livros.values.filter { it.estado == EstadoLeitura.A_LER }
+        .sortedWith(
+            compareByDescending<LivroCompleto> { it.ficha.emCurso }
+                .thenByDescending { it.atual?.iniciadaEm ?: 0L }
+        )
+
+/** "Acabei este livro", visto daqui: a leitura em curso fecha hoje (ou nasce já fechada). */
+private fun fecharLeitura(livro: LivroCompleto, palavras: List<PalavraGuardada>, agora: Long): LivroCompleto {
+    val fechada = (livro.atual?.takeIf { it.terminadaEm == null }
+        ?: Leitura(livroId = livro.ficha.id, iniciadaEm = palavras.minOfOrNull { it.guardadaEm }))
+        .copy(terminadaEm = agora, parada = false)
+    return LivroCompleto(livro.ficha, listOf(fechada))
+}
+
+/** Uma linha de significado: o do próprio, ou a primeira aceção do dicionário. */
+private suspend fun significadoCurto(vm: PesquisaViewModel, p: PalavraGuardada): String? =
+    dadosPartilha(vm.entradaPara(p.lemma), p)?.let { it.meuSignificado ?: it.acecoes.firstOrNull() }
+
+private fun textoPalavras(n: Int) = if (n == 1) "1 palavra" else "$n palavras"
+
+/**
+ * Um livro que se está a ler: capa, página, palavras e o progresso. Com
+ * `aoRever` e `aoAcabar` leva os dois botões (na estante); sem eles é o
+ * cartão pequeno do ecrã inicial, que só abre o livro.
+ */
+@Composable
+internal fun CartaoALer(
+    livro: LivroCompleto,
+    palavras: List<PalavraGuardada>,
+    aoAbrir: () -> Unit,
+    modifier: Modifier = Modifier,
+    aoRever: (() -> Unit)? = null,
+    aoAcabar: (() -> Unit)? = null,
+    /** "Em que página vais?", num toque, ao lado do progresso (na estante). */
+    aoMarcarPagina: (() -> Unit)? = null,
+) {
+    val forma = RoundedCornerShape(18.dp)
+    val comBotoes = aoRever != null || aoAcabar != null
+    val ficha = livro.ficha
+    Column(
+        modifier
+            .clip(forma)
+            .background(Cores.card)
+            .border(1.dp, Cores.line, forma)
+            .clickable(onClick = aoAbrir)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CapaLivro(
+                ficha.titulo, ficha.autor,
+                largura = if (comBotoes) 70.dp else 48.dp,
+                altura = if (comBotoes) 100.dp else 70.dp,
+                compacta = true,
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    ficha.titulo, style = Estilo.grupoTitulo, color = Cores.ink,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+                ficha.autor?.let {
+                    Text(it, style = Estilo.meta.copy(fontSize = 13.sp), color = Cores.ink2, maxLines = 1)
+                }
+                val progresso = progressoDoLivro(palavras, ficha.paginas, livro.atual)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    listOfNotNull(
+                        progresso?.let { (p, total) -> "p. $p de $total" }
+                            ?: paginaOndeVou(palavras, livro.atual)?.let { "p. $it" },
+                        textoPalavras(palavras.size),
+                    ).joinToString(" · "),
+                    style = Estilo.meta.copy(fontSize = 13.sp),
+                    color = Cores.ink2,
+                )
+                progresso?.let { (p, total) ->
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { p.toFloat() / total },
+                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                        color = Cores.accent,
+                        trackColor = Cores.sunk,
+                        drawStopIndicator = {},
+                    )
+                }
+            }
+            if (aoMarcarPagina != null) {
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = aoMarcarPagina, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.Rounded.EditNote, "Atualizar a página onde vais", tint = Cores.ink3)
+                }
+            }
+            if (!comBotoes) {
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Cores.ink3)
+            }
+        }
+        if (comBotoes) {
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (aoRever != null && palavras.isNotEmpty()) {
+                    BotaoPrincipal("Rever", aoRever, Modifier.weight(1f), altura = 44.dp)
+                }
+                if (aoAcabar != null) {
+                    BotaoContornado("Acabei de ler", aoAcabar, Modifier.weight(1f), altura = 44.dp)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SeccaoLivros(
+private fun ChipFiltro(texto: String, ativo: Boolean, aoTocar: () -> Unit) {
+    val forma = RoundedCornerShape(percent = 50)
+    Text(
+        texto,
+        style = Estilo.controloForte.copy(fontSize = 13.sp),
+        color = if (ativo) Cores.bg else Cores.ink2,
+        modifier = Modifier
+            .clip(forma)
+            .background(if (ativo) Cores.ink else Color.Transparent)
+            .border(1.dp, if (ativo) Cores.ink else Cores.line, forma)
+            .clickable(onClick = aoTocar)
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+    )
+}
+
+/** Uma prateleira: o título, e as capas três a três, com as palavras de cada uma por baixo. */
+@Composable
+private fun GrelhaLivros(
     titulo: String,
+    detalhe: String?,
     lista: List<LivroCompleto>,
     contagem: Map<String, Int>,
     aoAbrir: (String) -> Unit,
 ) {
     if (lista.isEmpty()) return
-    Spacer(Modifier.height(22.dp))
-    Overline(titulo, cor = Cores.accentInk)
-    Spacer(Modifier.height(6.dp))
-    lista.forEach { livro ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .clickable { aoAbrir(livro.titulo) }
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CapaLivro(livro.titulo, livro.ficha.autor, largura = 44.dp, altura = 60.dp, compacta = true)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    livro.titulo, style = Estilo.grupoTitulo, color = Cores.ink,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-                livro.ficha.autor?.let {
-                    Text(it, style = Estilo.meta.copy(fontSize = 12.5.sp), color = Cores.ink2)
-                }
-                periodoDeLeitura(livro)?.let {
-                    Text(it, style = Estilo.meta.copy(fontSize = 12.5.sp), color = Cores.accentInk)
-                }
-            }
-            val n = contagem[livro.titulo] ?: 0
-            if (n > 0) {
-                Spacer(Modifier.width(10.dp))
-                Text(n.toString(), style = Estilo.numeroEstat.copy(fontSize = 20.sp), color = Cores.accent)
-            }
+    Spacer(Modifier.height(24.dp))
+    Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.Bottom) {
+        Overline(titulo, cor = Cores.accentInk)
+        detalhe?.let {
+            Spacer(Modifier.width(8.dp))
+            Text(it, style = Estilo.meta.copy(fontSize = 12.sp), color = Cores.ink3)
         }
+    }
+    Spacer(Modifier.height(12.dp))
+    lista.chunked(3).forEach { linha ->
+        Row(
+            Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            linha.forEach { l ->
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { aoAbrir(l.titulo) },
+                ) {
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        CapaLivro(l.titulo, l.ficha.autor, largura = maxWidth, altura = maxWidth * 1.45f, compacta = true)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    val n = contagem[l.titulo] ?: 0
+                    Text(
+                        if (n == 0) "sem palavras" else textoPalavras(n),
+                        style = Estilo.meta.copy(fontSize = 12.sp),
+                        color = Cores.ink2,
+                    )
+                }
+            }
+            repeat(3 - linha.size) { Spacer(Modifier.weight(1f)) }
+        }
+        Spacer(Modifier.height(18.dp))
     }
 }
 
@@ -463,28 +734,35 @@ private fun PaginaLivro(
     aoMudarDeLivro: (String) -> Unit,
     aoAbrirPalavra: (String) -> Unit,
     aoRever: () -> Unit,
+    aoAcabar: () -> Unit,
+    aoPartilhar: () -> Unit,
 ) {
     val ficha = livro.ficha
     val ambito = rememberCoroutineScope()
     var editar by remember { mutableStateOf(false) }
     var juntar by remember { mutableStateOf(false) }
     var leituraAEditar by remember { mutableStateOf<Leitura?>(null) }
-    var resumoAoAcabar by remember { mutableStateOf<Pair<ResumoLivro, LivroCompleto>?>(null) }
-    var aPartilhar by remember { mutableStateOf<DadosLivroLido?>(null) }
-    // A imagem do livro lido: uma linha de significado para cada palavra que vai nela.
-    val partilhar: (LivroCompleto) -> Unit = { l ->
-        ambito.launch {
-            val significados = palavrasParaImagem(palavras).associate { p ->
-                p.lemma to dadosPartilha(vm.entradaPara(p.lemma), p)?.let { it.meuSignificado ?: it.acecoes.firstOrNull() }
-            }
-            aPartilhar = dadosLivroLido(l, palavras, significados)
-        }
-    }
     var menu by remember { mutableStateOf(false) }
+    var aMarcarPagina by remember { mutableStateOf(false) }
+    val leituraAberta = livro.estado == EstadoLeitura.A_LER || livro.estado == EstadoLeitura.PARADO
+    if (aMarcarPagina) {
+        DialogoPagina(
+            paginaAtual = paginaOndeVou(palavras, livro.atual),
+            paginasDoLivro = ficha.paginas,
+            aoCancelar = { aMarcarPagina = false },
+            aoGuardar = { p, total -> vm.marcarPagina(ficha.titulo, p, total); aMarcarPagina = false },
+        )
+    }
+    // Uma linha de significado por palavra, do dicionário (ou do próprio).
+    val significados by produceState(emptyMap<String, String?>(), palavras) {
+        value = palavras.associate { it.lemma to significadoCurto(vm, it) }
+    }
 
     if (editar) {
         DialogoFicha(
             livro = livro,
+            paginaAtual = paginaOndeVou(palavras, livro.atual),
+            aoMarcarPagina = if (leituraAberta) { t, p -> vm.marcarPagina(t, p, null) } else null,
             aoCancelar = { editar = false },
             aoEditar = { titulo, autor, paginas, nota ->
                 val r = vm.editarLivro(ficha.id, titulo, autor, paginas, nota)
@@ -519,18 +797,9 @@ private fun PaginaLivro(
             aoApagar = if (l.id != 0L) { { vm.apagarLeitura(l.id); leituraAEditar = null } } else null,
         )
     }
-    resumoAoAcabar?.let { (resumo, lido) ->
-        DialogoResumoLivro(
-            livro.titulo, resumo,
-            aoFechar = { resumoAoAcabar = null },
-            aoPartilhar = { resumoAoAcabar = null; partilhar(lido) },
-        )
-    }
-    aPartilhar?.let { DialogoPartilharLivro(it, aoFechar = { aPartilhar = null }) }
 
     // A página do livro não está num Scaffold: sem isto, a barra com o
-    // "voltar" ficava debaixo da barra de estado, e não havia como regressar
-    // à lista a não ser pelo "retroceder" do telemóvel.
+    // "voltar" ficava debaixo da barra de estado.
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         BarraVoltar(
             aoVoltar,
@@ -553,8 +822,8 @@ private fun PaginaLivro(
                             }
                         }
                         if (livro.estado == EstadoLeitura.LIDO) {
-                            ItemLivro("Partilhar o livro lido", Icons.Rounded.IosShare) {
-                                menu = false; partilhar(livro)
+                            ItemLivro("Partilhar o livro lido", Icons.Rounded.Share) {
+                                menu = false; aoPartilhar()
                             }
                         }
                         if (todos.size > 1) {
@@ -576,27 +845,52 @@ private fun PaginaLivro(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 28.dp),
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                CapaLivro(ficha.titulo, ficha.autor, largura = 92.dp, altura = 126.dp, compacta = true)
-                Spacer(Modifier.width(16.dp))
+            // A capa, o título e o estado.
+            Row(verticalAlignment = Alignment.Bottom) {
+                CapaLivro(ficha.titulo, ficha.autor, largura = 100.dp, altura = 144.dp, compacta = true)
+                Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f)) {
                     Text(ficha.titulo, style = Estilo.grupoTitulo.copy(fontSize = 22.sp), color = Cores.ink)
                     ficha.autor?.let {
                         Spacer(Modifier.height(2.dp))
-                        Text(it, style = Estilo.texto, color = Cores.ink2)
+                        Text(it, style = Estilo.meta.copy(fontSize = 14.sp), color = Cores.ink2)
                     }
                     periodoDeLeitura(livro)?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(it, style = Estilo.meta.copy(fontSize = 13.sp), color = Cores.accentInk)
+                        Spacer(Modifier.height(8.dp))
+                        Pilula(it, fundo = Cores.accentSoft, cor = Cores.accentInk)
                     }
                     if (ficha.emCurso) {
+                        Spacer(Modifier.height(4.dp))
                         Text("Vem escolhido ao registar", style = Estilo.meta, color = Cores.ink3)
                     }
-                    // L6: o progresso sai das páginas das palavras.
-                    if (livro.estado != EstadoLeitura.LIDO) {
-                        progressoDoLivro(palavras, ficha.paginas)?.let { (p, total) ->
-                            Spacer(Modifier.height(10.dp))
-                            Text("p. $p de $total", style = Estilo.meta.copy(fontSize = 13.sp), color = Cores.ink2)
+                }
+            }
+
+            // Onde vou: da última palavra ou escrito à mão, e atualiza-se num toque.
+            if (leituraAberta) {
+                val pagina = paginaOndeVou(palavras, livro.atual)
+                val progresso = progressoDoLivro(palavras, ficha.paginas, livro.atual)
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { aMarcarPagina = true }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when {
+                                progresso != null -> "p. ${progresso.first} de ${progresso.second}"
+                                pagina != null -> "p. $pagina"
+                                else -> "Em que página vais?"
+                            },
+                            style = if (pagina == null) Estilo.controloForte.copy(fontSize = 14.sp)
+                            else Estilo.meta.copy(fontSize = 13.sp),
+                            color = if (pagina == null) Cores.accentInk else Cores.ink2,
+                        )
+                        progresso?.let { (p, total) ->
                             Spacer(Modifier.height(4.dp))
                             LinearProgressIndicator(
                                 progress = { p.toFloat() / total },
@@ -607,103 +901,68 @@ private fun PaginaLivro(
                             )
                         }
                     }
+                    Spacer(Modifier.width(12.dp))
+                    Icon(Icons.Rounded.EditNote, "Atualizar a página onde vais", tint = Cores.ink3)
                 }
             }
 
-            // O que fazer com o livro agora, conforme o estado.
-            Spacer(Modifier.height(20.dp))
-            val acabar = {
-                val agora = System.currentTimeMillis()
-                vm.terminarLivro(ficha.titulo)
-                val fechada = (livro.atual?.takeIf { it.terminadaEm == null }
-                    ?: Leitura(livroId = ficha.id, iniciadaEm = palavras.minOfOrNull { it.guardadaEm }))
-                    .copy(terminadaEm = agora, parada = false)
-                val lido = LivroCompleto(ficha, listOf(fechada))
-                resumoAoAcabar = resumoDoLivro(palavras, lido, agora) to lido
-            }
-            when (livro.estado) {
-                EstadoLeitura.SEM_LEITURA -> {
-                    BotaoPrincipal("Estou a ler este livro", { vm.comecarLivro(ficha.titulo) }, Modifier.fillMaxWidth())
-                    TextoAcao("Já o li") { acabar() }
-                }
-                EstadoLeitura.A_LER -> {
-                    BotaoPrincipal("Acabei este livro", acabar, Modifier.fillMaxWidth())
-                    TextoAcao("Parar de ler") { vm.pararLivro(ficha.titulo) }
-                }
-                EstadoLeitura.PARADO -> {
-                    BotaoPrincipal("Retomar", { vm.comecarLivro(ficha.titulo) }, Modifier.fillMaxWidth())
-                    TextoAcao("Acabei este livro") { acabar() }
-                }
-                EstadoLeitura.LIDO ->
-                    BotaoContornado("Voltar a ler", { vm.comecarLivro(ficha.titulo) }, Modifier.fillMaxWidth())
-            }
-            if (palavras.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                BotaoContornado("Rever este livro", aoRever, Modifier.fillMaxWidth(), icone = Icons.Rounded.Quiz)
-            }
-
-            // O resumo.
-            Spacer(Modifier.height(26.dp))
-            Overline("Resumo")
-            Spacer(Modifier.height(8.dp))
+            // Os números: dias, palavras, sabidas.
             val resumo = resumoDoLivro(palavras, livro)
-            Text(frasesDoResumo(resumo), style = Estilo.texto.copy(lineHeight = 1.45.em), color = Cores.ink2)
-            if (resumo.aCustar.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text("Ainda custam", style = Estilo.rotulo.copy(fontSize = 13.sp), color = Cores.ink2)
-                Spacer(Modifier.height(2.dp))
-                Text(resumo.aCustar.joinToString(" · "), style = Estilo.corpo.copy(fontSize = 17.sp), color = Cores.ink)
-            }
-
-            // As leituras.
-            Spacer(Modifier.height(26.dp))
-            Overline("Leituras")
-            Spacer(Modifier.height(4.dp))
-            val leituras = livro.leituras.sortedByDescending { it.iniciadaEm ?: it.terminadaEm ?: 0L }
-            if (leituras.isEmpty()) {
-                Text("Nenhuma marcada.", style = Estilo.texto, color = Cores.ink3, modifier = Modifier.padding(vertical = 6.dp))
-            }
-            leituras.forEach { l ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { leituraAEditar = l }
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(textoDaLeitura(l), style = Estilo.texto, color = Cores.ink)
-                        diasDeLeitura(l.iniciadaEm, l.terminadaEm)?.let {
-                            Text(if (it == 1) "1 dia" else "$it dias", style = Estilo.meta, color = Cores.ink3)
-                        }
-                    }
-                    Icon(Icons.Rounded.EditNote, "Corrigir as datas", tint = Cores.ink3)
-                }
-            }
-            TextoAcao("Acrescentar uma leitura") {
-                leituraAEditar = Leitura(livroId = ficha.id)
-            }
-
-            // A nota.
-            Spacer(Modifier.height(20.dp))
-            Overline("Nota")
-            Spacer(Modifier.height(6.dp))
-            Text(
-                ficha.nota ?: "Escreve uma nota sobre o livro.",
-                style = if (ficha.nota != null) Estilo.texto.copy(lineHeight = 1.45.em)
-                else Estilo.texto.copy(fontStyle = FontStyle.Italic),
-                color = if (ficha.nota != null) Cores.ink else Cores.ink3,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { editar = true }
-                    .padding(vertical = 6.dp),
+            Spacer(Modifier.height(18.dp))
+            FaixaNumeros(
+                listOfNotNull(
+                    resumo.dias?.let { it.toString() to if (resumo.lido) "dias" else "dias a ler" },
+                    palavras.size.toString() to if (palavras.size == 1) "palavra" else "palavras",
+                    resumo.sabidas.toString() to "já sabes",
+                )
             )
 
-            // As palavras.
-            Spacer(Modifier.height(20.dp))
-            Overline(if (palavras.isEmpty()) "Palavras" else "Palavras (${palavras.size})")
+            // O que fazer agora, conforme o estado.
+            Spacer(Modifier.height(16.dp))
+            val rever = if (palavras.size == 1) "Rever a palavra" else "Rever as ${palavras.size} palavras"
+            when (livro.estado) {
+                EstadoLeitura.SEM_LEITURA -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BotaoPrincipal("Estou a ler", { vm.comecarLivro(ficha.titulo) }, Modifier.weight(1f), altura = 50.dp)
+                    BotaoContornado("Já o li", aoAcabar, Modifier.weight(1f), altura = 50.dp)
+                }
+                // A ler: rever em destaque; pausar e acabar lado a lado, por baixo.
+                EstadoLeitura.A_LER -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (palavras.isNotEmpty()) {
+                        BotaoPrincipal(rever, aoRever, Modifier.fillMaxWidth(), altura = 50.dp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        BotaoContornado("Pausar leitura", { vm.pararLivro(ficha.titulo) }, Modifier.weight(1f), altura = 48.dp)
+                        BotaoContornado("Acabei de ler", aoAcabar, Modifier.weight(1f), altura = 48.dp)
+                    }
+                }
+                EstadoLeitura.PARADO -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BotaoPrincipal("Retomar", { vm.comecarLivro(ficha.titulo) }, Modifier.weight(1f), altura = 50.dp)
+                    BotaoContornado("Acabei de ler", aoAcabar, Modifier.weight(1f), altura = 50.dp)
+                }
+                EstadoLeitura.LIDO -> Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (palavras.isNotEmpty()) {
+                        BotaoPrincipal(rever, aoRever, Modifier.weight(1f), altura = 50.dp)
+                    }
+                    IconButton(
+                        onClick = aoPartilhar,
+                        modifier = Modifier.size(50.dp).border(1.dp, Cores.line, CircleShape),
+                    ) {
+                        Icon(Icons.Rounded.Share, "Partilhar o livro lido", tint = Cores.ink)
+                    }
+                }
+            }
+
+            // As palavras, logo a seguir: são o centro da página.
+            Spacer(Modifier.height(26.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Overline("Palavras", Modifier.weight(1f), cor = Cores.accentInk)
+                if (palavras.size > 1) {
+                    Text("a mais recente primeiro", style = Estilo.meta.copy(fontSize = 12.sp), color = Cores.ink3)
+                }
+            }
             Spacer(Modifier.height(4.dp))
             if (palavras.isEmpty()) {
                 Text(
@@ -712,21 +971,171 @@ private fun PaginaLivro(
                     modifier = Modifier.padding(vertical = 6.dp),
                 )
             }
+            val custam = resumo.aCustar.toSet()
             palavras.forEach { p ->
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
                         .clickable { aoAbrirPalavra(p.lemma) }
-                        .padding(vertical = 9.dp),
+                        .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(p.lemma, style = Estilo.linhaLema.copy(fontSize = 18.sp), color = Cores.ink, modifier = Modifier.weight(1f))
-                    p.page?.let { Text("p. $it", style = Estilo.meta, color = Cores.ink3) }
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(p.lemma, style = Estilo.linhaLema.copy(fontSize = 18.sp), color = Cores.ink)
+                            if (p.lemma in custam) {
+                                Spacer(Modifier.width(8.dp))
+                                Pilula("ainda custa", fundo = Cores.sunk, cor = Cores.ink2)
+                            }
+                        }
+                        significados[p.lemma]?.let {
+                            Text(
+                                it, style = Estilo.texto.copy(fontSize = 14.sp), color = Cores.ink2,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    p.page?.let {
+                        Spacer(Modifier.width(10.dp))
+                        Text("p. $it", style = Estilo.meta, color = Cores.ink3)
+                    }
                 }
+                HorizontalDivider(color = Cores.line.copy(alpha = 0.6f))
+            }
+
+            // Sobre a leitura: as leituras, a nota, e o resto das ações.
+            Spacer(Modifier.height(26.dp))
+            Overline("Sobre a leitura", cor = Cores.accentInk)
+            Spacer(Modifier.height(10.dp))
+            val forma = RoundedCornerShape(16.dp)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(forma)
+                    .background(Cores.card)
+                    .border(1.dp, Cores.line, forma),
+            ) {
+                val leituras = livro.leituras.sortedByDescending { it.iniciadaEm ?: it.terminadaEm ?: 0L }
+                leituras.forEach { l ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { leituraAEditar = l }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(textoDaLeitura(l), style = Estilo.texto, color = Cores.ink)
+                            diasDeLeitura(l.iniciadaEm, l.terminadaEm)?.let {
+                                Text(if (it == 1) "1 dia" else "$it dias", style = Estilo.meta, color = Cores.ink3)
+                            }
+                        }
+                        Icon(Icons.Rounded.EditNote, "Corrigir as datas", tint = Cores.ink3)
+                    }
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Cores.line)
+                }
+                Text(
+                    if (leituras.isEmpty()) "Acrescentar uma leitura" else "Acrescentar uma leitura antiga",
+                    style = Estilo.controloForte.copy(fontSize = 14.sp),
+                    color = Cores.accentInk,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { leituraAEditar = Leitura(livroId = ficha.id) }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                )
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = Cores.line)
+                Text(
+                    ficha.nota ?: "Escreve uma nota sobre o livro.",
+                    style = if (ficha.nota != null) Estilo.texto.copy(lineHeight = 1.45.em)
+                    else Estilo.texto.copy(fontStyle = FontStyle.Italic),
+                    color = if (ficha.nota != null) Cores.ink else Cores.ink3,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { editar = true }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                )
+            }
+            when (livro.estado) {
+                EstadoLeitura.LIDO -> TextoAcao("Voltar a ler") { vm.comecarLivro(ficha.titulo) }
+                else -> {}
             }
         }
     }
+}
+
+/** Os números do livro numa faixa: "98 dias · 11 palavras · 8 já sabes". */
+@Composable
+private fun FaixaNumeros(numeros: List<Pair<String, String>>) {
+    val forma = RoundedCornerShape(16.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .background(Cores.card)
+            .border(1.dp, Cores.line, forma)
+            .height(IntrinsicSize.Min),
+    ) {
+        numeros.forEachIndexed { i, (numero, rotulo) ->
+            if (i > 0) VerticalDivider(color = Cores.line)
+            Column(
+                Modifier.weight(1f).padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(numero, style = Estilo.numeroEstat.copy(fontSize = 22.sp), color = Cores.accent)
+                Text(rotulo, style = Estilo.meta.copy(fontSize = 12.sp), color = Cores.ink2)
+            }
+        }
+    }
+}
+
+/** "Em que página vais?": a página onde se pousou o livro, e o total se faltar. */
+@Composable
+private fun DialogoPagina(
+    paginaAtual: Int?,
+    paginasDoLivro: Int?,
+    aoCancelar: () -> Unit,
+    aoGuardar: (pagina: Int, paginasDoLivro: Int?) -> Unit,
+) {
+    var pagina by rememberSaveable { mutableStateOf(paginaAtual?.toString().orEmpty()) }
+    var total by rememberSaveable { mutableStateOf(paginasDoLivro?.toString().orEmpty()) }
+    val p = pagina.toIntOrNull()?.takeIf { it > 0 }
+    AlertDialog(
+        onDismissRequest = aoCancelar,
+        containerColor = Cores.card,
+        title = { Text("Em que página vais?", style = Estilo.grupoTitulo.copy(fontSize = 22.sp), color = Cores.ink) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Para saberes onde ias da próxima vez que pegares no livro.",
+                    style = Estilo.ajuda, color = Cores.ink2,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CampoFormulario(
+                        "Página", pagina, { novo -> pagina = novo.filter { it.isDigit() }.take(5) },
+                        modifier = Modifier.weight(1f), numerico = true,
+                    )
+                    CampoFormulario(
+                        "De quantas", total, { novo -> total = novo.filter { it.isDigit() }.take(5) },
+                        modifier = Modifier.weight(1f), numerico = true,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { p?.let { aoGuardar(it, total.toIntOrNull()?.takeIf { t -> t > 0 }) } },
+                enabled = p != null,
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+            ) { Text("Guardar", style = Estilo.controloForte) }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = aoCancelar,
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+            ) { Text("Cancelar", style = Estilo.controlo) }
+        },
+    )
 }
 
 @Composable
@@ -760,7 +1169,7 @@ private fun ItemLivro(
 // --- diálogos ------------------------------------------------------------------------------
 
 /**
- * A ficha do livro: criar ("Começar um livro") ou editar. Ao editar, um título
+ * A ficha do livro: criar ("Adicionar livro") ou editar. Ao editar, um título
  * que já é de outro livro não se aceita, mas oferece-se juntar os dois.
  */
 @Composable
@@ -770,9 +1179,13 @@ private fun DialogoFicha(
     aoCriar: suspend (titulo: String, autor: String?, paginas: Int?, comecar: Boolean) -> Boolean = { _, _, _, _ -> false },
     aoEditar: suspend (titulo: String, autor: String?, paginas: Int?, nota: String?) -> ResultadoFicha = { _, _, _, _ -> ResultadoFicha.FEITO },
     aoJuntarCom: (String) -> Unit = {},
+    /** Onde se vai, para o campo "Página onde vais" (só com uma leitura aberta). */
+    paginaAtual: Int? = null,
+    aoMarcarPagina: ((titulo: String, pagina: Int) -> Unit)? = null,
 ) {
     val ambito = rememberCoroutineScope()
     val f = livro?.ficha
+    var ondeVou by rememberSaveable { mutableStateOf(paginaAtual?.toString().orEmpty()) }
     var titulo by rememberSaveable { mutableStateOf(f?.titulo.orEmpty()) }
     var autor by rememberSaveable { mutableStateOf(f?.autor.orEmpty()) }
     var paginas by rememberSaveable { mutableStateOf(f?.paginas?.toString().orEmpty()) }
@@ -786,7 +1199,7 @@ private fun DialogoFicha(
         containerColor = Cores.card,
         title = {
             Text(
-                if (livro == null) "Começar um livro" else "A ficha do livro",
+                if (livro == null) "Adicionar livro" else "A ficha do livro",
                 style = Estilo.grupoTitulo.copy(fontSize = 22.sp),
                 color = Cores.ink,
             )
@@ -810,6 +1223,14 @@ private fun DialogoFicha(
                         "Páginas", paginas,
                         { novo -> paginas = novo.filter { it.isDigit() }.take(5) },
                         modifier = Modifier.width(90.dp),
+                        numerico = true,
+                    )
+                }
+                if (livro != null && aoMarcarPagina != null) {
+                    CampoFormulario(
+                        "Página onde vais", ondeVou,
+                        { novo -> ondeVou = novo.filter { it.isDigit() }.take(5) },
+                        modifier = Modifier.width(160.dp),
                         numerico = true,
                     )
                 }
@@ -860,13 +1281,18 @@ private fun DialogoFicha(
                             when (aoEditar(titulo, autor, p, nota)) {
                                 ResultadoFicha.TITULO_EXISTE -> conflito = titulo.trim()
                                 ResultadoFicha.TITULO_VAZIO -> erro = "Falta o título."
-                                ResultadoFicha.FEITO -> Unit
+                                ResultadoFicha.FEITO -> {
+                                    val novaPagina = ondeVou.toIntOrNull()?.takeIf { it > 0 }
+                                    if (novaPagina != null && novaPagina != paginaAtual) {
+                                        aoMarcarPagina?.invoke(titulo.trim(), novaPagina)
+                                    }
+                                }
                             }
                         }
                     }
                 },
                 colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
-            ) { Text(if (livro == null) "Começar" else "Guardar", style = Estilo.controloForte) }
+            ) { Text(if (livro == null) "Adicionar" else "Guardar", style = Estilo.controloForte) }
         },
         dismissButton = {
             TextButton(
