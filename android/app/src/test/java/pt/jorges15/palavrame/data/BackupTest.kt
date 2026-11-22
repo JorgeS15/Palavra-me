@@ -82,4 +82,77 @@ class BackupTest {
         assertNull(Backup.desserializar("isto não é json"))
         assertNull(Backup.desserializar("{}"))            // sem 'palavras'
     }
+
+    @Test
+    fun `o round-trip preserva as fichas dos livros e as leituras`() {
+        val livros = listOf(
+            LivroCompleto(
+                FichaLivro(titulo = "Os Maias", autor = "Eça de Queirós", paginas = 714,
+                    nota = "Releitura.", criadoEm = 1000L),
+                listOf(
+                    Leitura(livroId = 0, iniciadaEm = 1000L, terminadaEm = 5000L),
+                    Leitura(livroId = 0, iniciadaEm = 9000L, parada = true),
+                ),
+            ),
+            LivroCompleto(
+                FichaLivro(titulo = "Ensaio sobre a Cegueira", criadoEm = 2000L, emCurso = true),
+                emptyList(),
+            ),
+        )
+        val volta = Backup.desserializar(
+            Backup.serializar(emptyList(), null, "1.0", livros)
+        )!!.livros
+        assertEquals(livros, volta)
+    }
+
+    @Test
+    fun `o formato das versoes de teste le-se como leituras`() {
+        val json = """
+            {"palavras": [], "livros": [
+              {"titulo": "A", "iniciado_em": 100, "terminado_em": 200},
+              {"titulo": "B", "iniciado_em": 300, "em_curso": true},
+              {"titulo": "C", "iniciado_em": 400}
+            ]}
+        """.trimIndent()
+        val livros = Backup.desserializar(json)!!.livros.associateBy { it.titulo }
+        assertEquals(listOf(Leitura(livroId = 0, iniciadaEm = 100, terminadaEm = 200)), livros["A"]!!.leituras)
+        assertEquals(EstadoLeitura.A_LER, livros["B"]!!.estado)
+        assertEquals(EstadoLeitura.SEM_LEITURA, livros["C"]!!.estado)
+        assertEquals(400L, livros["C"]!!.ficha.criadoEm)
+    }
+
+    @Test
+    fun `o titulo do livro entra sem espacos a volta`() {
+        val json = Backup.serializar(
+            listOf(
+                PalavraGuardada(lemma = "langor", livro = "  Os Maias "),
+                PalavraGuardada(lemma = "pundonor", livro = "   "),
+            ),
+            null, "1.0",
+        )
+        val p = Backup.desserializar(json)!!.palavras
+        assertEquals("Os Maias", p[0].livro)
+        assertNull(p[1].livro)
+    }
+
+    @Test
+    fun `uma copia anterior sem livros le-se com a lista vazia`() {
+        val json = Backup.serializar(emptyList(), null, "1.0")
+        assertEquals(emptyList<LivroCompleto>(), Backup.desserializar(json)!!.livros)
+    }
+
+    @Test
+    fun `o estado sai da leitura mais recente`() {
+        val f = FichaLivro(id = 1, titulo = "A", criadoEm = 0)
+        assertEquals(EstadoLeitura.SEM_LEITURA, LivroCompleto(f).estado)
+        val lida = Leitura(id = 1, livroId = 1, iniciadaEm = 100, terminadaEm = 200)
+        assertEquals(EstadoLeitura.LIDO, LivroCompleto(f, listOf(lida)).estado)
+        val releitura = Leitura(id = 2, livroId = 1, iniciadaEm = 300)
+        assertEquals(EstadoLeitura.A_LER, LivroCompleto(f, listOf(lida, releitura)).estado)
+        assertEquals(
+            EstadoLeitura.PARADO,
+            LivroCompleto(f, listOf(lida, releitura.copy(parada = true))).estado,
+        )
+        assertEquals(listOf(lida), LivroCompleto(f, listOf(lida, releitura)).lidas)
+    }
 }

@@ -13,10 +13,12 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,6 +28,7 @@ import pt.jorges15.palavrame.jogo.EstadoJogo
 import pt.jorges15.palavrame.jogo.JogoViewModel
 import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
 import pt.jorges15.palavrame.jogo.Niveis
+import pt.jorges15.palavrame.jogo.Perguntas
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
 
@@ -52,7 +55,14 @@ fun EcraJogo(vm: JogoViewModel, aoVoltar: () -> Unit) {
                 icone = Icons.Rounded.Close,
                 descricao = "Fechar",
                 centro = {
-                    Text("Rever", style = Estilo.controloForte, color = Cores.ink)
+                    // A rever um livro, diz-se qual.
+                    Text(
+                        vm.livro?.let { "Rever \"$it\"" } ?: "Rever",
+                        style = Estilo.controloForte,
+                        color = Cores.ink,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                 },
                 direita = {
                     progresso?.let {
@@ -104,6 +114,18 @@ fun EcraJogo(vm: JogoViewModel, aoVoltar: () -> Unit) {
                         aoVoltar = aoVoltar,
                     )
 
+                    is EstadoJogo.LivroRevisto -> Explicacao(
+                        titulo = "Livro revisto",
+                        texto = if (e.revistas == 0) {
+                            ("Nenhuma palavra de \"${e.titulo}\" deu uma pergunta. Precisam "
+                                + "de definição no dicionário.")
+                        } else {
+                            ("Passaste pelas palavras de \"${e.titulo}\" que dão pergunta. "
+                                + "Boa leitura.")
+                        },
+                        aoVoltar = aoVoltar,
+                    )
+
                     is EstadoJogo.AJogar -> Pergunta(e, vm, aoVoltar)
                 }
             }
@@ -129,6 +151,9 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
             )
         }
 
+        if (e.escrever) {
+            PerguntaEscrita(e, vm)
+        } else {
         Overline("O que quer dizer")
         Spacer(Modifier.height(8.dp))
         TextoMarcado(e.pergunta.lemma, Estilo.lema)
@@ -154,12 +179,17 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
                 aoTocar = { vm.responder(i) },
             )
         }
+        }
 
         if (e.respondida != null) {
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (e.acertou == true) "Certo." else "Era outra.",
+                    when {
+                        e.acertou == true -> "Certo."
+                        e.escrever -> "Era esta."
+                        else -> "Era outra."
+                    },
                     style = Estilo.resultado,
                     color = Cores.ink,
                     modifier = Modifier.weight(1f),
@@ -243,6 +273,80 @@ private fun Pergunta(e: EstadoJogo.AJogar, vm: JogoViewModel, aoVoltar: () -> Un
             } else {
                 BotaoPrincipal("Feito", aoVoltar, Modifier.fillMaxWidth())
             }
+        }
+    }
+}
+
+/**
+ * Escrever a palavra (1.22): a classe, a definição e uma pista (a primeira
+ * letra e o tamanho), e um campo sem correção automática. "Não sei" conta
+ * como errada, sem drama. Respondida, mostra-se a palavra, e o que se
+ * escreveu se não era. Certa sem acentos conta como certa, e diz-se a grafia.
+ */
+@Composable
+private fun PerguntaEscrita(e: EstadoJogo.AJogar, vm: JogoViewModel) {
+    var texto by rememberSaveable(e.pergunta.lemma) { mutableStateOf("") }
+    val lemma = e.pergunta.lemma
+
+    Overline("Que palavra é")
+    if (e.pergunta.pos.isNotBlank() && e.pergunta.pos != "desconhecido") {
+        Spacer(Modifier.height(6.dp))
+        Text(rotuloPos(e.pergunta.pos), style = Estilo.classe, color = Cores.ink2)
+    }
+    Spacer(Modifier.height(12.dp))
+    Text(
+        e.pergunta.definicaoCerta,
+        style = Estilo.acecao,
+        color = Cores.ink,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Cores.sunk)
+            .padding(16.dp),
+    )
+    Spacer(Modifier.height(10.dp))
+    Text(Perguntas.pista(lemma), style = Estilo.ajuda, color = Cores.ink3)
+    Spacer(Modifier.height(18.dp))
+
+    if (e.respondida == null) {
+        val responder = { if (texto.isNotBlank()) vm.responderEscrita(texto) }
+        CampoFormulario(
+            null, texto, { texto = it },
+            placeholder = "A palavra",
+            capitalizacao = KeyboardCapitalization.None,
+            semCorrecao = true,
+            aoConcluir = responder,
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = { vm.responderEscrita("") },
+                modifier = Modifier.weight(1f).height(52.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+            ) { Text("Não sei", style = Estilo.botao) }
+            BotaoPrincipal(
+                "Responder", responder,
+                modifier = Modifier.weight(2f),
+                altura = 52.dp,
+                ativo = texto.isNotBlank(),
+            )
+        }
+    } else {
+        TextoMarcado(lemma, Estilo.lema)
+        val escrito = e.escrito.orEmpty()
+        val nota = when {
+            e.acertou == true && Perguntas.grafiaDiferente(escrito, lemma) ->
+                "Escreveste \"$escrito\". Escreve-se assim, com os acentos."
+            e.acertou != true && escrito.isNotBlank() -> "Escreveste \"$escrito\"."
+            else -> null
+        }
+        nota?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, style = Estilo.ajuda, color = Cores.ink2)
         }
     }
 }

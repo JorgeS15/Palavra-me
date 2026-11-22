@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -39,6 +40,7 @@ import pt.jorges15.palavrame.ui.EcraColecao
 import pt.jorges15.palavrame.ui.EcraDefinicoes
 import pt.jorges15.palavrame.ui.EcraJogo
 import pt.jorges15.palavrame.ui.EcraLicencas
+import pt.jorges15.palavrame.ui.EcraLivros
 import pt.jorges15.palavrame.ui.EcraPesquisa
 import pt.jorges15.palavrame.ui.PesquisaViewModel
 import pt.jorges15.palavrame.ui.AcaoNovidade
@@ -52,7 +54,7 @@ import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
 import pt.jorges15.palavrame.ui.theme.TemaPalavrame
 
-private enum class Ecra { PESQUISA, COLECAO, DEFINICOES, LICENCAS, JOGO }
+private enum class Ecra { PESQUISA, COLECAO, LIVROS, DEFINICOES, LICENCAS, JOGO }
 
 class MainActivity : ComponentActivity() {
 
@@ -126,9 +128,12 @@ class MainActivity : ComponentActivity() {
                 // A sessão 0, quando a app abriu pela notificação, é a do
                 // lembrete; as outras são revisões à mão ("Rever agora").
                 var sessaoJogo by rememberSaveable { mutableStateOf(0) }
+                // O livro a rever (pedido na Coleção), ou nulo para a revisão normal.
+                var livroARever by rememberSaveable { mutableStateOf<String?>(null) }
                 // A palavra aberta veio da Coleção: o "retroceder" da palavra
                 // leva de volta para lá, e não para o ecrã inicial.
-                var palavraDaColecao by rememberSaveable { mutableStateOf(false) }
+                // (Ou dos Livros, desde a 1.22: a página do livro abre palavras.)
+                var origemDaPalavra by rememberSaveable { mutableStateOf<Ecra?>(null) }
                 // Guarda o estado de cada separador (a posição na lista, o
                 // filtro, os livros recolhidos) enquanto se está noutro: voltar
                 // à Coleção encontra-a como se deixou.
@@ -140,8 +145,14 @@ class MainActivity : ComponentActivity() {
                 // palavras (dentro do EcraPesquisa) e a saída normal tratarem
                 // disso.
                 BackHandler(enabled = ecra != Ecra.PESQUISA) {
-                    palavraDaColecao = false
-                    ecra = if (ecra == Ecra.LICENCAS) Ecra.DEFINICOES else Ecra.PESQUISA
+                    origemDaPalavra = null
+                    ecra = when {
+                        ecra == Ecra.LICENCAS -> Ecra.DEFINICOES
+                        // A rever um livro, volta-se ao livro, como no "×".
+                        ecra == Ecra.JOGO && livroARever != null -> Ecra.LIVROS
+                        else -> Ecra.PESQUISA
+                    }
+                    livroARever = null
                 }
 
                 // Palavra vinda de outra app (o leitor de e-books): procura-se
@@ -237,7 +248,7 @@ class MainActivity : ComponentActivity() {
                 val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
                 // O Rever é um ecrã inteiro, com o seu "×"; as licenças são um
                 // subecrã das definições. Nos outros três há a barra de baixo.
-                val comBarra = ecra == Ecra.PESQUISA || ecra == Ecra.COLECAO ||
+                val comBarra = ecra == Ecra.PESQUISA || ecra == Ecra.COLECAO || ecra == Ecra.LIVROS ||
                     ecra == Ecra.DEFINICOES
 
                 Scaffold(
@@ -253,7 +264,7 @@ class MainActivity : ComponentActivity() {
                                     // Tocar outra vez em Procurar volta ao início.
                                     if (destino == Ecra.PESQUISA && ecra == Ecra.PESQUISA) vm.limpar()
                                     // Mudar de separador à mão corta a ligação à Coleção.
-                                    palavraDaColecao = false
+                                    origemDaPalavra = null
                                     ecra = destino
                                 },
                             )
@@ -273,12 +284,30 @@ class MainActivity : ComponentActivity() {
                                         // pronta: senão via-se o início por um
                                         // instante.
                                         vm.procurar(lema) {
-                                            palavraDaColecao = true
+                                            origemDaPalavra = Ecra.COLECAO
                                             ecra = Ecra.PESQUISA
                                         }
                                     },
+                                    aoAbrirLivro = { titulo ->
+                                        livroPedido = titulo
+                                        ecra = Ecra.LIVROS
+                                    },
+                                )
+                                Ecra.LIVROS -> EcraLivros(
+                                    vm,
                                     livroInicial = livroPedido,
                                     aoUsarLivroInicial = { livroPedido = null },
+                                    aoAbrirPalavra = { lema ->
+                                        vm.procurar(lema) {
+                                            origemDaPalavra = Ecra.LIVROS
+                                            ecra = Ecra.PESQUISA
+                                        }
+                                    },
+                                    aoReverLivro = { titulo ->
+                                        livroARever = titulo
+                                        sessaoJogo++
+                                        ecra = Ecra.JOGO
+                                    },
                                 )
                                 Ecra.DEFINICOES -> EcraDefinicoes(
                                     preferencias,
@@ -294,34 +323,40 @@ class MainActivity : ComponentActivity() {
                                     // logo, sem fechar a app.
                                     val doLembrete = daNotificacao && sessaoJogo == 0
                                     val jogo: JogoViewModel = viewModel(
-                                        key = "jogo-$sessaoJogo-$desenvolvedor",
+                                        key = "jogo-$sessaoJogo-$desenvolvedor-${livroARever.orEmpty()}",
                                         factory = fabricaJogo(
                                             app, preferencias, desenvolvedor,
                                             lemaPreferido = if (doLembrete) lemaDaNotificacao else null,
                                             deLembrete = doLembrete,
+                                            livro = livroARever,
                                         ),
                                     )
-                                    EcraJogo(jogo, aoVoltar = { ecra = Ecra.PESQUISA })
+                                    // De um livro, volta-se à Coleção, de onde se veio.
+                                    EcraJogo(jogo, aoVoltar = {
+                                        ecra = if (livroARever != null) Ecra.LIVROS else Ecra.PESQUISA
+                                        livroARever = null
+                                    })
                                 }
                                 Ecra.PESQUISA -> EcraPesquisa(
                                     vm,
                                     preferencias,
                                     aoAbrirColecao = { ecra = Ecra.COLECAO },
                                     aoAbrirJogo = {
+                                        livroARever = null
                                         sessaoJogo++
                                         ecra = Ecra.JOGO
                                     },
                                     aoAbrirLivro = { titulo ->
                                         livroPedido = titulo
-                                        ecra = Ecra.COLECAO
+                                        ecra = Ecra.LIVROS
                                     },
-                                    aoSairParaOrigem = if (palavraDaColecao) {
+                                    aoSairParaOrigem = origemDaPalavra?.let { origem ->
                                         {
                                             vm.limpar()
-                                            palavraDaColecao = false
-                                            ecra = Ecra.COLECAO
+                                            origemDaPalavra = null
+                                            ecra = origem
                                         }
-                                    } else null,
+                                    },
                                 )
                             }
                           }
@@ -362,6 +397,7 @@ class MainActivity : ComponentActivity() {
         treinoLivre: Boolean,
         lemaPreferido: String?,
         deLembrete: Boolean,
+        livro: String? = null,
     ) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -373,6 +409,8 @@ class MainActivity : ComponentActivity() {
                 cotaRestante = { preferencias.cotaManual.value.restantes(LocalDate.now()) },
                 gastarCota = { preferencias.usarCotaManual() },
                 aoResponder = { lemma -> Lembrete.esquecerSeAnunciou(app, lemma) },
+                escreverAPalavra = { preferencias.escreverAPalavra.value },
+                livro = livro,
             ) as T
     }
 }
@@ -383,6 +421,7 @@ private data class Destino(val ecra: Ecra, val rotulo: String, val icone: ImageV
 private val DESTINOS = listOf(
     Destino(Ecra.PESQUISA, "Procurar", Icons.Rounded.Search),
     Destino(Ecra.COLECAO, "Coleção", Icons.Rounded.Bookmarks),
+    Destino(Ecra.LIVROS, "Livros", Icons.Rounded.AutoStories),
     Destino(Ecra.DEFINICOES, "Definições", Icons.Rounded.Tune),
 )
 

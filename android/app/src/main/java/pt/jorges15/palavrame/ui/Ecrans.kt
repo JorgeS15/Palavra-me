@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -66,6 +67,7 @@ fun EcraPesquisa(
 ) {
     val estado by vm.estado.collectAsState()
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
+    val livroEmCurso by vm.livroEmCurso.collectAsState()
     val guardados by vm.lemasGuardados.collectAsState(initial = emptySet())
     // Do ViewModel, já carregada: voltar a este ecrã não pisca vazio (ver
     // `PesquisaViewModel.colecao`). Nula só antes da primeira leitura.
@@ -93,6 +95,16 @@ fun EcraPesquisa(
     var marcoAvaliacao by rememberSaveable { mutableStateOf<Int?>(null) }
     // A palavra a partilhar como imagem, com o ecrã de partilha aberto.
     var aPartilhar by remember { mutableStateOf<DadosPartilha?>(null) }
+
+    // Palavra nova: se chegou à 5.ª ou à 50.ª, pede-se uma avaliação, uma vez
+    // por marco. Marca-se logo como pedida, aceite ou não: perguntar outra vez
+    // seria insistir.
+    fun talvezPedirAvaliacao() {
+        preferencias.avaliacaoPorPedir(palavras.size + 1)?.let { marco ->
+            preferencias.marcarAvaliacaoPedida(marco)
+            marcoAvaliacao = marco
+        }
+    }
 
     // Ao abrir uma palavra (por pesquisa, sugestão, candidato ou sinónimo)
     // fecha-se o teclado: a definição não deve ser vista com o teclado por
@@ -189,6 +201,7 @@ fun EcraPesquisa(
                     aoRever = aoAbrirJogo,
                     aoAbrirColecao = aoAbrirColecao,
                     aoAbrirLivro = aoAbrirLivro,
+                    livroEmCurso = livroEmCurso?.titulo,
                 )
             }
         }
@@ -224,6 +237,8 @@ fun EcraPesquisa(
             existente = existente,
             fraseInicial = fraseSugerida,
             pedirSignificado = pedirSignificadoNoRegisto,
+            livroEmCurso = livroEmCurso?.titulo,
+            aoMarcarEmCurso = { vm.comecarLivro(it) },
             aoCancelar = {
                 lemaARegistar = null; pedirSignificadoNoRegisto = false; vm.limparContexto()
             },
@@ -233,15 +248,7 @@ fun EcraPesquisa(
                 val eraFalta = pedirSignificadoNoRegisto && existente == null
                 if (existente != null) vm.atualizar(palavra) else vm.registar(palavra)
                 lemaARegistar = null
-                // Palavra nova: se chegou à 5.ª ou à 50.ª, pede-se uma
-                // avaliação, uma vez por marco. Marca-se logo como pedida,
-                // aceite ou não: perguntar outra vez seria insistir.
-                if (existente == null) {
-                    preferencias.avaliacaoPorPedir(palavras.size + 1)?.let { marco ->
-                        preferencias.marcarAvaliacaoPedida(marco)
-                        marcoAvaliacao = marco
-                    }
-                }
+                if (existente == null) talvezPedirAvaliacao()
                 pedirSignificadoNoRegisto = false; vm.limparContexto()
                 if (existente == null) {
                     ambito.launch {
@@ -368,6 +375,7 @@ private fun Inicio(
     aoRever: () -> Unit,
     aoAbrirColecao: () -> Unit,
     aoAbrirLivro: (String) -> Unit,
+    livroEmCurso: String? = null,
 ) {
     val sequencia = sequenciaAtiva(progresso)
     Column(
@@ -456,7 +464,7 @@ private fun Inicio(
                 )
             }
 
-            val estante = remember(palavras) { estanteDe(palavras) }
+            val estante = remember(palavras, livroEmCurso) { estanteDe(palavras, livroEmCurso) }
             if (estante.isNotEmpty()) {
                 Spacer(Modifier.height(22.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -493,6 +501,10 @@ private fun Inicio(
                                         append(livro.quantas.toString())
                                     }
                                     append(if (livro.quantas == 1) " palavra" else " palavras")
+                                    if (livro.titulo == livroEmCurso) {
+                                        append(" · ")
+                                        withStyle(SpanStyle(color = Cores.accentInk)) { append("a ler") }
+                                    }
                                 },
                                 style = Estilo.ajuda,
                                 color = Cores.ink2,
@@ -609,8 +621,11 @@ private fun CartaoSugestoes(estado: EstadoPesquisa, aoProcurar: (String) -> Unit
 /** Um livro da estante: o título, o autor que lhe ficou e quantas palavras tem. */
 private data class LivroNaEstante(val titulo: String, val autor: String?, val quantas: Int)
 
-/** Os livros da coleção, o mais recente primeiro (a lista vem por data). */
-private fun estanteDe(palavras: List<PalavraGuardada>): List<LivroNaEstante> =
+/**
+ * Os livros da coleção, o mais recente primeiro (a lista vem por data), com
+ * o livro em curso à cabeça.
+ */
+private fun estanteDe(palavras: List<PalavraGuardada>, emCurso: String? = null): List<LivroNaEstante> =
     palavras.filter { !it.livro.isNullOrBlank() }
         .groupBy { it.livro!!.trim() }
         .map { (titulo, lista) ->
@@ -620,6 +635,7 @@ private fun estanteDe(palavras: List<PalavraGuardada>): List<LivroNaEstante> =
                 lista.size,
             )
         }
+        .sortedByDescending { it.titulo == emCurso }
         .take(12)
 
 /**
@@ -834,6 +850,8 @@ private fun VistaEntrada(
     aoSeguir: (String) -> Unit,
 ) {
     val significadoProprio = guardada?.significado?.takeIf { it.isNotBlank() }
+    var aCorrigir by remember(entrada.lemmaId) { mutableStateOf(false) }
+    if (aCorrigir) DialogoCorrigir(entrada, aoFechar = { aCorrigir = false })
     // Coluna + lista com peso: o texto rola, mas a barra de registar fica
     // sempre em baixo. Registar é o gesto central da app; numa entrada com
     // sete aceções, o botão não pode desaparecer ao rolar.
@@ -841,9 +859,34 @@ private fun VistaEntrada(
         BarraVoltar(
             aoVoltar,
             direita = {
-                // Partilhar leva o significado para fora da app, sem rede.
-                IconButton(onClick = aoPartilhar, modifier = Modifier.size(44.dp)) {
-                    Icon(Icons.Rounded.Share, "Partilhar", tint = Cores.ink)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Partilhar leva o significado para fora da app, sem rede.
+                    IconButton(onClick = aoPartilhar, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Rounded.Share, "Partilhar", tint = Cores.ink)
+                    }
+                    // "Corrigir uma definição" (1.22): no menu, para não
+                    // pôr mais um ícone à vista numa barra que é da palavra.
+                    if (entrada.acecoes.isNotEmpty()) {
+                        var menu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp)) {
+                                Icon(Icons.Rounded.MoreVert, "Mais", tint = Cores.ink)
+                            }
+                            DropdownMenu(
+                                expanded = menu,
+                                onDismissRequest = { menu = false },
+                                containerColor = Cores.card,
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("Corrigir uma definição", style = Estilo.controlo, color = Cores.ink)
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.EditNote, null, tint = Cores.ink) },
+                                    onClick = { menu = false; aCorrigir = true },
+                                )
+                            }
+                        }
+                    }
                 }
             },
         )
@@ -1156,7 +1199,7 @@ private fun CaixaExemplo(exemplo: Exemplo, desenvolvedor: Boolean) {
             Text(exemplo.frase, style = Estilo.citacao, color = Cores.ink)
             Spacer(Modifier.height(6.dp))
             // A fonte da frase fica sempre: o Tatoeba distribui em CC BY com
-            // atribuição por frase (ver docs/fontes.md). A referência interna
+            // atribuição por frase (ver notas/fontes.md). A referência interna
             // só no Modo Desenvolvedor.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (exemplo.gerado) {

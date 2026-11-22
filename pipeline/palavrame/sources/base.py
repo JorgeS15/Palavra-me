@@ -38,7 +38,7 @@ class License:
 
 @dataclass(frozen=True)
 class SourceInfo:
-    """Identidade de uma fonte. Alimenta `docs/fontes.md` e a tabela `sources`."""
+    """Identidade de uma fonte. Alimenta `notas/fontes.md` e a tabela `sources`."""
 
     slug: str
     name: str

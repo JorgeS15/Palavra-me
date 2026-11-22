@@ -328,4 +328,41 @@ class PerguntasTest {
         // E uma definição a sério nunca é remissão.
         assertFalse(Perguntas.eAutoRemissao("Que fala pouco.", "lacónico"))
     }
+
+    // --- escrever a palavra (1.22) ------------------------------------------
+
+    @Test
+    fun `a escrita conta sem acentos nem maiusculas`() {
+        assertTrue(Perguntas.escritaCerta("lacónico", "lacónico"))
+        assertTrue(Perguntas.escritaCerta("  Laconico ", "lacónico"))
+        assertFalse(Perguntas.escritaCerta("lacónica", "lacónico"))
+        assertFalse(Perguntas.escritaCerta("", "lacónico"))
+        assertFalse(Perguntas.escritaCerta("   ", "lacónico"))
+    }
+
+    @Test
+    fun `certa sem acentos diz a grafia, certa igual nao`() {
+        assertTrue(Perguntas.grafiaDiferente("laconico", "lacónico"))
+        assertFalse(Perguntas.grafiaDiferente("Lacónico", "lacónico"))
+        assertFalse(Perguntas.grafiaDiferente("outra", "lacónico"))
+    }
+
+    @Test
+    fun `a pista da a primeira letra e as letras`() {
+        assertEquals("Começa por \"l\", 8 letras", Perguntas.pista("lacónico"))
+        assertEquals("Começa por \"g\", 11 letras", Perguntas.pista("guarda-chuva"))
+        assertEquals("Começa por \"a\", 1 letra", Perguntas.pista("a"))
+    }
+
+    @Test
+    fun `so se pede escrita com a opcao ligada, a palavra ja acertada e sem espacos`() {
+        val sempre = object : Random() {
+            override fun nextBits(bitCount: Int) = 1
+            override fun nextBoolean() = true
+        }
+        assertFalse(Perguntas.pedeEscrita(false, 5, "lacónico", sempre))
+        assertFalse(Perguntas.pedeEscrita(true, 1, "lacónico", sempre))
+        assertFalse(Perguntas.pedeEscrita(true, 5, "de facto", sempre))
+        assertTrue(Perguntas.pedeEscrita(true, Perguntas.CAIXA_PARA_ESCREVER, "lacónico", sempre))
+    }
 }

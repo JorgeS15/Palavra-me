@@ -334,6 +334,10 @@ fun CampoFormulario(
     numerico: Boolean = false,
     capitalizacao: KeyboardCapitalization = KeyboardCapitalization.Sentences,
     borda: Color = Cores.line,
+    /** Sem a correção automática do teclado (para escrever uma palavra no jogo). */
+    semCorrecao: Boolean = false,
+    /** A tecla de "concluído" do teclado; nulo deixa a tecla normal. */
+    aoConcluir: (() -> Unit)? = null,
 ) {
     Column(modifier) {
         if (rotulo != null) {
@@ -354,7 +358,12 @@ fun CampoFormulario(
             minLines = linhas,
             maxLines = if (linhas == 1) 1 else linhas + 3,
             keyboardOptions = if (numerico) KeyboardOptions(keyboardType = KeyboardType.Number)
-            else KeyboardOptions(capitalization = capitalizacao),
+            else KeyboardOptions(
+                capitalization = capitalizacao,
+                autoCorrectEnabled = !semCorrecao,
+                imeAction = if (aoConcluir != null) ImeAction.Done else ImeAction.Default,
+            ),
+            keyboardActions = KeyboardActions(onDone = { aoConcluir?.invoke() }),
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { campo ->
                 Box(

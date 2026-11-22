@@ -23,10 +23,18 @@ android/build/
 android/app/build/
 android/**/build/
 android/.idea/
+android/.kotlin/
+# A pasta do Android Studio, se se abrir a raiz por engano.
+/.idea/
 android/local.properties
 android/keystore.properties
+# As chaves de assinatura, com ou sem extensão. Nunca sobem: o repositório é
+# público, e com a chave qualquer pessoa assinava uma "Palavra-me".
 *.jks
 *.keystore
+*.p12
+*.pfx
+chave*_palavrame*
 *.apk
 *.aab
 # O dicionário (empacotado nos assets ou solto): reconstrói-se com o pipeline.
@@ -53,14 +61,15 @@ desktop.ini
 # primeiro sobre o projeto.
 plano-palavra-me.md
 
-# A documentação de trabalho fica toda fora: registo de licenças, desenho do
-# jogo, rascunhos de emails a instituições, guias de arranque. É material de
-# quem constrói, e o `docs/emails.md` é mesmo correspondência privada.
+# As notas de trabalho ficam todas fora, em `notas/`: registo de licenças,
+# desenho do jogo, roteiros, rascunhos de emails a instituições, guias de
+# arranque. É material de quem constrói, e o `notas/emails.md` é mesmo
+# correspondência privada. (A pasta `docs/` do repositório é o site.)
 #
 # A atribuição das fontes não depende disto e continua cumprida onde tem de
 # estar: no ecrã "Fontes e licenças" da app, e na tabela `sources` dentro da
 # própria base de dados, que viaja com ela.
-# docs/
+notas/
 
 # As entregas do design (protótipos HTML, capturas e os zips de onde vieram).
 # São material de trabalho com vários MB cada; o que delas interessa já está
@@ -71,6 +80,12 @@ Palavra-me app redesign*/
 # O vídeo da loja: grande e binário, vive na Play Console.
 *.mp4
 *.mov
+
+# Material da loja (capturas, ícone, gráfico): vive na Play Console.
+loja-play-store/
+
+# Versões do briefing.
+plano-palavra-me*.md
 
 # Rascunhos e notas pessoais. A descrição da loja que conta está em
 # loja/descricao.md; os comandos estão no pipeline/README.md.

@@ -32,6 +32,14 @@ class Novidades(val itens: List<String>, val acao: AcaoNovidade? = null)
 
 /** As notas por `versionCode`. Só as versões com algo a contar. */
 val NOVIDADES: Map<Int, Novidades> = mapOf(
+    35 to Novidades(          // 1.22.0 (o 34 é a 1.21.1, só correções)
+        itens = listOf(
+            "Novo separador Livros: o que estás a ler, os lidos por ano, as datas de cada leitura, uma nota e um resumo, que se partilha como imagem.",
+            "Novo na revisão: escrever a palavra a partir da definição. Liga-o em Definições, Rever.",
+            "Podes esconder a palavra nos lembretes, em Definições. No ecrã bloqueado fica sempre escondida.",
+            "Uma definição errada ou antiquada? Avisa no menu da palavra. E \"crèdor\" e afins passam à grafia de hoje.",
+        ),
+    ),
     33 to Novidades(          // 1.21.0
         itens = listOf(
             "Cada significado tem a sua classe: \"computador\" é substantivo, e os significados aparecem agrupados.",

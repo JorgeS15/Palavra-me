@@ -51,6 +51,45 @@ data class Pergunta(
  */
 object Perguntas {
 
+    // --- escrever a palavra (1.22) ----------------------------------------
+
+    /**
+     * A partir de que caixa se pode pedir para escrever a palavra: só nas que
+     * já se acertaram algumas vezes. Escrever é mais difícil do que
+     * reconhecer, e pedi-lo a uma palavra nova era desanimar.
+     */
+    const val CAIXA_PARA_ESCREVER = 2
+
+    /**
+     * Esta pergunta pede para escrever a palavra? Com a opção ligada, numa
+     * palavra já acertada e de uma só palavra (as locuções ficam de escolha
+     * múltipla), em metade das vezes: a escolha múltipla continua a aparecer.
+     */
+    fun pedeEscrita(ligado: Boolean, caixa: Int, lemma: String, aleatorio: Random): Boolean =
+        ligado && caixa >= CAIXA_PARA_ESCREVER && lemma.none { it.isWhitespace() } &&
+            aleatorio.nextBoolean()
+
+    /**
+     * A resposta escrita está certa? Sem contar acentos nem maiúsculas: quem
+     * escreve "laconico" sabe a palavra. A grafia certa mostra-se depois (ver
+     * `grafiaDiferente`).
+     */
+    fun escritaCerta(escrito: String, lemma: String): Boolean {
+        val e = Texto.normalizar(escrito)
+        return e.isNotEmpty() && e == Texto.normalizar(lemma)
+    }
+
+    /** Certa, mas escrita de outra maneira ("laconico" para "lacónico"). */
+    fun grafiaDiferente(escrito: String, lemma: String): Boolean =
+        escritaCerta(escrito, lemma) && escrito.trim().lowercase() != lemma.lowercase()
+
+    /** A pista: a primeira letra e o tamanho ("Começa por "l", 8 letras"). */
+    fun pista(lemma: String): String {
+        val primeira = lemma.first().lowercase()
+        val letras = lemma.count { it.isLetter() }
+        return "Começa por \"$primeira\", " + if (letras == 1) "1 letra" else "$letras letras"
+    }
+
     /** Uma definição curta demais não dá pergunta: a certa salta à vista. */
     const val MIN_CARACTERES = 25
 

@@ -41,7 +41,7 @@ class SessaoTest {
     @Test
     fun `os pontos nunca descem abaixo de zero`() {
         // O piso é o que impede a penalização de virar dívida desanimadora —
-        // ver a discussão no docs/jogo.md.
+        // ver a discussão no notas/jogo.md.
         val base = Pontuacao(pontos = 2, ultimoDia = hoje.toString())
         assertEquals(0, base.responder(acertou = false, hoje = hoje).pontos)
     }

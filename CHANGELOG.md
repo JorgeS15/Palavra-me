@@ -12,7 +12,125 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
-## [0.34.0] - em curso · app v1.21.0
+## [app v1.21.1] - 2026-11-21 (versionCode 34)
+
+Só app, com o dicionário da 1.21.0. Feita no GitHub (commits 2f0e187 e
+0b4082e) e trazida também para a 1.22.0.
+
+### Fixed
+
+- **Jogo aberto pela notificação: "Feito" passa a ser o botão grande**, e
+  "Rever mais" fica por baixo, discreto. Quem veio pelo lembrete veio por
+  uma palavra. Em "Rever" fica como estava: "Palavra seguinte" em destaque.
+- **A notificação sai da barra quando se responde à palavra que anunciava**,
+  também em "Rever". Antes ficava lá, e tocar-lhe abria outra palavra ou
+  "Nada a rever". A notificação de outra palavra não se toca.
+
+## [0.35.0] - em curso · app v1.22.0 (versionCode 35)
+
+O livro que estou a ler (`notas/roadmap-2.md`, 1.22.0), e uma correção ao
+dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
+
+### Added
+
+- **Os livros.** Separador novo, "Livros", ao estilo de um diário de
+  leitura calmo (sem estrelas, metas nem desafios):
+  - **A lista:** "A ler", "Parados", "Lidos em 2026" (por ano) e "Outros
+    livros" (com palavras, sem leitura marcada). "Começar um livro" cria um
+    livro ainda sem palavras.
+  - **A página de cada livro:** capa tipográfica, título, autor, o estado
+    ("A ler desde 3 de março", "Lido de março a maio de 2026"), o resumo (há
+    quantos dias, ou em quantos se leu; palavras guardadas, sabidas e as que
+    ainda custam), as leituras com as datas, uma nota sobre o livro e as
+    palavras dele, tocáveis.
+  - **Leituras:** "Estou a ler este livro", "Acabei este livro" (com o
+    resumo), "Parar de ler", "Retomar" e "Voltar a ler". Voltar a ler abre
+    uma leitura nova e guarda as anteriores ("Lido 2 vezes"). As datas de
+    cada leitura corrigem-se à mão, e pode acrescentar-se uma leitura antiga.
+  - **Ficha:** título, autor, páginas e nota. Corrigir o título ou o autor
+    muda-os também nas palavras do livro. "Juntar a outro livro" para quando
+    o mesmo livro ficou com dois nomes ("Os maias" e "Os Maias"): as palavras
+    e as leituras passam para um, e o outro desaparece.
+  - **Progresso pelas palavras:** com o número de páginas, a página do livro
+    mostra "p. 214 de 480", da página da última palavra guardada, sem
+    atualizar nada à mão.
+  - **Livro em curso:** o livro que vem já escolhido ao registar (antes vinha
+    o último usado). É o que se começou a ler por último; muda-se no menu da
+    página do livro, ou no diálogo de registar ("Estou a ler este livro").
+    O diálogo abre-se sempre, para a página, a frase e a nota. Na estante do
+    ecrã inicial vem primeiro, marcado "a ler", e tocar num livro da estante
+    abre a página dele.
+  - Na Coleção, cada livro tem um botão para a sua página, e mostra o estado
+    da leitura por baixo do autor.
+  - **A imagem do livro lido:** ao acabar um livro ("Partilhar imagem", no
+    resumo) ou depois, no menu da página do livro ("Partilhar o livro
+    lido"). Leva as datas da leitura, o título com o marcador, o autor,
+    "Guardei 32 palavras neste livro, em 47 dias de leitura." e as primeiras
+    palavras guardadas (quatro no Stories, três na publicação), cada uma com
+    uma linha do significado. Os mesmos formatos e cores da partilha de uma
+    palavra (Stories ou publicação; cores da app ou cor do livro). Desenho
+    no Claude Design ("Palavra-me: imagem do livro lido").
+- **Escrever a palavra.** Uma variante da revisão: aparece a classe, a
+  definição e uma pista ("Começa por "l", 8 letras"), e escreve-se a
+  palavra, com o teclado sem correção automática. Conta certa sem acentos
+  nem maiúsculas ("laconico"), e mostra-se a grafia certa. "Não sei" conta
+  como errada. Só nas palavras já acertadas (caixa 2 ou mais) e sem
+  espaços, em metade das perguntas: a escolha múltipla continua. Desligada
+  por omissão; liga-se em Definições, Rever, "Escrever a palavra".
+- **Rever um livro.** "Rever este livro", na página do livro: uma
+  sessão só com as palavras desse livro, para retomar a leitura com elas
+  frescas. Primeiro as que estão por rever; depois as outras, por ordem de
+  revisão, sem repetir. Nestas o calendário não mexe (como no treino livre),
+  mas todas contam para o limite do dia. No fim, "Livro revisto", e volta-se
+  ao livro.
+- **Corrigir uma definição.** No ecrã da palavra, no menu (três pontos ao
+  lado de Partilhar): escolhe-se a aceção, escreve-se o que está mal (se se
+  quiser) e abre-se o email, com a palavra, a aceção, a fonte e a versão do
+  dicionário. Sem rede, como a submissão de palavras em falta.
+- **A palavra escondida nos lembretes.** Nas Definições, em Rever: "Mostrar a
+  palavra", ligado por omissão. Desligado, o lembrete diz só "Tens uma
+  palavra para rever". No ecrã bloqueado a palavra fica sempre escondida
+  (versão pública da notificação). Pedido de quem usa a app.
+
+### Changed
+
+- **`utilizador.db` v6:** tabelas `livros` (a ficha: título único, autor,
+  páginas, nota, criado em, em curso) e `leituras` (início, fim, parada). O
+  título continua a ser o elo com as palavras, e renomear ou juntar muda-o
+  nelas na mesma transação. A migração só acrescenta: cada livro das
+  palavras ganha ficha, com o autor delas, sem leitura marcada; os títulos
+  perdem os espaços à volta. A v5 (tabela `livros` por título, só nas versões
+  de teste) passa as datas a leituras. A cópia de segurança leva as fichas e
+  as leituras; uma cópia anterior importa-se como antes.
+
+### Fixed
+
+- **Curadoria:** "cruciverbalista" (substantivo), vinda de uma submissão.
+  O `seeds/curadoria.csv` tinha sido gravado pelo Excel, que o desfez (o
+  Excel português separa por ponto e vírgula e grava noutra codificação);
+  reposto em UTF-8, com as 791 linhas como estavam. Editar o ficheiro num
+  editor de texto, não no Excel.
+- **As notas de trabalho passam de `docs/` para `notas/`**, fora do
+  repositório; no GitHub, `docs/` é o site. As referências no código mudam
+  com elas.
+- **Sem o acento grave da ortografia de 1911:** "crèdor" passa a "credor",
+  "sòzinho" a "sozinho", "prègar" a "pregar", no Dicionário Aberto (lemas,
+  aceções, exemplos e formas). O grave marcava vogais abertas átonas e foi
+  abolido em 1945. "crèdor" era uma entrada à parte ao lado de "credor", e a
+  pesquisa dava as duas; agora juntam-se (123 casos na base de 2026-11-04;
+  541 lemas e cerca de 240 aceções corrigidos). Fica o grave das contrações: "à",
+  "às", "àquele", "barco à vela".
+- **Importar uma cópia antiga:** o título do livro de cada palavra entra sem
+  espaços à volta. Uma cópia de antes da 1.17.1 podia tê-los, e com os livros
+  ligados às palavras pelo título exato um livro renomeado partia-se em dois.
+- **Revisão de um livro:** o "retroceder" do telemóvel volta ao livro, como o
+  "×" (ia para Procurar), e "Palavra seguinte" só aparece se ainda houver uma
+  pergunta (levava direto a "Livro revisto").
+- Pormenores: a pista de "Escrever a palavra" diz "1 letra"; o email de
+  "Corrigir uma definição" já não diz "(desconhecido)" como classe; um livro
+  ainda sem ficha não deixa o "retroceder" preso no separador Livros.
+
+## [0.34.0] - 2026-11 · app v1.21.0 (publicada)
 
 O dicionário novo (`docs/roadmap.md`, 1.21.0). Faz-se por partes e
 publica-se de uma vez, com uma só reconstrução do dicionário. **Não publicar
@@ -97,12 +215,6 @@ antes de reconstruir e empacotar o dicionário.**
 - **O pipeline tira também as remissões "Vide X" e "V. X" para o próprio
   lema** ("lacónico: Vide lacónico"); só conhecia "Ver X", "O mesmo que X"
   e "Idem". A app já as escondia desde a 1.20.1.
-- **Jogo aberto pela notificação: "Feito" passa a ser o botão grande**, e
-  "Rever mais" fica por baixo, discreto. Quem veio pelo lembrete veio por
-  uma palavra. Em "Rever" fica como estava: "Palavra seguinte" em destaque.
-- **A notificação sai da barra quando se responde à palavra que anunciava**,
-  também em "Rever". Antes ficava lá, e tocar-lhe abria outra palavra ou
-  "Nada a rever". A notificação de outra palavra não se toca.
 
 ## [app v1.20.1] - 2026-11-15
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -17,11 +18,23 @@ import kotlinx.coroutines.withContext
 import pt.jorges15.palavrame.data.Candidato
 import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
+import pt.jorges15.palavrame.data.Leitura
+import pt.jorges15.palavrame.data.LivroCompleto
+import pt.jorges15.palavrame.data.acertarLivros
+import pt.jorges15.palavrame.data.apagarLivro
+import pt.jorges15.palavrame.data.criarLivro
+import pt.jorges15.palavrame.data.editarLivro
+import pt.jorges15.palavrame.data.escolherEmCurso
+import pt.jorges15.palavrame.data.juntarLivros
+import pt.jorges15.palavrame.data.livrosCompletos
+import pt.jorges15.palavrame.data.pararLivro
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.Parecida
 import pt.jorges15.palavrame.data.Sugestao
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.data.UtilizadorDb
+import pt.jorges15.palavrame.data.comecarLivro
+import pt.jorges15.palavrame.data.terminarLivro
 import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
 
 data class EstadoPesquisa(
@@ -91,17 +104,86 @@ class PesquisaViewModel(
      * recente** que foi escrito para ele: se o corrigiste na última palavra
      * que registaste desse livro, é essa correção que passa a preencher-se.
      */
-    val livrosUsados: Flow<List<Livro>> = palavrasGuardadas.map { lista ->
+    val livrosUsados: Flow<List<Livro>> = combine(
+        palavrasGuardadas, utilizador.livros().fichas(),
+    ) { lista, fichas ->
         // A lista vem por data decrescente (ver o DAO), portanto o primeiro
-        // registo de cada título é o mais recente. `groupBy` mantém essa ordem
-        // dentro de cada grupo, e fica-se com o primeiro autor escrito. (Era
-        // `associate`, que guarda o ÚLTIMO valor de cada chave: pré-preenchia
-        // o autor mais antigo, ao contrário do que se queria.)
-        lista.filter { !it.livro.isNullOrBlank() }
-            .groupBy { it.livro!! }
+        // registo de cada título é o mais recente. O autor da ficha do livro
+        // (1.22) vale mais do que o das palavras; sem ficha, o mais recente
+        // escrito.
+        val autorDaFicha = fichas.associate { it.titulo to it.autor }
+        val dasPalavras = lista.filter { !it.livro.isNullOrBlank() }
+            .groupBy { it.livro!!.trim() }
             .map { (titulo, registos) ->
-                Livro(titulo, registos.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) })
+                Livro(
+                    titulo,
+                    autorDaFicha[titulo]
+                        ?: registos.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
+                )
             }
+        // Os livros começados sem palavras também se escolhem, os mais novos primeiro.
+        val usados = dasPalavras.map { it.titulo }.toSet()
+        dasPalavras + fichas.filter { it.titulo !in usados }
+            .sortedByDescending { it.criadoEm }
+            .map { Livro(it.titulo, it.autor) }
+    }
+
+    /**
+     * Os livros (1.22): as fichas com as leituras, por título. As palavras
+     * apontam para eles pelo título (ver `data/Livros.kt`).
+     */
+    val livros: StateFlow<Map<String, LivroCompleto>> = combine(
+        utilizador.livros().fichas(), utilizador.livros().leituras(),
+    ) { fichas, leituras -> livrosCompletos(fichas, leituras) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** O livro que vem já escolhido ao registar uma palavra. */
+    val livroEmCurso: StateFlow<Livro?> = livros.map { mapa ->
+        mapa.values.firstOrNull { it.ficha.emCurso }?.let { Livro(it.titulo, it.ficha.autor) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private fun agora() = System.currentTimeMillis()
+
+    /** "Estou a ler", "Retomar", "Voltar a ler". */
+    fun comecarLivro(titulo: String) {
+        viewModelScope.launch { utilizador.comecarLivro(titulo.trim(), agora()) }
+    }
+
+    fun pararLivro(titulo: String) {
+        viewModelScope.launch { utilizador.pararLivro(titulo.trim()) }
+    }
+
+    fun terminarLivro(titulo: String) {
+        viewModelScope.launch { utilizador.terminarLivro(titulo.trim(), agora()) }
+    }
+
+    /** Só "vem já escolhido ao registar" (nulo: nenhum). */
+    fun escolherEmCurso(titulo: String?) {
+        viewModelScope.launch { utilizador.escolherEmCurso(titulo?.trim()) }
+    }
+
+    suspend fun criarLivro(titulo: String, autor: String?, paginas: Int?, comecar: Boolean): Boolean =
+        utilizador.criarLivro(titulo, autor, paginas, comecar, agora())
+
+    suspend fun editarLivro(id: Long, titulo: String, autor: String?, paginas: Int?, nota: String?) =
+        utilizador.editarLivro(id, titulo, autor, paginas, nota)
+
+    fun juntarLivros(deId: Long, paraId: Long) {
+        viewModelScope.launch { utilizador.juntarLivros(deId, paraId) }
+    }
+
+    suspend fun apagarLivro(id: Long): Boolean = utilizador.apagarLivro(id)
+
+    /** Corrigir as datas de uma leitura (ou acrescentar uma, com id 0). */
+    fun gravarLeitura(leitura: Leitura) {
+        viewModelScope.launch {
+            val dao = utilizador.livros()
+            if (leitura.id == 0L) dao.inserirLeitura(leitura) else dao.atualizarLeitura(leitura)
+        }
+    }
+
+    fun apagarLeitura(id: Long) {
+        viewModelScope.launch { utilizador.livros().apagarLeitura(id) }
     }
 
     /** O trabalho da tecla anterior: cancela-se quando se escreve outra. */
@@ -250,7 +332,11 @@ class PesquisaViewModel(
     }
 
     fun registar(palavra: PalavraGuardada) {
-        viewModelScope.launch { utilizador.palavras().guardar(palavra) }
+        viewModelScope.launch {
+            utilizador.palavras().guardar(palavra)
+            // Um livro novo ganha a ficha dele.
+            utilizador.acertarLivros()
+        }
     }
 
     fun esquecer(lemma: String) {
@@ -258,7 +344,10 @@ class PesquisaViewModel(
     }
 
     fun atualizar(palavra: PalavraGuardada) {
-        viewModelScope.launch { utilizador.palavras().atualizar(palavra) }
+        viewModelScope.launch {
+            utilizador.palavras().atualizar(palavra)
+            utilizador.acertarLivros()
+        }
     }
 
     fun apagar(palavra: PalavraGuardada) {

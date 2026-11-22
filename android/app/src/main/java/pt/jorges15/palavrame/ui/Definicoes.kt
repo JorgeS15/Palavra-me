@@ -47,6 +47,7 @@ import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.ResultadoImportacao
 import pt.jorges15.palavrame.data.Backup
+import pt.jorges15.palavrame.data.livrosCompletos
 import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.LetraId
 import pt.jorges15.palavrame.data.PaletaId
@@ -86,9 +87,12 @@ fun EcraDefinicoes(
         ambito.launch {
             val palavras = app.utilizador.palavras().todasAgora()
             val progresso = app.utilizador.progresso().atual()
+            val livros = livrosCompletos(
+                app.utilizador.livros().fichasAgora(), app.utilizador.livros().leiturasAgora(),
+            ).values.toList()
             mensagemBackup = when (
                 val r = Backup.exportar(
-                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME
+                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME, livros
                 )
             ) {
                 is Backup.Resultado.Feito -> "Exportadas ${r.novas} palavras."
@@ -138,6 +142,8 @@ fun EcraDefinicoes(
 
             Seccao("Rever")
             GrupoCartao { SeccaoJogo(preferencias) }
+            Spacer(Modifier.height(12.dp))
+            GrupoCartao { LinhaEscrever(preferencias) }
 
             Seccao("As minhas palavras")
             GrupoCartao {
@@ -622,6 +628,22 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
 }
 
 /**
+ * "Escrever a palavra" (1.22): nas palavras que já se acertam, metade das
+ * perguntas pede para escrever a palavra a partir da definição. Vale para a
+ * revisão toda, com ou sem lembretes.
+ */
+@Composable
+private fun LinhaEscrever(preferencias: Preferencias) {
+    val ligado by preferencias.escreverAPalavra.collectAsState()
+    LinhaGrupo(
+        "Escrever a palavra",
+        subtitulo = "Nas palavras que já acertas, às vezes mostra-se a definição "
+            + "e escreves tu a palavra. É mais difícil, e ajuda a fixá-la.",
+        direita = { SwitchPalavra(ligado) { preferencias.definirEscreverAPalavra(it) } },
+    )
+}
+
+/**
  * Os lembretes: ligar, quantos por dia, e entre que horas.
  *
  * A permissão de notificações é pedida **aqui**, no momento em que se liga o
@@ -636,6 +658,7 @@ private fun SeccaoJogo(preferencias: Preferencias) {
     val quantos by preferencias.quantosPorDia.collectAsState()
     val inicio by preferencias.inicioDaJanela.collectAsState()
     val fim by preferencias.fimDaJanela.collectAsState()
+    val comPalavra by preferencias.palavraNasNotificacoes.collectAsState()
     var aEscolher by remember { mutableStateOf<Extremo?>(null) }
 
     fun reagendar() = Lembrete.agendar(context, quantos, inicio, fim)
@@ -755,6 +778,16 @@ private fun SeccaoJogo(preferencias: Preferencias) {
             color = Cores.ink2,
         )
     }
+    DivisoriaGrupo()
+    LinhaGrupo(
+        "Mostrar a palavra",
+        subtitulo = if (comPalavra) {
+            "\"Ainda te lembras de ...?\" No ecrã bloqueado, a palavra fica sempre escondida."
+        } else {
+            "\"${Lembrete.TITULO_SEM_PALAVRA}\". A palavra só aparece ao abrir."
+        },
+        direita = { SwitchPalavra(comPalavra) { preferencias.definirPalavraNasNotificacoes(it) } },
+    )
     DivisoriaGrupo()
     // Empurrão à bateria. Em muitos telemóveis (Xiaomi, Samsung, Huawei...) o
     // sistema mata o trabalho em segundo plano e os lembretes não chegam. Não
@@ -985,7 +1018,7 @@ private fun DialogoSubmeterFaltas(
 
 // Para onde vão as submissões e como as identificar na caixa de entrada. É o
 // email do Jorge, não o de contacto público da app: chega-lhe direto.
-private const val EMAIL_SUBMISSAO = "jorgea15santos@gmail.com"
+internal const val EMAIL_SUBMISSAO = "jorgea15santos@gmail.com"
 
 // Contacto geral (sugestões, problemas, ajuda). O mesmo email das submissões.
 private const val CONTACTO_EMAIL = "jorgea15santos@gmail.com"
@@ -1001,7 +1034,7 @@ private const val CONTACTO_EMAIL = "jorgea15santos@gmail.com"
  * maioria prefere). Algumas apps ignoram os extras e abriam o email vazio;
  * outras ignoram o endereço. Com os dois, todas recebem tudo.
  */
-private fun intentEmail(para: String, assunto: String, corpo: String): Intent {
+internal fun intentEmail(para: String, assunto: String, corpo: String): Intent {
     val endereco = "mailto:" + Uri.encode(para, "@") +
         "?subject=" + Uri.encode(assunto) +
         "&body=" + Uri.encode(corpo)

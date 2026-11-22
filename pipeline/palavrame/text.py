@@ -133,6 +133,32 @@ def sem_trema(s: str) -> str:
     return s.translate(_TREMA)
 
 
+_GRAVES = str.maketrans("àèìòùÀÈÌÒÙ", "aeiouAEIOU")
+_PALAVRA = re.compile(r"[^\W\d_]+(?:-[^\W\d_]+)*")
+# O acento grave que ficou: a contração ("à", "às", "àquele", "àquilo"...).
+_CONTRACAO = re.compile(r"^(?:às?|àquel\w*|àquil\w*)$", re.IGNORECASE)
+
+
+def sem_graves(s: str) -> str:
+    """Tira o acento grave da ortografia de 1911, que o de 1945 aboliu.
+
+    O Dicionário Aberto (1913) marca com grave as vogais abertas átonas das
+    derivadas: `crèdor`, `sòzinho`, `chàzeiro`, `prègar`. Hoje escreve-se
+    `credor`, `sozinho`, `chazeiro`, `pregar`. Sem isto, `crèdor` era uma
+    entrada à parte ao lado de `credor` (do Wikcionário), e a pesquisa por
+    "credor" dava as duas.
+
+    Fica o grave das contrações, que continua a existir: "à", "às",
+    "àquele", "àquilo" ("barco à vela" não muda).
+    """
+    if not any(ch in s for ch in "àèìòùÀÈÌÒÙ"):
+        return s
+    def trocar(m: "re.Match[str]") -> str:
+        palavra = m.group(0)
+        return palavra if _CONTRACAO.match(palavra) else palavra.translate(_GRAVES)
+    return _PALAVRA.sub(trocar, s)
+
+
 def tokens(s: str) -> list[str]:
     """Palavras normalizadas de uma frase, para validação de exemplos."""
     return [t for t in normalize(s).replace("-", " ").split(" ") if t]

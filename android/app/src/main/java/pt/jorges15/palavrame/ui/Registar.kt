@@ -50,6 +50,13 @@ fun FolhaRegistar(
     pedirSignificado: Boolean = false,
     aoCancelar: () -> Unit,
     aoGuardar: (PalavraGuardada) -> Unit,
+    /** O livro que se está a ler agora, se há (1.22). */
+    livroEmCurso: String? = null,
+    /**
+     * Marca o livro escolhido como o que se está a ler. Nulo esconde a opção
+     * (na Coleção, onde isso se faz no menu do livro).
+     */
+    aoMarcarEmCurso: ((String) -> Unit)? = null,
 ) {
     // Quem está a ler um livro regista dele muitas palavras seguidas. Voltar
     // a escrever o título de cada vez é a fricção mais fácil de eliminar:
@@ -59,7 +66,9 @@ fun FolhaRegistar(
     // a meio de um registo, num diálogo com cinco campos, é a fricção que mais
     // dói. A chave no lema reinicia os campos quando se abre outra palavra.
     // Ao editar, o que já lá estava; senão o último livro usado.
+    // Com um livro em curso (1.22), é esse que vem; senão o último usado.
     val livroInicial = existente?.livro
+        ?: livroEmCurso
         ?: livrosAnteriores.firstOrNull()?.titulo.orEmpty()
     var livro by rememberSaveable(lemma) { mutableStateOf(livroInicial) }
     // Ao editar, o autor é o que já lá estava. Ao registar de novo, é o que
@@ -91,6 +100,7 @@ fun FolhaRegistar(
             autorAutomatico = autor
         }
     }
+    var marcarEmCurso by rememberSaveable(lemma) { mutableStateOf(false) }
     var pagina by rememberSaveable(lemma) { mutableStateOf(existente?.page?.toString().orEmpty()) }
     // A frase pré-preenche-se com a seleção do leitor, quando vem uma; ao
     // editar, é a que já lá estava.
@@ -231,6 +241,45 @@ fun FolhaRegistar(
                 }
             }
 
+            // "Estou a ler este livro": a forma de chegar ao Registar com um
+            // toque, para as palavras seguintes. Só para um livro escolhido
+            // que ainda não é o que se está a ler.
+            val tituloEscolhido = livro.trim()
+            if (aoMarcarEmCurso != null && tituloEscolhido.isNotEmpty() &&
+                tituloEscolhido != livroEmCurso
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { marcarEmCurso = !marcarEmCurso }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = marcarEmCurso,
+                        onCheckedChange = { marcarEmCurso = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = Cores.accent,
+                            uncheckedColor = Cores.ink3,
+                            checkmarkColor = Cores.bg,
+                        ),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Estou a ler este livro",
+                            style = Estilo.controlo.copy(fontSize = 15.sp),
+                            color = Cores.ink,
+                        )
+                        Text(
+                            "Vem já escolhido nas próximas palavras, mesmo que registes de outro.",
+                            style = Estilo.ajuda,
+                            color = Cores.ink2,
+                        )
+                    }
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 CampoFormulario(
                     "Autor", autor, { autor = it },
@@ -295,6 +344,7 @@ fun FolhaRegistar(
                 BotaoPrincipal(
                     "Guardar",
                     aoTocar = {
+                        if (marcarEmCurso && livro.isNotBlank()) aoMarcarEmCurso?.invoke(livro.trim())
                         aoGuardar(
                             // `copy` quando existe, para preservar o id, a data de
                             // registo e o progresso de revisão: editar as notas de

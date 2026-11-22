@@ -88,7 +88,7 @@ def test_folha_de_revisao_marca_o_que_e_gerado(paths):
 def test_validar_recusa_distribuicao_com_fontes_por_verificar(paths):
     """A rede de segurança das licenças continua armada.
 
-    Desde 2026-07-30 as fontes da F0 estão verificadas (docs/fontes.md),
+    Desde 2026-07-30 as fontes da F0 estão verificadas (notas/fontes.md),
     portanto a DB de fixtures passa o modo distribuição — e isso também se
     afirma aqui. Mas a recusa tem de continuar a funcionar para uma fonte
     por verificar, e isso testa-se dando ao validador um SourceInfo com
@@ -123,7 +123,7 @@ def test_comando_fontes_lista_o_que_falta_verificar(capsys):
     assert main(["fontes"]) == 0
     saida = capsys.readouterr().out
     assert "POR VERIFICAR" in saida
-    assert "docs/fontes.md" in saida
+    assert "notas/fontes.md" in saida
 
 
 def test_f1_constroi_sobre_as_fixtures_sem_seeds(paths, capsys):

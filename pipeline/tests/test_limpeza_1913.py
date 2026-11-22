@@ -129,3 +129,42 @@ def test_parentese_por_fechar_no_fim_nao_engole_a_acecao():
     acecoes = _acecoes_do_def("Coisa qualquer.\n(Do lat. aliquid")
     assert acecoes[0] == "Coisa qualquer."
     assert len(acecoes) == 2 and acecoes[1].endswith(")")
+
+
+# --- acento grave de 1911 (crèdor -> credor) ----------------------------------
+
+def test_sem_graves_tira_o_grave_da_ortografia_antiga():
+    from palavrame.text import sem_graves
+
+    assert sem_graves("crèdor") == "credor"
+    assert sem_graves("sòzinho") == "sozinho"
+    assert sem_graves("Tratar com mèzinhas.") == "Tratar com mezinhas."
+    assert sem_graves("pàra-quedas") == "para-quedas"
+
+
+def test_sem_graves_deixa_as_contracoes():
+    from palavrame.text import sem_graves
+
+    assert sem_graves("barco à vela") == "barco à vela"
+    assert sem_graves("às vezes") == "às vezes"
+    assert sem_graves("Àquilo e àquele") == "Àquilo e àquele"
+    assert sem_graves("crèdor à vista") == "credor à vista"
+
+
+def test_dicionario_aberto_sai_sem_graves():
+    """O verbete `crèdor` chega à fusão como `credor`, e junta-se ao do
+    Wikcionário em vez de ficar ao lado dele."""
+    from palavrame.schema import Example, Form, Sense, SourceEntry
+    from palavrame.sources.dicionario_aberto import _sem_graves
+
+    e = SourceEntry(
+        lemma="crèdor", source="dicionario_aberto", pos="substantivo",
+        senses=[Sense("Aquele que é crèdor da minha estima.", "dicionario_aberto")],
+        examples=[Example("Um crèdor à porta.", "dicionario_aberto")],
+        forms=[Form("crèdores")],
+    )
+    e = _sem_graves(e)
+    assert e.lemma == "credor"
+    assert e.senses[0].definition == "Aquele que é credor da minha estima."
+    assert e.examples[0].sentence == "Um credor à porta."
+    assert e.forms[0].form == "credores"

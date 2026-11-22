@@ -51,7 +51,7 @@ data class PalavraGuardada(
      * para a curadoria — e o que se mostra a quem volta a abrir a palavra.
      */
     val significado: String? = null,
-    /** Caixa da repetição espaçada, 0 a 5. Ver `docs/jogo.md`. */
+    /** Caixa da repetição espaçada, 0 a 5. Ver `notas/jogo.md`. */
     val mastery: Int = 0,
     @ColumnInfo(name = "last_reviewed") val revistaEm: Long? = null,
     /**
@@ -201,20 +201,46 @@ val MIGRACAO_3_4 = object : Migration(3, 4) {
 }
 
 /**
+ * v4 -> v5: os livros (datas de leitura e o livro em curso). Só existiu nas
+ * versões de teste da 1.22; a v6 refá-la (ver `MIGRACAO_5_6`, em `Livros.kt`).
+ * Fica para o caminho 4 -> 5 -> 6 ser sempre o mesmo.
+ *
+ * Só acrescenta uma tabela. Cada livro que já tem palavras ganha uma linha
+ * com o início no dia da primeira palavra guardada dele: é a melhor
+ * aproximação que há, e corrige-se à mão. Nenhum fica lido nem em curso.
+ */
+val MIGRACAO_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `livros` (`titulo` TEXT NOT NULL,"
+            + " `iniciado_em` INTEGER, `terminado_em` INTEGER,"
+            + " `em_curso` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`titulo`))"
+        )
+        db.execSQL(
+            "INSERT OR IGNORE INTO livros (titulo, iniciado_em, terminado_em, em_curso)"
+            + " SELECT TRIM(book_title), MIN(saved_at), NULL, 0 FROM saved_words"
+            + " WHERE book_title IS NOT NULL AND TRIM(book_title) <> ''"
+            + " GROUP BY TRIM(book_title)"
+        )
+    }
+}
+
+/**
  * Todas as migrações, por ordem. A app e o teste de migrações
  * (`androidTest/.../MigracoesTest`) usam esta mesma lista, para não haver uma
  * migração que a app corre e o teste não verifica.
  */
-val MIGRACOES = arrayOf(MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4)
+val MIGRACOES = arrayOf(MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4, MIGRACAO_4_5, MIGRACAO_5_6)
 
 @Database(
-    entities = [PalavraGuardada::class, Progresso::class],
-    version = 4,
+    entities = [PalavraGuardada::class, Progresso::class, FichaLivro::class, Leitura::class],
+    version = 6,
     exportSchema = true,
 )
 abstract class UtilizadorDb : RoomDatabase() {
     abstract fun palavras(): PalavrasDao
     abstract fun progresso(): ProgressoDao
+    abstract fun livros(): LivrosDao
 
     companion object {
         @Volatile private var instancia: UtilizadorDb? = null

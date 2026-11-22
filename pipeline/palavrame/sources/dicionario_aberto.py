@@ -25,7 +25,7 @@ from typing import Any, Iterable, Iterator
 from xml.etree import ElementTree as ET
 
 from ..mysqldump import insert_re, open_dump, sql_values
-from ..text import clean_definition
+from ..text import clean_definition, sem_graves
 from ..schema import Sense, SourceEntry, canonical_pos
 from .base import License, Source, SourceInfo
 
@@ -66,6 +66,19 @@ INFO = SourceInfo(
 )
 
 _TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
+
+
+def _sem_graves(entry: SourceEntry) -> SourceEntry:
+    """A grafia de 1911 com acento grave passa à de hoje (`crèdor` -> `credor`),
+    no lema, nas aceções, nos exemplos e nas formas. Ver `text.sem_graves`."""
+    entry.lemma = sem_graves(entry.lemma)
+    for sense in entry.senses:
+        sense.definition = sem_graves(sense.definition)
+    for exemplo in entry.examples:
+        exemplo.sentence = sem_graves(exemplo.sentence)
+    for forma in entry.forms:
+        forma.form = sem_graves(forma.form)
+    return entry
 
 
 def _decap(lemma: str) -> str:
@@ -126,6 +139,10 @@ class DicionarioAberto(Source):
             self.cache.fetch(url, self.slug, f"word/{_safe_name(lemma)}.json")
 
     def parse(self, lemmas: Iterable[str] | None = None) -> Iterator[SourceEntry]:
+        for entry in self._parse_bruto(lemmas):
+            yield _sem_graves(entry)
+
+    def _parse_bruto(self, lemmas: Iterable[str] | None = None) -> Iterator[SourceEntry]:
         wanted = self._wanted(lemmas)
         base = self.cache.paths.cache / self.slug
 

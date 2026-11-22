@@ -20,6 +20,7 @@ import androidx.work.workDataOf
 import pt.jorges15.palavrame.MainActivity
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.R
+import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.UtilizadorDb
 import java.util.concurrent.TimeUnit
 
@@ -183,6 +184,9 @@ object Lembrete {
                 context, android.Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
 
+    const val TITULO_SEM_PALAVRA = "Tens uma palavra para rever"
+    private const val TEXTO_LEMBRETE = "Uma palavra da tua coleção, à espera."
+
     fun mostrar(context: Context, lemma: String) {
         if (!temPermissao(context)) return
         criarCanal(context)
@@ -201,16 +205,30 @@ object Lembrete {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notificacao = NotificationCompat.Builder(context, CANAL)
-            // A palavra aparece; a definição não. Se a notificação
-            // respondesse à pergunta, não valia a pena abrir a app.
-            .setContentTitle("Ainda te lembras de \"$lemma\"?")
-            .setContentText("Uma palavra da tua coleção, à espera.")
+        // Sem a palavra: a versão do ecrã bloqueado, sempre, e a de toda a
+        // parte para quem desligou "Mostrar a palavra nas notificações".
+        fun base() = NotificationCompat.Builder(context, CANAL)
             .setSmallIcon(R.drawable.ic_notificacao)
             .setContentIntent(pendente)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        val semPalavra = base()
+            .setContentTitle(TITULO_SEM_PALAVRA)
+            .setContentText(TEXTO_LEMBRETE)
             .build()
+
+        val notificacao = if (Preferencias.palavraNasNotificacoes(context)) {
+            base()
+                // A palavra aparece; a definição não. Se a notificação
+                // respondesse à pergunta, não valia a pena abrir a app.
+                .setContentTitle("Ainda te lembras de \"$lemma\"?")
+                .setContentText(TEXTO_LEMBRETE)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(semPalavra)
+                .build()
+        } else {
+            semPalavra
+        }
 
         NotificationManagerCompat.from(context).notify(ID_NOTIFICACAO, notificacao)
         preferenciasInternas(context).edit().putString(CHAVE_ANUNCIADA, lemma).apply()

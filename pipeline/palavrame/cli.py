@@ -91,7 +91,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="comando")
 
     p = sub.add_parser("fontes", help="estado das fontes e das licenças")
-    p.add_argument("--markdown", action="store_true", help="saída para docs/fontes.md")
+    p.add_argument("--markdown", action="store_true", help="saída para notas/fontes.md")
     p.set_defaults(func=cmd_fontes)
 
     p = sub.add_parser("fetch", help="descarrega ficheiros brutos para o cache")
@@ -186,7 +186,7 @@ def cmd_fontes(args) -> int:
     pending = [i.slug for i in infos if not i.license.verified]
     if pending:
         print(f"  {len(pending)} fontes por verificar: {', '.join(pending)}")
-        print("  Preencher docs/fontes.md antes da F1 (plano, secção 8).\n")
+        print("  Preencher notas/fontes.md antes da F1 (plano, secção 8).\n")
     return 0
 
 

@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -51,6 +52,8 @@ fun EcraColecao(
     livroInicial: String? = null,
     /** Avisa que o livro inicial já foi aplicado, para não se repetir. */
     aoUsarLivroInicial: () -> Unit = {},
+    /** Abre a página do livro (separador Livros). */
+    aoAbrirLivro: (String) -> Unit = {},
 ) {
     // Nulo só antes da primeira leitura da base (no arranque da app): aí não
     // se desenha a lista, em vez de a mostrar vazia por um instante.
@@ -82,6 +85,7 @@ fun EcraColecao(
     }
     var aEditar by remember { mutableStateOf<PalavraGuardada?>(null) }
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
+    val livrosCompletos by vm.livros.collectAsState()
     val focus = LocalFocusManager.current
 
     // Esquecer uma palavra apaga o livro e a frase que lhe estavam anotados,
@@ -237,13 +241,28 @@ fun EcraColecao(
                             val recolhido = livro.isNotEmpty() && !aFiltrar && livro in recolhidos
                             if (livro.isNotEmpty()) {
                                 item(key = "grupo-$livro") {
+                                    val livroCompleto = livrosCompletos[livro]
                                     CabecalhoGrupo(
                                         titulo = livro,
                                         autor = if (livro == SEM_LIVRO) null
-                                        else lista.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
+                                        else livroCompleto?.ficha?.autor
+                                            ?: lista.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
                                         quantas = lista.size,
                                         semLivro = livro == SEM_LIVRO,
                                         recolhido = recolhido,
+                                        periodo = if (livro == SEM_LIVRO) null else periodoDeLeitura(livroCompleto),
+                                        menu = if (livro == SEM_LIVRO) null else {
+                                            {
+                                                // O livro abre-se na sua página (separador
+                                                // Livros), onde estão as leituras e o resto.
+                                                IconButton(
+                                                    onClick = { aoAbrirLivro(livro) },
+                                                    modifier = Modifier.size(44.dp),
+                                                ) {
+                                                    Icon(Icons.Rounded.AutoStories, "Abrir o livro", tint = Cores.ink3)
+                                                }
+                                            }
+                                        },
                                         aoTocar = if (aFiltrar) null else {
                                             {
                                                 recolhidos = if (livro in recolhidos) recolhidos - livro
@@ -299,6 +318,10 @@ private fun CabecalhoGrupo(
     recolhido: Boolean = false,
     /** Nulo quando não se pode recolher (a filtrar). */
     aoTocar: (() -> Unit)? = null,
+    /** "A ler desde 3 de março", "Lido de março a maio de 2026" (1.22). */
+    periodo: String? = null,
+    /** O menu do livro (a ler, acabei, datas); nulo no "Sem livro". */
+    menu: (@Composable () -> Unit)? = null,
 ) {
     Row(
         Modifier
@@ -319,6 +342,9 @@ private fun CabecalhoGrupo(
             autor?.let {
                 Text(it, style = Estilo.meta.copy(fontSize = 12.5.sp), color = Cores.ink2)
             }
+            periodo?.let {
+                Text(it, style = Estilo.meta.copy(fontSize = 12.5.sp), color = Cores.accentInk)
+            }
         }
         Spacer(Modifier.width(12.dp))
         // A contagem por livro é o número que dá gosto ver crescer.
@@ -335,6 +361,7 @@ private fun CabecalhoGrupo(
                 tint = Cores.ink3,
             )
         }
+        menu?.invoke()
     }
 }
 
