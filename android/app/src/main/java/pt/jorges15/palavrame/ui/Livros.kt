@@ -286,6 +286,8 @@ fun EcraLivros(
     aoUsarLivroInicial: () -> Unit = {},
     aoAbrirPalavra: (String) -> Unit,
     aoReverLivro: (String) -> Unit,
+    /** Muda quando se toca outra vez no separador Livros: volta-se à lista. */
+    voltarALista: Int = 0,
 ) {
     val livros by vm.livros.collectAsState()
     val carregadas by vm.colecao.collectAsState()
@@ -303,6 +305,12 @@ fun EcraLivros(
     // Só com a página à vista: um livro ainda sem ficha (acabado de registar)
     // não abre, e o "retroceder" não fica preso a uma página invisível.
     BackHandler(enabled = livroAberto != null) { aberto = null }
+    // Só um toque novo fecha o livro: ao voltar ao separador (de uma palavra,
+    // de rever o livro), a página continua aberta.
+    var toqueVisto by rememberSaveable { mutableStateOf(voltarALista) }
+    LaunchedEffect(voltarALista) {
+        if (voltarALista != toqueVisto) { toqueVisto = voltarALista; aberto = null }
+    }
     LaunchedEffect(aberto, livros) {
         if (aberto != null && livros.isNotEmpty() && livros[aberto] == null) aberto = null
     }
@@ -520,7 +528,10 @@ private fun PaginaLivro(
     }
     aPartilhar?.let { DialogoPartilharLivro(it, aoFechar = { aPartilhar = null }) }
 
-    Column(Modifier.fillMaxSize()) {
+    // A página do livro não está num Scaffold: sem isto, a barra com o
+    // "voltar" ficava debaixo da barra de estado, e não havia como regressar
+    // à lista a não ser pelo "retroceder" do telemóvel.
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         BarraVoltar(
             aoVoltar,
             direita = {

@@ -86,7 +86,9 @@ dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
 - **Corrigir uma definição.** No ecrã da palavra, no menu (três pontos ao
   lado de Partilhar): escolhe-se a aceção, escreve-se o que está mal (se se
   quiser) e abre-se o email, com a palavra, a aceção, a fonte e a versão do
-  dicionário. Sem rede, como a submissão de palavras em falta.
+  dicionário. Sem rede, como a submissão de palavras em falta. A última
+  opção, "Falta um significado", serve para acrescentar um (aí é preciso
+  escrevê-lo); por isso o menu aparece também em palavras sem aceções.
 - **A palavra escondida nos lembretes.** Nas Definições, em Rever: "Mostrar a
   palavra", ligado por omissão. Desligado, o lembrete diz só "Tens uma
   palavra para rever". No ecrã bloqueado a palavra fica sempre escondida
@@ -129,6 +131,9 @@ dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
 - Pormenores: a pista de "Escrever a palavra" diz "1 letra"; o email de
   "Corrigir uma definição" já não diz "(desconhecido)" como classe; um livro
   ainda sem ficha não deixa o "retroceder" preso no separador Livros.
+- **Página do livro:** a barra com o "voltar" ficava debaixo da barra de
+  estado, e não havia como regressar à lista dos livros sem o "retroceder"
+  do telemóvel. Tocar outra vez no separador Livros também volta à lista.
 
 ## [0.34.0] - 2026-11 · app v1.21.0 (publicada)
 

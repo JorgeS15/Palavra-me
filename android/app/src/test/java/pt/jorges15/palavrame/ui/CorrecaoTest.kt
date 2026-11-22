@@ -40,4 +40,12 @@ class CorrecaoTest {
         assertTrue(corpo.contains("Fonte: Dicionário Aberto (fraseado adaptado)\n"))
         assertTrue(corpo.contains("(não escrevi nada)"))
     }
+
+    @Test
+    fun `sem acecao e um significado que falta`() {
+        val corpo = corpoCorrecao("credor", null, "substantivo", " Quem empresta dinheiro. ", "v")
+        assertTrue(corpo.startsWith("Palavra: credor (substantivo)\n"))
+        assertTrue(corpo.contains("Falta um significado:\nQuem empresta dinheiro.\n"))
+        assertTrue(!corpo.contains("Fonte:"))
+    }
 }

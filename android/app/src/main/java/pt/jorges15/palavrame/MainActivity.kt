@@ -130,6 +130,8 @@ class MainActivity : ComponentActivity() {
                 var sessaoJogo by rememberSaveable { mutableStateOf(0) }
                 // O livro a rever (pedido na Coleção), ou nulo para a revisão normal.
                 var livroARever by rememberSaveable { mutableStateOf<String?>(null) }
+                // Conta os toques no separador Livros já aberto (volta à lista).
+                var voltarAosLivros by remember { mutableStateOf(0) }
                 // A palavra aberta veio da Coleção: o "retroceder" da palavra
                 // leva de volta para lá, e não para o ecrã inicial.
                 // (Ou dos Livros, desde a 1.22: a página do livro abre palavras.)
@@ -263,6 +265,8 @@ class MainActivity : ComponentActivity() {
                                 aoEscolher = { destino ->
                                     // Tocar outra vez em Procurar volta ao início.
                                     if (destino == Ecra.PESQUISA && ecra == Ecra.PESQUISA) vm.limpar()
+                                    // Tocar outra vez em Livros volta à lista dos livros.
+                                    if (destino == Ecra.LIVROS && ecra == Ecra.LIVROS) voltarAosLivros++
                                     // Mudar de separador à mão corta a ligação à Coleção.
                                     origemDaPalavra = null
                                     ecra = destino
@@ -295,6 +299,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 Ecra.LIVROS -> EcraLivros(
                                     vm,
+                                    voltarALista = voltarAosLivros,
                                     livroInicial = livroPedido,
                                     aoUsarLivroInicial = { livroPedido = null },
                                     aoAbrirPalavra = { lema ->

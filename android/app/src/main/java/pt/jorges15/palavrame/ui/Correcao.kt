@@ -36,11 +36,11 @@ internal fun assuntoCorrecao(lemma: String): String = "Palavra-me: corrigir \"$l
 /**
  * O corpo do email: a palavra, a aceção como está (com a fonte, que diz se é
  * do Wikcionário ou de 1913), o que a pessoa escreveu, e a versão da app e
- * do dicionário.
+ * do dicionário. Sem aceção, é um significado que falta, escrito pela pessoa.
  */
 internal fun corpoCorrecao(
     lemma: String,
-    acecao: Acecao,
+    acecao: Acecao?,
     classe: String?,
     comentario: String,
     versao: String,
@@ -48,19 +48,24 @@ internal fun corpoCorrecao(
     append("Palavra: ").append(lemma)
     classe?.takeIf { it.isNotBlank() }?.let { append(" (").append(it).append(")") }
     append("\n")
-    append("Significado ").append(acecao.ord).append(": ").append(acecao.definicao).append("\n")
-    append("Fonte: ").append(acecao.fonte)
-    if (acecao.modernizada) append(" (fraseado adaptado)")
-    append("\n\n")
     val c = comentario.trim()
-    append("O que está mal, ou como devia ser:\n")
+    if (acecao == null) {
+        append("\nFalta um significado:\n")
+    } else {
+        append("Significado ").append(acecao.ord).append(": ").append(acecao.definicao).append("\n")
+        append("Fonte: ").append(acecao.fonte)
+        if (acecao.modernizada) append(" (fraseado adaptado)")
+        append("\n\n")
+        append("O que está mal, ou como devia ser:\n")
+    }
     append(if (c.isEmpty()) "(não escrevi nada)" else c)
     append("\n\n").append(versao).append("\n")
 }
 
 /**
  * Escolhe-se a aceção (a primeira vem escolhida), escreve-se o que está mal,
- * se se quiser, e abre-se o email.
+ * se se quiser, e abre-se o email. A última opção, "Falta um significado",
+ * é para acrescentar um: aí é preciso escrevê-lo.
  */
 @Composable
 internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
@@ -69,6 +74,8 @@ internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
     var comentario by remember(entrada.lemmaId) { mutableStateOf("") }
     var erro by remember { mutableStateOf<String?>(null) }
     val acecoes = entrada.acecoes
+    // O índice a seguir às aceções é "Falta um significado".
+    val acrescentar = escolhida >= acecoes.size
 
     AlertDialog(
         onDismissRequest = aoFechar,
@@ -86,8 +93,8 @@ internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    "Qual está errada ou antiquada? O email vai para quem cuida do "
-                        + "dicionário, com a palavra e a fonte.",
+                    "Qual está errada ou antiquada? Ou falta um significado? O email "
+                        + "vai para quem cuida do dicionário, com a palavra e a fonte.",
                     style = Estilo.ajuda,
                     color = Cores.ink2,
                 )
@@ -119,11 +126,30 @@ internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
                         )
                     }
                 }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { escolhida = acecoes.size }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = acrescentar,
+                        onClick = { escolhida = acecoes.size },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Cores.accent,
+                            unselectedColor = Cores.ink3,
+                        ),
+                    )
+                    Text("Falta um significado", style = Estilo.texto.copy(fontSize = 15.sp), color = Cores.ink)
+                }
                 Spacer(Modifier.height(6.dp))
                 CampoFormulario(
-                    "O que está mal, ou como devia ser", comentario, { comentario = it },
+                    if (acrescentar) "O significado que falta" else "O que está mal, ou como devia ser",
+                    comentario, { comentario = it },
                     linhas = 3,
-                    placeholder = "Se quiseres",
+                    placeholder = if (acrescentar) "Escreve-o aqui" else "Se quiseres",
                 )
                 erro?.let { Text(it, style = Estilo.ajuda, color = Cores.err) }
             }
@@ -131,7 +157,7 @@ internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
         confirmButton = {
             TextButton(
                 onClick = {
-                    val a = acecoes.getOrNull(escolhida) ?: return@TextButton
+                    val a = acecoes.getOrNull(escolhida)
                     val app = context.applicationContext as PalavrameApp
                     val intent = intentEmail(
                         para = EMAIL_SUBMISSAO,
@@ -139,7 +165,7 @@ internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
                         corpo = corpoCorrecao(
                             lemma = entrada.lemma,
                             acecao = a,
-                            classe = (a.pos ?: entrada.pos)
+                            classe = (a?.pos ?: entrada.pos)
                                 .takeIf { it.isNotBlank() && it != "desconhecido" }?.let(::rotuloPos),
                             comentario = comentario,
                             versao = linhaVersao(BuildConfig.VERSION_NAME, app.dicionario?.construidoEm),
@@ -152,7 +178,8 @@ internal fun DialogoCorrigir(entrada: Entrada, aoFechar: () -> Unit) {
                         erro = "Não encontrei uma app de email neste telemóvel."
                     }
                 },
-                enabled = acecoes.isNotEmpty(),
+                // Para acrescentar, o significado tem de estar escrito.
+                enabled = !acrescentar || comentario.isNotBlank(),
                 colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
             ) { Text("Escrever email", style = Estilo.controloForte) }
         },

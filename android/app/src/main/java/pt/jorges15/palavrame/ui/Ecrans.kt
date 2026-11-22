@@ -866,7 +866,7 @@ private fun VistaEntrada(
                     }
                     // "Corrigir uma definição" (1.22): no menu, para não
                     // pôr mais um ícone à vista numa barra que é da palavra.
-                    if (entrada.acecoes.isNotEmpty()) {
+                    run {
                         var menu by remember { mutableStateOf(false) }
                         Box {
                             IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp)) {
