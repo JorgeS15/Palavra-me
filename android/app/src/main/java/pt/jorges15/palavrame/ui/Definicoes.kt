@@ -137,6 +137,9 @@ fun EcraDefinicoes(
     }
     var mensagem by remember { mutableStateOf<String?>(null) }
 
+    var verTutorial by remember { mutableStateOf(false) }
+    if (verTutorial) Tutorial(aoFechar = { verTutorial = false })
+
     // Submissão de palavras em falta, sem rede: a app entrega a lista ao
     // email (é o email que envia; a app continua sem permissão de Internet).
     var mensagemFalta by remember { mutableStateOf<String?>(null) }
@@ -214,11 +217,12 @@ fun EcraDefinicoes(
 
             Seccao("Sobre")
             GrupoCartao {
+                // O tutorial da primeira abertura, para rever quando se quiser.
                 LinhaGrupo(
-                    "Versão da app",
-                    direita = {
-                        Text(BuildConfig.VERSION_NAME, style = Estilo.texto, color = Cores.ink2)
-                    },
+                    "Como funciona",
+                    subtitulo = "Procurar, guardar, os livros e a revisão, em quatro ecrãs.",
+                    aoTocar = { verTutorial = true },
+                    direita = { Chevron() },
                 )
                 DivisoriaGrupo()
                 // Abre a página da app na Play Store (como o pedido à 5.ª
@@ -269,6 +273,14 @@ fun EcraDefinicoes(
                         modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
                     )
                 }
+                // A versão no fim: é informação, não uma ação.
+                DivisoriaGrupo()
+                LinhaGrupo(
+                    "Versão da app",
+                    direita = {
+                        Text(BuildConfig.VERSION_NAME, style = Estilo.texto, color = Cores.ink2)
+                    },
+                )
             }
 
             Seccao("Avançado")

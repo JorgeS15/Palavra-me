@@ -46,6 +46,7 @@ import pt.jorges15.palavrame.ui.PesquisaViewModel
 import pt.jorges15.palavrame.ui.AcaoNovidade
 import pt.jorges15.palavrame.ui.DialogoNovidades
 import pt.jorges15.palavrame.ui.NOVIDADES
+import pt.jorges15.palavrame.ui.Tutorial
 import pt.jorges15.palavrame.ui.mostrarNovidades
 import pt.jorges15.palavrame.ui.notasPorVer
 import pt.jorges15.palavrame.ui.BotaoPrincipal
@@ -185,6 +186,9 @@ class MainActivity : ComponentActivity() {
                 // versão só se marca como vista quando a nota aparece).
                 // O código da versão cujas notas estão abertas (nulo: nenhuma).
                 var notasAbertas by rememberSaveable { mutableStateOf<Int?>(null) }
+                // "Como funciona": sozinho só na instalação nova; depois, pelo
+                // botão das Novidades ou pelas Definições.
+                var tutorialAberto by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (!primeiraCriacao || daNotificacao || textoRecebido() != null) {
                         return@LaunchedEffect
@@ -195,9 +199,17 @@ class MainActivity : ComponentActivity() {
                     // Instalação nova (ou já vista): nada a mostrar, e as notas
                     // ficam dadas como vistas. Senão, as mais recentes por ver,
                     // mesmo que sejam de uma versão que não chegou a sair.
-                    if (mostrarNovidades(atual, vista, foiAtualizacao())) {
+                    val atualizacao = foiAtualizacao()
+                    if (mostrarNovidades(atual, vista, atualizacao)) {
                         notasAbertas = notasPorVer(atual, vista)
                     }
+                    if (!atualizacao && !preferencias.tutorialVisto()) tutorialAberto = true
+                }
+                if (tutorialAberto) {
+                    Tutorial(aoFechar = {
+                        tutorialAberto = false
+                        preferencias.marcarTutorialVisto()
+                    })
                 }
                 falhaDaAtualizacao?.let { motivo ->
                     AlertDialog(
@@ -241,6 +253,7 @@ class MainActivity : ComponentActivity() {
                                         abrirAspeto = true
                                         ecra = Ecra.DEFINICOES
                                     }
+                                    AcaoNovidade.TUTORIAL -> tutorialAberto = true
                                 }
                             },
                         )

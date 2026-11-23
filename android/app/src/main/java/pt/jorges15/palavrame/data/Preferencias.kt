@@ -212,8 +212,18 @@ class Preferencias(context: Context) {
         prefs.edit().putInt(CHAVE_VERSAO_VISTA, codigo).apply()
     }
 
+    // --- "Como funciona" (1.22) ----------------------------------------------
+
+    /** O tutorial já se mostrou (ou saltou-se): não volta a abrir sozinho. */
+    fun tutorialVisto(): Boolean = prefs.getBoolean(CHAVE_TUTORIAL, false)
+
+    fun marcarTutorialVisto() {
+        prefs.edit().putBoolean(CHAVE_TUTORIAL, true).apply()
+    }
+
     companion object {
         private const val CHAVE_VERSAO_VISTA = "novidades_vistas_ate"
+        private const val CHAVE_TUTORIAL = "tutorial_visto"
         private const val CHAVE_COTA_DIA = "revisao_manual_dia"
         private const val CHAVE_COTA_USADAS = "revisao_manual_usadas"
         private const val CHAVE_TEMA = "tema"

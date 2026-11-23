@@ -26,6 +26,7 @@ import pt.jorges15.palavrame.ui.theme.Estilo
 /** Para onde leva o botão da nota, quando a novidade tem um sítio na app. */
 enum class AcaoNovidade(val rotulo: String) {
     ASPETO("Ver o Aspeto"),
+    TUTORIAL("Ver como funciona"),
 }
 
 class Novidades(val itens: List<String>, val acao: AcaoNovidade? = null)
@@ -39,6 +40,7 @@ val NOVIDADES: Map<Int, Novidades> = mapOf(
             "Podes esconder a palavra nos lembretes, em Definições. No ecrã bloqueado fica sempre escondida.",
             "Uma definição errada ou antiquada? Avisa no menu da palavra. E \"crèdor\" e afins passam à grafia de hoje.",
         ),
+        acao = AcaoNovidade.TUTORIAL,
     ),
     33 to Novidades(          // 1.21.0
         itens = listOf(

@@ -101,6 +101,12 @@ dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
   dicionário. Sem rede, como a submissão de palavras em falta. A última
   opção, "Falta um significado", serve para acrescentar um (aí é preciso
   escrevê-lo); por isso o menu aparece também em palavras sem aceções.
+- **Como funciona.** Quatro ecrãs curtos (procurar, guardar, os livros,
+  rever), com "Saltar" sempre à mão e ilustrações feitas com peças da própria
+  app. Abre sozinho só na primeira abertura de uma instalação nova; quem
+  atualiza chega-lhe pelo botão "Ver como funciona" das Novidades da 1.22.0,
+  e qualquer pessoa em Definições, Sobre, "Como funciona". Não pede
+  permissões. Desenho no Claude Design ("Palavra-me: tutorial").
 - **A palavra escondida nos lembretes.** Nas Definições, em Rever: "Mostrar a
   palavra", ligado por omissão. Desligado, o lembrete diz só "Tens uma
   palavra para rever". No ecrã bloqueado a palavra fica sempre escondida
