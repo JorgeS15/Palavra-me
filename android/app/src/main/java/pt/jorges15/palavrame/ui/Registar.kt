@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
@@ -37,6 +38,8 @@ import pt.jorges15.palavrame.ui.theme.Estilo
 @Composable
 fun FolhaRegistar(
     lemma: String,
+    /** A língua com que a palavra se regista (a do dicionário onde foi encontrada). */
+    lingua: String = Lingua.PT,
     livrosAnteriores: List<Livro> = emptyList(),
     /** Não nulo = estamos a editar um registo que já existe. */
     existente: PalavraGuardada? = null,
@@ -349,7 +352,7 @@ fun FolhaRegistar(
                             // `copy` quando existe, para preservar o id, a data de
                             // registo e o progresso de revisão: editar as notas de
                             // uma palavra não é registá-la de novo.
-                            (existente ?: PalavraGuardada(lemma = lemma)).copy(
+                            (existente ?: PalavraGuardada(lemma = lemma, lingua = lingua)).copy(
                                 // TEXTO, não id: a coleção sobrevive a uma
                                 // substituição do dicionario.db.
                                 lemma = lemma,

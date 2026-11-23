@@ -33,6 +33,14 @@ class Novidades(val itens: List<String>, val acao: AcaoNovidade? = null)
 
 /** As notas por `versionCode`. Só as versões com algo a contar. */
 val NOVIDADES: Map<Int, Novidades> = mapOf(
+    36 to Novidades(          // 1.23.0
+        itens = listOf(
+            "Dicionário de inglês: palavras inglesas, com as definições em inglês.",
+            "Ao acrescentar um livro, escolhes a língua. A pesquisa abre na língua do livro que estás a ler.",
+            "Na pesquisa, PT ou EN com um toque. Se a palavra estiver no outro dicionário, a app diz.",
+            "As palavras inglesas entram na coleção e na revisão, sempre contra palavras da mesma língua.",
+        ),
+    ),
     35 to Novidades(          // 1.22.0 (o 34 é a 1.21.1, só correções)
         itens = listOf(
             "Novo separador Livros: o que estás a ler, os lidos por ano, as datas de cada leitura, uma nota e um resumo, que se partilha como imagem.",

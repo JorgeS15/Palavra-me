@@ -62,6 +62,9 @@ class TextoTest {
     fun `preserva hifen e apostrofo, que sao parte da palavra`() {
         assertEquals("fim-de-semana", Texto.normalizar("fim-de-semana"))
         assertEquals("d'agua", Texto.normalizar("d'água"))
+        // O apóstrofo tipográfico dos ebooks é o mesmo apóstrofo.
+        assertEquals("d'agua", Texto.normalizar("d’água"))
+        assertEquals("wouldn't", Texto.normalizar("Wouldn’t"))
         // O ª é uma letra e o Python preserva-o: não o convertemos a 'a'.
         assertEquals("1ª", Texto.normalizar("1ª"))
     }

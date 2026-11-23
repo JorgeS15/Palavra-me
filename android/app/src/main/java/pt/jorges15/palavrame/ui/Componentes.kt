@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
@@ -259,6 +260,29 @@ fun Segmentado(
             }
         }
     }
+}
+
+/**
+ * PT / EN: em que dicionário se procura, ou em que língua se lê um livro.
+ * Nada se desenha com uma só língua (sem o dicionário de inglês instalado, a
+ * app fica exatamente como era).
+ */
+@Composable
+fun EscolhaLingua(
+    atual: String,
+    linguas: List<String>,
+    aoEscolher: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    altura: Dp = 36.dp,
+) {
+    if (linguas.size < 2) return
+    Segmentado(
+        opcoes = linguas.map(Lingua::sigla),
+        selecionado = linguas.indexOf(atual).coerceAtLeast(0),
+        aoEscolher = { aoEscolher(linguas[it]) },
+        modifier = modifier.width((56 * linguas.size).dp),
+        altura = altura,
+    )
 }
 
 /** O campo de pesquisa grande da entrada (e, mais baixo, o filtro da coleção). */

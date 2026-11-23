@@ -17,6 +17,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.MainActivity
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.R
@@ -187,8 +188,11 @@ object Lembrete {
     const val TITULO_SEM_PALAVRA = "Tens uma palavra para rever"
     private const val TEXTO_LEMBRETE = "Uma palavra da tua coleção, à espera."
 
-    fun mostrar(context: Context, lemma: String) {
+    fun mostrar(context: Context, lemma: String, lingua: String = Lingua.PT) {
         if (!temPermissao(context)) return
+        // O que viaja é a chave (`chaveDe`): o lema, com a língua à frente se
+        // não for português. O título mostra só a palavra.
+        val chave = chaveDe(lemma, lingua)
         criarCanal(context)
 
         val abrir = Intent(context, MainActivity::class.java).apply {
@@ -197,7 +201,7 @@ object Lembrete {
             // escolher ao abrir, e bastava registares uma palavra nova entre
             // a notificação e o toque para o jogo perguntar outra coisa — as
             // palavras acabadas de registar são as primeiras da fila.
-            putExtra(EXTRA_LEMA, lemma)
+            putExtra(EXTRA_LEMA, chave)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendente = PendingIntent.getActivity(
@@ -231,11 +235,11 @@ object Lembrete {
         }
 
         NotificationManagerCompat.from(context).notify(ID_NOTIFICACAO, notificacao)
-        preferenciasInternas(context).edit().putString(CHAVE_ANUNCIADA, lemma).apply()
+        preferenciasInternas(context).edit().putString(CHAVE_ANUNCIADA, chave).apply()
     }
 
     /**
-     * Tira a notificação da barra se anunciava `lemma`. O jogo chama isto a
+     * Tira a notificação da barra se anunciava a palavra `chave` (ver `chaveDe`). O jogo chama isto a
      * cada resposta.
      *
      * Sem isto, quem revia em "Rever" a palavra que a notificação anunciava
@@ -243,9 +247,9 @@ object Lembrete {
      * rever"): a notificação prometia uma coisa que já não existia. Só se tira
      * a da mesma palavra; uma notificação de outra continua a ser verdade.
      */
-    fun esquecerSeAnunciou(context: Context, lemma: String) {
+    fun esquecerSeAnunciou(context: Context, chave: String) {
         val prefs = preferenciasInternas(context)
-        if (prefs.getString(CHAVE_ANUNCIADA, null) != lemma) return
+        if (prefs.getString(CHAVE_ANUNCIADA, null) != chave) return
         NotificationManagerCompat.from(context).cancel(ID_NOTIFICACAO)
         prefs.edit().remove(CHAVE_ANUNCIADA).apply()
     }
@@ -282,15 +286,15 @@ class LembreteWorker(
         // Num processo iniciado só para o worker, o dicionário pode ainda não
         // estar aberto. Sem ele, NENHUMA palavra conta como jogável e o
         // lembrete ficava mudo mesmo havendo palavras vencidas. Abre-se aqui.
-        if (app != null && app.dicionario == null) app.abrirDicionario()
+        if (app != null) Lingua.todas.filter { app.dicionario(it) == null }.forEach { app.abrirDicionario(it) }
 
         val palavra = escolherPalavra(
-            dicionario = app?.dicionario,
+            dicionarios = { l -> app?.dicionario(l) },
             utilizador = UtilizadorDb.obter(applicationContext),
             agora = System.currentTimeMillis(),
         ) ?: return Result.success()
 
-        Lembrete.mostrar(applicationContext, palavra.lemma)
+        Lembrete.mostrar(applicationContext, palavra.lemma, palavra.lingua)
         return Result.success()
     }
 }

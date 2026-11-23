@@ -10,6 +10,10 @@ Tudo o resto são as suas peças, disponíveis à parte para depurar.
     palavrame gerar --backend ollama # AMALIA em batch
     palavrame rever                  # aprovar/rejeitar o que o AMALIA gerou
     palavrame validar --db out/dicionario-f0.db --distribuicao
+
+    palavrame fetch --lingua en      # fontes do dicionário de inglês
+    palavrame en                     # build do dicionário de inglês
+    palavrame empacotar --lingua en --db out/dicionario-en-1.db
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from .config import default_paths
 from .merge import merge_entries
 from .report import build_report, write_reports
 from .schema import MergedEntry, SourceEntry, dump_jsonl
-from .sources import REGISTRY, all_infos, build as build_source
+from .sources import LINGUAS, REGISTRY, all_infos, build as build_source, registo
 from .sources.base import SourceUnavailable
 from .validate import validate_database
 
@@ -91,10 +95,13 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="comando")
 
     p = sub.add_parser("fontes", help="estado das fontes e das licenças")
+    p.add_argument("--lingua", choices=LINGUAS, default="pt")
     p.add_argument("--markdown", action="store_true", help="saída para notas/fontes.md")
     p.set_defaults(func=cmd_fontes)
 
     p = sub.add_parser("fetch", help="descarrega ficheiros brutos para o cache")
+    p.add_argument("--lingua", choices=LINGUAS, default="pt",
+                   help="de que dicionário são as fontes (por omissão, pt)")
     p.add_argument("--source", action="append", dest="sources",
                    help="repetível; por omissão, todas")
     p.add_argument("--seeds", default=DEFAULT_SEEDS,
@@ -122,6 +129,12 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="exige o VOC como autoridade de lemas")
     p.set_defaults(func=cmd_f1)
 
+    p = sub.add_parser("en", help="build do dicionário de inglês")
+    p.add_argument("--db-version", default="1")
+    p.add_argument("--seeds", default=None,
+                   help="só estes lemas (protótipo); por omissão, todos")
+    p.set_defaults(func=cmd_en)
+
     p = sub.add_parser("gerar", help="gera exemplos com o AMALIA (batch)")
     p.add_argument("--entries", default=None, help="JSONL de entradas fundidas")
     p.add_argument("--backend", choices=("ollama", "echo"), default="ollama")
@@ -138,6 +151,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="prepara a DB para ir dentro do APK (comprime para assets/)",
     )
     p.add_argument("--db", required=True)
+    p.add_argument("--lingua", choices=LINGUAS, default="pt",
+                   help="en escreve dicionario-en.db.gz em vez de dicionario.db.gz")
     p.add_argument("--destino", default="../android/app/src/main/assets")
     p.add_argument("--completa", action="store_true",
                    help="empacota a base inteira, sem tirar o que a app não usa")
@@ -166,7 +181,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_fontes(args) -> int:
-    infos = all_infos()
+    infos = all_infos(args.lingua)
     if args.markdown:
         print(_fontes_markdown(infos))
         return 0
@@ -193,8 +208,8 @@ def cmd_fontes(args) -> int:
 def cmd_fetch(args) -> int:
     paths = default_paths().ensure()
     cache = Cache(paths, offline=args.offline)
-    slugs = args.sources or list(REGISTRY)
-    lemmas = _read_seeds(paths, args.seeds)
+    slugs = args.sources or list(registo(args.lingua))
+    lemmas = _read_seeds(paths, args.seeds) if args.lingua == "pt" else []
 
     override = getattr(args, "url", None) or getattr(args, "ficheiro", None)
     if override:
@@ -462,6 +477,76 @@ def cmd_f1(args) -> int:
     )
 
 
+def cmd_en(args) -> int:
+    """O dicionário de inglês: Wiktionary inglês + frequências do Leipzig.
+
+    Mais simples do que a F1 portuguesa (ver `palavrame.ingles`): uma fonte de
+    conteúdo e uma de frequência. Precisa de `palavrame fetch --lingua en`.
+    """
+    from .build import build_database
+    from .ingles import fundir, ranks_de
+    from .merge.merger import ConflictReport
+
+    paths = default_paths().ensure()
+    cache = Cache(paths, offline=args.offline)
+    lemmas = _read_seeds(paths, args.seeds) if args.seeds else None
+    alcance = f"{len(lemmas)} lemas da lista" if lemmas else "completo"
+    print(f"\n  Dicionário de inglês — {alcance}.\n")
+
+    # As formas flexionadas de um lema da lista também têm de passar o filtro
+    # da fonte, senão `ran` ficava de fora quando se pede `run`. Por isso o
+    # Wiktionary lê-se inteiro e o recorte faz-se depois da fusão.
+    wikt = build_source("wiktionary_en", cache)
+    leipzig = build_source("leipzig_en", cache)
+
+    ranks = ranks_de(leipzig.parse(None))
+    print(f"  {'leipzig_en':<20} {len(ranks)} frequências")
+
+    entradas = fundir(wikt.parse(None), ranks)
+    if lemmas is not None:
+        pedidos = set(lemmas)
+        entradas = [e for e in entradas if e.lemma in pedidos]
+    print(f"  {'wiktionary_en':<20} {len(entradas)} lemas")
+    if not entradas:
+        print("\n  Nada para construir. Corre `palavrame fetch --lingua en` "
+              "primeiro (precisa de rede).\n")
+        return 2
+
+    infos = [wikt.info] + ([leipzig.info] if ranks else [])
+    versao = f"en-{args.db_version}"
+    db_path = paths.out / f"dicionario-{versao}.db"
+    stats = build_database(
+        db_path, entradas, infos, db_version=versao,
+        extra_meta={"lingua": "en", "fase": "EN" if lemmas is None else "EN-F0"},
+    )
+    print(f"  DB: {db_path} ({stats['bytes'] / 1048576:.1f} MB)")
+
+    report = build_report(versao, entradas, stats, ConflictReport(), infos)
+    written = write_reports(paths.out, report, entradas)
+
+    sondas = [(w, l) for w, l in PROBES_EN if lemmas is None or l in set(lemmas)]
+    validation = validate_database(db_path, infos, distribution=False, probes=sondas)
+    print("\n  Validação:")
+    print(validation.render())
+    print("\n  Escrito:")
+    for path in written:
+        print(f"    {path}")
+    print(f"\n  Para a app: python -m palavrame.cli empacotar --lingua en --db {db_path}\n")
+    return 0 if validation.ok else 1
+
+
+# Sondas da pesquisa em inglês: flexões irregulares, o apóstrofo tipográfico dos
+# ebooks, e uma grafia britânica.
+PROBES_EN = (
+    ("ran", "run"),
+    ("dogs", "dog"),
+    ("went", "go"),
+    ("bleakest", "bleak"),
+    ("wouldn\u2019t", "wouldn't"),
+    ("colour", "colour"),
+)
+
+
 def cmd_gerar(args) -> int:
     from .generate import EchoBackend, OllamaBackend
     from .generate.runner import DEFAULT_MODEL, generate_examples, save_candidates
@@ -534,7 +619,10 @@ def cmd_empacotar(args) -> int:
 
     destino_dir = Path(args.destino)
     destino_dir.mkdir(parents=True, exist_ok=True)
-    destino = destino_dir / "dicionario.db.gz"
+    # O dicionário de inglês vai ao lado, com o sufixo da língua; o português
+    # mantém o nome de sempre, para as apps já instaladas.
+    sufixo = "" if args.lingua == "pt" else f"-{args.lingua}"
+    destino = destino_dir / f"dicionario{sufixo}.db.gz"
 
     # A cópia que vai no APK leva só o que a app usa (ver `_emagrecer`). A base
     # completa em `out/` fica intacta: é essa que se valida e publica.
@@ -568,7 +656,7 @@ def cmd_empacotar(args) -> int:
     finally:
         conn.close()
     versao = linha[0] if linha else "?"
-    marca = destino_dir / "dicionario.versao"
+    marca = destino_dir / f"dicionario{sufixo}.versao"
     marca.write_text(f"{versao}\n{assinatura}\n", encoding="utf-8")
 
     tamanho = destino.stat().st_size / 1048576

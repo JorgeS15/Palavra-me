@@ -629,6 +629,12 @@
     "sha256": "362960b9176f6a1185aa86d5ee642b3e644c05df5181c810754be50af70d504a",
     "url": "https://downloads.wortschatz-leipzig.de/corpora/por-pt_web_2015_1M.tar.gz"
   },
+  "leipzig_en/eng-uk_web_2002_1M.tar.gz": {
+    "bytes": 225606037,
+    "fetched_at": "2026-11-23T16:02:52Z",
+    "sha256": "d1e809df33b8f3044bf861b42814722fc9a9a3baa0e3cbe71f62d31e630f4b54",
+    "url": "file://C:\\Users\\User\\Documents\\Projetos\\Palavra-me\\pipeline\\cache\\_descargas-en\\eng-uk_web_2002_1M.tar.gz"
+  },
   "ontopt/OntoPTv0.6_n3.zip": {
     "bytes": 5380964,
     "fetched_at": "2026-08-06T16:06:32Z",
@@ -652,6 +658,12 @@
     "fetched_at": "2026-07-30T13:42:39Z",
     "sha256": "8254e1423cfa552d908b0b9fed6a3fda6167cb5d7b8ab96bb9642a0eab00ca51",
     "url": "https://kaikki.org/dictionary/downloads/pt/pt-extract.jsonl.gz"
+  },
+  "wiktionary_en/kaikki-English.jsonl.gz": {
+    "bytes": 534186395,
+    "fetched_at": "2026-11-23T16:02:51Z",
+    "sha256": "4d03b6cba283744756c57ff661c2c6cbfe34fcf8ff513a966576cf7d97e91a99",
+    "url": "file://C:\\Users\\User\\Documents\\Projetos\\Palavra-me\\pipeline\\cache\\_descargas-en\\kaikki-English.jsonl.gz"
   },
   "wordnet_pt/pulo.sql.xz": {
     "bytes": 5555724,

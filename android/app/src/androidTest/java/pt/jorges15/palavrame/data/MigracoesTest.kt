@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -150,6 +151,13 @@ class MigracoesTest {
             assertEquals(1000L, livro.criadoEm)
             assertEquals(false, livro.emCurso)
             assertEquals(emptyList<Leitura>(), db.livros().leiturasDe(livro.id))
+
+            // A versão 8: o que já lá estava é português, e a mesma grafia
+            // passa a poder estar na coleção também em inglês.
+            assertEquals(Lingua.PT, p.lingua)
+            assertEquals(Lingua.PT, livro.lingua)
+            assertTrue(db.palavras().guardar(PalavraGuardada(lemma = "lânguido", lingua = Lingua.EN)) > 0)
+            assertEquals(-1L, db.palavras().guardar(PalavraGuardada(lemma = "lânguido")))
 
             val prog = db.progresso().atual()!!
             assertEquals(523, prog.pontos)

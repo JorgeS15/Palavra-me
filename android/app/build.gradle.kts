@@ -35,8 +35,8 @@ android {
         applicationId = "pt.jorges15.palavrame"
         minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "1.22.0"
+        versionCode = 36
+        versionName = "1.23.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -125,22 +125,30 @@ kotlin {
  * vale mais do que uma app que mente sobre o que tem lá dentro.
  */
 val verificarDicionario by tasks.registering {
-    val asset = layout.projectDirectory.file("src/main/assets/dicionario.db.gz")
+    // Os dois vão dentro da app (1.23): o português e o inglês.
+    val dicionarios = listOf(
+        Triple("dicionario.db.gz", "f1", "empacotar --db out/dicionario-1.db"),
+        Triple("dicionario-en.db.gz", "en", "empacotar --lingua en --db out/dicionario-en-1.db"),
+    ).map { (nome, build, empacotar) ->
+        Triple(layout.projectDirectory.file("src/main/assets/$nome"), build, empacotar)
+    }
     doFirst {
-        val f = asset.asFile
-        if (!f.exists() || f.length() < 1_000_000) {
-            throw GradleException(
-                """
-                Falta o dicionário nos assets: ${f.path}
+        for ((asset, build, empacotar) in dicionarios) {
+            val f = asset.asFile
+            if (!f.exists() || f.length() < 1_000_000) {
+                throw GradleException(
+                    """
+                    Falta o dicionário nos assets: ${f.path}
 
-                Constrói-o e empacota-o antes de compilar a app:
-                    cd pipeline
-                    python -m palavrame.cli f1
-                    python -m palavrame.cli empacotar --db out/dicionario-1.db
-                """.trimIndent()
-            )
+                    Constrói-o e empacota-o antes de compilar a app:
+                        cd pipeline
+                        python -m palavrame.cli $build
+                        python -m palavrame.cli $empacotar
+                    """.trimIndent()
+                )
+            }
+            logger.lifecycle("  ${f.name}: ${f.length() / 1_048_576} MB nos assets")
         }
-        logger.lifecycle("  dicionário: ${f.length() / 1_048_576} MB nos assets")
     }
 }
 
@@ -168,18 +176,15 @@ tasks.register("verificarApk") {
                     "    ${entrada.name} — ${entrada.size / 1024} KiB"
                 }
         }
-        val temDicionario = ZipFile(apk).use { zip ->
-            zip.entries().asSequence().any { entrada ->
-                // O AGP tira o `.gz` aos assets que o tenham; os dois nomes
-                // contam como sucesso.
-                entrada.name == "assets/dicionario.db.gz" ||
-                    entrada.name == "assets/dicionario.db"
+        val nomes = ZipFile(apk).use { zip -> zip.entries().asSequence().map { it.name }.toSet() }
+        for (base in listOf("dicionario", "dicionario-en")) {
+            // O AGP tira o `.gz` aos assets que o tenham; os dois nomes
+            // contam como sucesso.
+            if ("assets/$base.db.gz" !in nomes && "assets/$base.db" !in nomes) {
+                throw GradleException(
+                    "O APK saiu sem o $base.db. Assets encontrados:\n$entradas"
+                )
             }
-        }
-        if (!temDicionario) {
-            throw GradleException(
-                "O APK saiu sem o dicionário. Assets encontrados:\n$entradas"
-            )
         }
         logger.lifecycle("  assets dentro do APK:\n$entradas")
     }

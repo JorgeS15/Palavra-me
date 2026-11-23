@@ -33,3 +33,13 @@ def test_sigla_toda_em_maiusculas_nao_e_nome_proprio():
 
 def test_surface_words_preserva_caixa_e_acentos():
     assert surface_words("O Bebé dorme.") == ["O", "Bebé", "dorme"]
+
+
+def test_apostrofo_tipografico_e_o_simples():
+    # Os ebooks escrevem `wouldn’t` com o ’ (U+2019); tem de dar o mesmo que
+    # o apóstrofo simples, e a app (`Texto.kt`) faz igual.
+    from palavrame.text import normalize
+
+    assert normalize("Wouldn’t") == "wouldn't"
+    assert normalize("d’água") == "d'agua"
+    assert normalize("d'água") == "d'agua"

@@ -150,7 +150,7 @@ fun EcraPesquisa(
             when {
                 entrada != null -> VistaEntrada(
                     entrada,
-                    guardada = palavras.firstOrNull { it.lemma == entrada.lemma },
+                    guardada = palavras.firstOrNull { it.lemma == entrada.lemma && it.lingua == entrada.lingua },
                     desenvolvedor = desenvolvedor,
                     aoVoltar = voltar,
                     aoRegistar = {
@@ -160,7 +160,8 @@ fun EcraPesquisa(
                     },
                     aoPartilhar = {
                         aPartilhar = dadosPartilha(
-                            entrada, palavras.firstOrNull { it.lemma == entrada.lemma },
+                            entrada,
+                            palavras.firstOrNull { it.lemma == entrada.lemma && it.lingua == entrada.lingua },
                         )
                     },
                     aoSeguir = { vm.procurar(it) },
@@ -171,10 +172,16 @@ fun EcraPesquisa(
 
                 estado.procurou -> {
                     val termo = Texto.paraRegisto(estado.texto)
-                    val guardada = palavras.firstOrNull { it.lemma.equals(termo, ignoreCase = true) }
+                    val guardada = palavras.firstOrNull {
+                        it.lemma.equals(termo, ignoreCase = true) && it.lingua == estado.lingua
+                    }
                     NaoEncontrada(
                         termo = termo,
                         parecidas = estado.parecidas,
+                        lingua = estado.lingua,
+                        linguas = vm.linguas,
+                        existeNaOutra = estado.existeNaOutra,
+                        aoEscolherLingua = vm::escolherLingua,
                         aoVoltar = voltar,
                         aoEscolherParecida = { vm.procurar(it) },
                         significadoProprio = guardada?.significado,
@@ -195,6 +202,8 @@ fun EcraPesquisa(
                     // do Modo Desenvolvedor). O limite do dia mantém a app calma.
                     porRever = porRever,
                     restantesHoje = restantesHoje,
+                    linguas = vm.linguas,
+                    aoEscolherLingua = vm::escolherLingua,
                     aoEscrever = vm::escrever,
                     aoProcurar = { termo ->
                         vm.procurar(termo)
@@ -233,9 +242,13 @@ fun EcraPesquisa(
     }
 
     lemaARegistar?.let { lema ->
-        val existente = palavras.firstOrNull { it.lemma == lema }
+        // A palavra regista-se na língua da entrada aberta (ou, se não está no
+        // dicionário, na língua em que se procurou).
+        val linguaDoRegisto = estado.entrada?.lingua ?: estado.lingua
+        val existente = palavras.firstOrNull { it.lemma == lema && it.lingua == linguaDoRegisto }
         FolhaRegistar(
             lemma = lema,
+            lingua = linguaDoRegisto,
             livrosAnteriores = livros,
             existente = existente,
             fraseInicial = fraseSugerida,
@@ -372,6 +385,8 @@ private fun Inicio(
     progresso: Progresso?,
     porRever: Int,
     restantesHoje: Int,
+    linguas: List<String> = listOf(Lingua.PT),
+    aoEscolherLingua: (String) -> Unit = {},
     aoEscrever: (String) -> Unit,
     aoProcurar: (String) -> Unit,
     aoLimpar: () -> Unit,
@@ -393,7 +408,10 @@ private fun Inicio(
         ) {
             Logotipo()
             Spacer(Modifier.weight(1f))
+            // Em que dicionário se procura. Abre na língua do livro em curso.
+            EscolhaLingua(estado.lingua, linguas, aoEscolherLingua)
             if (sequencia >= 1) {
+                if (linguas.size > 1) Spacer(Modifier.width(8.dp))
                 Pilula(
                     if (sequencia == 1) "1 dia" else "$sequencia dias",
                     fundo = Cores.accentSoft,
@@ -865,8 +883,10 @@ private fun VistaEntrada(
                 // Todas as classes da palavra, a principal primeiro
                 // ("substantivo · adjetivo"); com um dicionário anterior à
                 // 1.21, só a do lema, como antes.
-                val classe = entrada.classes.takeIf { it.isNotEmpty() }
-                    ?.joinToString(" · ") { rotuloPos(it) }
+                // Uma palavra inglesa diz que o é, à frente da classe.
+                val classe = (listOfNotNull(Lingua.nome(entrada.lingua).takeIf { entrada.lingua != Lingua.PT })
+                    + entrada.classes.map { rotuloPos(it) })
+                    .takeIf { it.isNotEmpty() }?.joinToString(" · ")
                 if (classe != null || entrada.silabas != null) {
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1259,9 +1279,17 @@ private fun NaoEncontrada(
     significadoProprio: String?,
     jaGuardada: Boolean,
     aoRegistar: () -> Unit,
+    lingua: String = Lingua.PT,
+    linguas: List<String> = listOf(Lingua.PT),
+    /** A outra língua, se a palavra estiver lá. */
+    existeNaOutra: String? = null,
+    aoEscolherLingua: (String) -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize()) {
-        BarraVoltar(aoVoltar)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { BarraVoltar(aoVoltar) }
+            EscolhaLingua(lingua, linguas, aoEscolherLingua, Modifier.padding(end = 16.dp))
+        }
         Column(
             Modifier
                 .fillMaxSize()
@@ -1281,12 +1309,24 @@ private fun NaoEncontrada(
                 )
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "Não está no dicionário. Pode ser só um erro de escrita.",
+                    if (linguas.size > 1)
+                        "Não está no dicionário de ${Lingua.nome(lingua).lowercase()}. Pode ser só um erro de escrita."
+                    else "Não está no dicionário. Pode ser só um erro de escrita.",
                     style = Estilo.corpo,
                     color = Cores.ink2,
                 )
             } else {
                 Text("Não encontrei essa palavra.", style = Estilo.corpo, color = Cores.ink2)
+            }
+
+            // Está no outro dicionário: um toque e procura-se lá.
+            existeNaOutra?.let { outra ->
+                Spacer(Modifier.height(18.dp))
+                BotaoPrincipal(
+                    "Ver no dicionário de ${Lingua.nome(outra).lowercase()}",
+                    { aoEscolherLingua(outra) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             if (parecidas.isNotEmpty()) {

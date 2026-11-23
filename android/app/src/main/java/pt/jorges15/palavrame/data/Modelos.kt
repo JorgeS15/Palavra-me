@@ -72,6 +72,8 @@ data class Entrada(
     val acecoes: List<Acecao>,
     val exemplos: List<Exemplo>,
     val relacionadas: List<Relacionada>,
+    /** De que dicionário veio (`Lingua`): é a língua com que a palavra se regista. */
+    val lingua: String = Lingua.PT,
 ) {
     /**
      * As classes da palavra, pela ordem em que se mostram: a com mais

@@ -82,9 +82,9 @@ class MainActivity : ComponentActivity() {
 
             TemaPalavrame(preferido = tema, paleta = paleta, letra = letra) {
                 // Falta instalar se nao ha base nenhuma, ou se a que veio no
-                // APK e diferente da instalada.
+                // APK e diferente da instalada (em qualquer das linguas).
                 var temDicionario by remember {
-                    mutableStateOf(app.dicionario != null && !app.temDicionarioEmpacotado())
+                    mutableStateOf(app.dicionario != null && app.linguasPorInstalar().isEmpty())
                 }
 
                 // A atualização do dicionário falhou, mas a base antiga abriu:
@@ -296,11 +296,11 @@ class MainActivity : ComponentActivity() {
                                     vm,
                                     desenvolvedor = desenvolvedor,
                                     aoVoltar = { ecra = Ecra.PESQUISA },
-                                    aoAbrirPalavra = { lema ->
+                                    aoAbrirPalavra = { chave ->
                                         // Só se muda de ecrã com a palavra já
                                         // pronta: senão via-se o início por um
-                                        // instante.
-                                        vm.procurar(lema) {
+                                        // instante. A chave traz a língua.
+                                        vm.procurarGuardada(chave) {
                                             origemDaPalavra = Ecra.COLECAO
                                             ecra = Ecra.PESQUISA
                                         }
@@ -315,8 +315,8 @@ class MainActivity : ComponentActivity() {
                                     voltarALista = voltarAosLivros,
                                     livroInicial = livroPedido,
                                     aoUsarLivroInicial = { livroPedido = null },
-                                    aoAbrirPalavra = { lema ->
-                                        vm.procurar(lema) {
+                                    aoAbrirPalavra = { chave ->
+                                        vm.procurarGuardada(chave) {
                                             origemDaPalavra = Ecra.LIVROS
                                             ecra = Ecra.PESQUISA
                                         }
@@ -411,7 +411,7 @@ class MainActivity : ComponentActivity() {
     private fun fabrica(app: PalavrameApp) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            PesquisaViewModel({ app.dicionario }, app.utilizador) as T
+            PesquisaViewModel({ l -> app.dicionario(l) }, app.utilizador, { app.linguasInstaladas() }) as T
     }
 
     private fun fabricaJogo(
@@ -425,13 +425,13 @@ class MainActivity : ComponentActivity() {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             JogoViewModel(
-                { app.dicionario }, app.utilizador,
+                { l -> app.dicionario(l) }, app.utilizador,
                 treinoLivre = treinoLivre,
                 lemaPreferido = lemaPreferido,
                 deLembrete = deLembrete,
                 cotaRestante = { preferencias.cotaManual.value.restantes(LocalDate.now()) },
                 gastarCota = { preferencias.usarCotaManual() },
-                aoResponder = { lemma -> Lembrete.esquecerSeAnunciou(app, lemma) },
+                aoResponder = { chave -> Lembrete.esquecerSeAnunciou(app, chave) },
                 escreverAPalavra = { preferencias.escreverAPalavra.value },
                 livro = livro,
             ) as T
@@ -530,19 +530,26 @@ private fun EcraInstalarDicionario(
     var aCopiar by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
     val ambito = rememberCoroutineScope()
-    val empacotado = remember { app.temDicionarioEmpacotado() }
+    // O português primeiro: sem ele a app não arranca. O inglês, se vier no
+    // APK, instala-se a seguir, no mesmo ecrã.
+    val porInstalar = remember { app.linguasPorInstalar() }
     // O tamanho real, para o texto de espera (era "São 200 MB", escrito à mão).
-    val tamanhoMb = remember { app.tamanhoDoDicionarioEmpacotado()?.let { (it + (1 shl 20) - 1) shr 20 } }
+    val tamanhoMb = remember { app.tamanhoPorInstalarMb() }
 
-    LaunchedEffect(empacotado) {
-        if (!empacotado) return@LaunchedEffect
+    LaunchedEffect(porInstalar) {
+        if (porInstalar.isEmpty()) return@LaunchedEffect
         aCopiar = true
-        when (val r = app.instalarDicionarioEmpacotado()) {
-            is ResultadoImportacao.Feito -> { aCopiar = false; aoFicarPronto() }
-            is ResultadoImportacao.Erro -> {
-                aCopiar = false
-                if (app.dicionario != null) aoFalharComBaseAntiga(r.motivo) else erro = r.motivo
-            }
+        var falha: String? = null
+        for (lingua in porInstalar) {
+            val r = app.instalarDicionarioEmpacotado(lingua)
+            if (r is ResultadoImportacao.Erro && falha == null) falha = r.motivo
+        }
+        aCopiar = false
+        when {
+            falha == null -> aoFicarPronto()
+            // O português abriu (o antigo ou o novo): segue-se, e diz-se o que falhou.
+            app.dicionario != null -> aoFalharComBaseAntiga(falha)
+            else -> erro = falha
         }
     }
 
@@ -554,7 +561,10 @@ private fun EcraInstalarDicionario(
         erro = null
         ambito.launch {
             when (val r = app.importarDicionario(uri)) {
-                is ResultadoImportacao.Feito -> { aCopiar = false; aoFicarPronto() }
+                // Importar o inglês não chega para arrancar: falta o português.
+                is ResultadoImportacao.Feito ->
+                    if (app.dicionario != null) { aCopiar = false; aoFicarPronto() }
+                    else { aCopiar = false; erro = "Esse é o dicionário de inglês. Falta o de português." }
                 is ResultadoImportacao.Erro -> { aCopiar = false; erro = r.motivo }
             }
         }

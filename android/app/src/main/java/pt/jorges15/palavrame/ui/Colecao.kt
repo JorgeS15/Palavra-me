@@ -28,6 +28,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import pt.jorges15.palavrame.data.Lingua
+import pt.jorges15.palavrame.jogo.chave
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.ui.theme.Cores
@@ -47,7 +49,7 @@ fun EcraColecao(
     vm: PesquisaViewModel,
     desenvolvedor: Boolean = false,
     aoVoltar: () -> Unit,
-    aoAbrirPalavra: (String) -> Unit = { vm.procurar(it); aoVoltar() },
+    aoAbrirPalavra: (String) -> Unit = { vm.procurarGuardada(it); aoVoltar() },
     /** Livro em que abrir (tocado na estante do ecrã inicial), ou nulo. */
     livroInicial: String? = null,
     /** Avisa que o livro inicial já foi aplicado, para não se repetir. */
@@ -277,12 +279,12 @@ fun EcraColecao(
                                     p,
                                     desenvolvedor = desenvolvedor,
                                     mostrarLivro = !agruparPorLivro,
-                                    aoProcurar = { aoAbrirPalavra(p.lemma) },
+                                    aoProcurar = { aoAbrirPalavra(p.chave) },
                                     aoEditar = { aEditar = p },
                                     aoApagar = { esquecerComAnular(p) },
                                     aoPartilhar = {
                                         ambito.launch {
-                                            aPartilhar = dadosPartilha(vm.entradaPara(p.lemma), p)
+                                            aPartilhar = dadosPartilha(vm.entradaPara(p.lemma, p.lingua), p)
                                         }
                                     },
                                 )
@@ -403,6 +405,11 @@ private fun LinhaPalavra(
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    // As palavras inglesas dizem que o são (as portuguesas, a maioria, não).
+                    if (palavra.lingua != Lingua.PT) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(Lingua.sigla(palavra.lingua), style = Estilo.rotulo, color = Cores.ink3)
+                    }
                     // Os pontinhos do nível de domínio são do Modo Desenvolvedor.
                     if (desenvolvedor) {
                         Spacer(Modifier.width(10.dp))

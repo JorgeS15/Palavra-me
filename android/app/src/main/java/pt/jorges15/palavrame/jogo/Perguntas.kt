@@ -1,5 +1,6 @@
 package pt.jorges15.palavrame.jogo
 
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.Texto
 import kotlin.random.Random
 
@@ -17,6 +18,8 @@ data class Candidata(
     val frase: String? = null,
     val autor: String? = null,
     val page: Int? = null,
+    /** A língua da palavra: as distrações são sempre da mesma. */
+    val lingua: String = Lingua.PT,
 )
 
 data class Pergunta(
@@ -34,6 +37,7 @@ data class Pergunta(
     val indiceCerto: Int,
     val livro: String?,
     val frase: String?,
+    val lingua: String = Lingua.PT,
 ) {
     val definicaoCerta: String get() = opcoes[indiceCerto]
 }
@@ -307,6 +311,7 @@ object Perguntas {
             indiceCerto = baralhadas.indexOfFirst { it.certa },
             livro = alvo.livro,
             frase = alvo.frase,
+            lingua = alvo.lingua,
         )
     }
 

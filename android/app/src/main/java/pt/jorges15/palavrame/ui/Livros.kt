@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.data.EstadoLeitura
 import pt.jorges15.palavrame.data.Leitura
 import pt.jorges15.palavrame.data.LivroCompleto
+import pt.jorges15.palavrame.data.Lingua
+import pt.jorges15.palavrame.jogo.chave
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.ResultadoFicha
 import pt.jorges15.palavrame.ui.theme.Cores
@@ -399,8 +401,8 @@ fun EcraLivros(
         DialogoFicha(
             livro = null,
             aoCancelar = { aCriar = false },
-            aoCriar = { titulo, autor, paginas, comecar ->
-                val ok = vm.criarLivro(titulo, autor, paginas, comecar)
+            aoCriar = { titulo, autor, paginas, comecar, lingua ->
+                val ok = vm.criarLivro(titulo, autor, paginas, comecar, lingua)
                 if (ok) { aCriar = false; aberto = titulo.trim() }
                 ok
             },
@@ -563,7 +565,7 @@ private fun fecharLeitura(livro: LivroCompleto, palavras: List<PalavraGuardada>,
 
 /** Uma linha de significado: o do próprio, ou a primeira aceção do dicionário. */
 private suspend fun significadoCurto(vm: PesquisaViewModel, p: PalavraGuardada): String? =
-    dadosPartilha(vm.entradaPara(p.lemma), p)?.let { it.meuSignificado ?: it.acecoes.firstOrNull() }
+    dadosPartilha(vm.entradaPara(p.lemma, p.lingua), p)?.let { it.meuSignificado ?: it.acecoes.firstOrNull() }
 
 private fun textoPalavras(n: Int) = if (n == 1) "1 palavra" else "$n palavras"
 
@@ -764,8 +766,8 @@ private fun PaginaLivro(
             paginaAtual = paginaOndeVou(palavras, livro.atual),
             aoMarcarPagina = if (leituraAberta) { t, p -> vm.marcarPagina(t, p, null) } else null,
             aoCancelar = { editar = false },
-            aoEditar = { titulo, autor, paginas, nota ->
-                val r = vm.editarLivro(ficha.id, titulo, autor, paginas, nota)
+            aoEditar = { titulo, autor, paginas, nota, lingua ->
+                val r = vm.editarLivro(ficha.id, titulo, autor, paginas, nota, lingua)
                 if (r == ResultadoFicha.FEITO) { editar = false; aoMudarDeLivro(titulo.trim()) }
                 r
             },
@@ -977,7 +979,7 @@ private fun PaginaLivro(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .clickable { aoAbrirPalavra(p.lemma) }
+                        .clickable { aoAbrirPalavra(p.chave) }
                         .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1176,8 +1178,10 @@ private fun ItemLivro(
 private fun DialogoFicha(
     livro: LivroCompleto?,
     aoCancelar: () -> Unit,
-    aoCriar: suspend (titulo: String, autor: String?, paginas: Int?, comecar: Boolean) -> Boolean = { _, _, _, _ -> false },
-    aoEditar: suspend (titulo: String, autor: String?, paginas: Int?, nota: String?) -> ResultadoFicha = { _, _, _, _ -> ResultadoFicha.FEITO },
+    aoCriar: suspend (titulo: String, autor: String?, paginas: Int?, comecar: Boolean, lingua: String) -> Boolean =
+        { _, _, _, _, _ -> false },
+    aoEditar: suspend (titulo: String, autor: String?, paginas: Int?, nota: String?, lingua: String) -> ResultadoFicha =
+        { _, _, _, _, _ -> ResultadoFicha.FEITO },
     aoJuntarCom: (String) -> Unit = {},
     /** Onde se vai, para o campo "Página onde vais" (só com uma leitura aberta). */
     paginaAtual: Int? = null,
@@ -1191,6 +1195,7 @@ private fun DialogoFicha(
     var paginas by rememberSaveable { mutableStateOf(f?.paginas?.toString().orEmpty()) }
     var nota by rememberSaveable { mutableStateOf(f?.nota.orEmpty()) }
     var comecar by rememberSaveable { mutableStateOf(true) }
+    var lingua by rememberSaveable { mutableStateOf(f?.lingua ?: Lingua.PT) }
     var conflito by remember { mutableStateOf<String?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
 
@@ -1225,6 +1230,15 @@ private fun DialogoFicha(
                         modifier = Modifier.width(90.dp),
                         numerico = true,
                     )
+                }
+                // Em que língua se lê: é a do dicionário em que a pesquisa abre
+                // enquanto este for o livro em curso.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Língua do livro", style = Estilo.controlo.copy(fontSize = 15.sp),
+                        color = Cores.ink, modifier = Modifier.weight(1f),
+                    )
+                    EscolhaLingua(lingua, Lingua.todas, { lingua = it })
                 }
                 if (livro != null && aoMarcarPagina != null) {
                     CampoFormulario(
@@ -1276,9 +1290,9 @@ private fun DialogoFicha(
                     ambito.launch {
                         if (livro == null) {
                             if (titulo.isBlank()) { erro = "Falta o título."; return@launch }
-                            if (!aoCriar(titulo, autor, p, comecar)) erro = "Já tens um livro com esse título."
+                            if (!aoCriar(titulo, autor, p, comecar, lingua)) erro = "Já tens um livro com esse título."
                         } else {
-                            when (aoEditar(titulo, autor, p, nota)) {
+                            when (aoEditar(titulo, autor, p, nota, lingua)) {
                                 ResultadoFicha.TITULO_EXISTE -> conflito = titulo.trim()
                                 ResultadoFicha.TITULO_VAZIO -> erro = "Falta o título."
                                 ResultadoFicha.FEITO -> {

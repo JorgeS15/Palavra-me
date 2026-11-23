@@ -157,7 +157,7 @@ object Backup {
             var jaExistiam = 0
             db.withTransaction {
             for (palavra in conteudo.palavras) {
-                if (palavrasDao.porLema(palavra.lemma) != null) {
+                if (palavrasDao.porLema(palavra.lemma, palavra.lingua) != null) {
                     jaExistiam++
                 } else {
                     // id = 0 para o Room atribuir um novo: os ids da cópia
@@ -206,6 +206,9 @@ object Backup {
         // A próxima revisão TEM de ir: sem ela, a palavra importada fica
         // vencida desde sempre e a coleção inteira volta à fila (bug 1.1).
         p.proximaRevisao?.let { put("proxima_revisao", it) }
+        // Só o inglês se escreve: uma palavra sem "lingua" é português, que é
+        // como as cópias de antes da 1.23 se continuam a ler.
+        if (p.lingua != Lingua.PT) put("lingua", p.lingua)
     }
 
     private fun deJson(o: JSONObject): PalavraGuardada? {
@@ -226,6 +229,7 @@ object Backup {
             mastery = o.optInt("dominio", 0).coerceIn(0, 5),
             revistaEm = if (o.has("revista_em")) o.optLong("revista_em") else null,
             proximaRevisao = if (o.has("proxima_revisao")) o.optLong("proxima_revisao") else null,
+            lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
         )
     }
 
@@ -254,6 +258,7 @@ object Backup {
         f.nota?.let { put("nota", it) }
         put("criado_em", f.criadoEm)
         if (f.emCurso) put("em_curso", true)
+        if (f.lingua != Lingua.PT) put("lingua", f.lingua)
         put("leituras", JSONArray().apply {
             l.leituras.forEach { r ->
                 put(JSONObject().apply {
@@ -279,6 +284,7 @@ object Backup {
             nota = o.optString("nota").takeIf { it.isNotBlank() },
             criadoEm = o.longOuNulo("criado_em") ?: o.longOuNulo("iniciado_em") ?: 0L,
             emCurso = emCurso,
+            lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
         )
         val leituras = o.optJSONArray("leituras")?.let { a ->
             (0 until a.length()).map { i ->

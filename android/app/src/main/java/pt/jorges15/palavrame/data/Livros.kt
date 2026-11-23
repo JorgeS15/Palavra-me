@@ -40,6 +40,11 @@ data class FichaLivro(
     @ColumnInfo(name = "criado_em") val criadoEm: Long = System.currentTimeMillis(),
     /** O livro que vem já escolhido ao registar uma palavra. No máximo um. */
     @ColumnInfo(name = "em_curso", defaultValue = "0") val emCurso: Boolean = false,
+    /**
+     * Em que língua se lê o livro (`Lingua`). Escolhe-se ao acrescentá-lo, e é
+     * a língua em que a pesquisa abre enquanto é o livro em curso.
+     */
+    @ColumnInfo(defaultValue = "'pt'") val lingua: String = Lingua.PT,
 )
 
 /**
@@ -283,10 +288,16 @@ suspend fun UtilizadorDb.criarLivro(
     paginas: Int?,
     comecar: Boolean,
     agora: Long,
+    lingua: String = Lingua.PT,
 ): Boolean = withTransaction {
     val t = titulo.trim()
     if (t.isEmpty() || livros().porTitulo(t) != null) return@withTransaction false
-    livros().inserir(FichaLivro(titulo = t, autor = autor?.trim()?.ifBlank { null }, paginas = paginas, criadoEm = agora))
+    livros().inserir(
+        FichaLivro(
+            titulo = t, autor = autor?.trim()?.ifBlank { null }, paginas = paginas,
+            criadoEm = agora, lingua = Lingua.deCodigo(lingua),
+        )
+    )
     if (comecar) comecarLivro(t, agora)
     true
 }
@@ -294,7 +305,7 @@ suspend fun UtilizadorDb.criarLivro(
 enum class ResultadoFicha { FEITO, TITULO_EXISTE, TITULO_VAZIO }
 
 /**
- * Corrigir a ficha: título, autor, páginas, nota. O título e o autor mudam
+ * Corrigir a ficha: título, autor, páginas, nota, língua. O título e o autor mudam
  * também em todas as palavras do livro. Um título que já é de outro livro não
  * se aceita aqui: isso é juntar (ver `juntarLivros`).
  */
@@ -304,6 +315,7 @@ suspend fun UtilizadorDb.editarLivro(
     autor: String?,
     paginas: Int?,
     nota: String?,
+    lingua: String? = null,
 ): ResultadoFicha = withTransaction {
     val dao = livros()
     val ficha = dao.porId(id) ?: return@withTransaction ResultadoFicha.FEITO
@@ -314,7 +326,12 @@ suspend fun UtilizadorDb.editarLivro(
     val a = autor?.trim()?.ifBlank { null }
     if (t != ficha.titulo) dao.renomearNasPalavras(ficha.titulo, t)
     if (a != ficha.autor) dao.autorNasPalavras(t, a)
-    dao.atualizar(ficha.copy(titulo = t, autor = a, paginas = paginas, nota = nota?.trim()?.ifBlank { null }))
+    dao.atualizar(
+        ficha.copy(
+            titulo = t, autor = a, paginas = paginas, nota = nota?.trim()?.ifBlank { null },
+            lingua = lingua?.let(Lingua::deCodigo) ?: ficha.lingua,
+        )
+    )
     ResultadoFicha.FEITO
 }
 

@@ -19,10 +19,23 @@ object Texto {
     // Python em modo Unicode é letra, dígito ou underscore — daí \p{L}\p{N}_.
     private val limpeza = Regex("[^\\p{L}\\p{N}_\\-']+")
     private val espacos = Regex("\\s+")
+    // Espelha `_APOSTROFOS`: os ebooks escrevem `wouldn’t` e `d’água` com o
+    // ’ (U+2019), que sem isto virava espaço e a pesquisa não encontrava nada.
+    private val apostrofos = Regex("[’‘ʼ′]")
+
+    /**
+     * Sem o possessivo inglês, numa chave já normalizada: "darcy's" -> "darcy",
+     * "dogs'" -> "dogs". Igual se não o tiver.
+     */
+    fun semPossessivo(chave: String): String = when {
+        chave.length > 3 && chave.endsWith("'s") -> chave.dropLast(2)
+        chave.length > 2 && chave.endsWith("'") -> chave.dropLast(1)
+        else -> chave
+    }
 
     fun normalizar(texto: String): String {
         val semAcentos = Normalizer
-            .normalize(texto.trim().lowercase(), Normalizer.Form.NFD)
+            .normalize(apostrofos.replace(texto.trim().lowercase(), "'"), Normalizer.Form.NFD)
             .replace(marcasDeAcento, "")
         return espacos.replace(limpeza.replace(semAcentos, " "), " ").trim()
     }

@@ -167,4 +167,21 @@ class BackupTest {
         )
         assertEquals(listOf(lida), LivroCompleto(f, listOf(lida, releitura)).lidas)
     }
+
+    @Test
+    fun `a lingua da palavra e do livro viaja na copia`() {
+        val p = PalavraGuardada(lemma = "wistful", livro = "Persuasion", lingua = Lingua.EN)
+        val livro = LivroCompleto(FichaLivro(titulo = "Persuasion", criadoEm = 1L, lingua = Lingua.EN))
+        val volta = Backup.desserializar(Backup.serializar(listOf(p), null, "1.0", listOf(livro)))!!
+        assertEquals(Lingua.EN, volta.palavras.single().lingua)
+        assertEquals(Lingua.EN, volta.livros.single().ficha.lingua)
+    }
+
+    @Test
+    fun `uma copia sem lingua e portugues`() {
+        val json = """{"formato":1,"palavras":[{"lema":"ensonado"}],"livros":[{"titulo":"Os Maias"}]}"""
+        val volta = Backup.desserializar(json)!!
+        assertEquals(Lingua.PT, volta.palavras.single().lingua)
+        assertEquals(Lingua.PT, volta.livros.single().ficha.lingua)
+    }
 }

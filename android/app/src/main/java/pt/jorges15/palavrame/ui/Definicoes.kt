@@ -48,6 +48,7 @@ import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.ResultadoImportacao
 import pt.jorges15.palavrame.data.Backup
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.livrosCompletos
 import pt.jorges15.palavrame.data.Preferencias
 import pt.jorges15.palavrame.data.Progresso
@@ -566,7 +567,25 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
     val ambito = rememberCoroutineScope()
     var aInstalar by remember { mutableStateOf(false) }
     var mensagem by remember { mutableStateOf<String?>(null) }
-    var haNovoNoApk by remember { mutableStateOf(app.temDicionarioEmpacotado()) }
+    var porInstalar by remember { mutableStateOf(app.linguasPorInstalar()) }
+    var instaladas by remember { mutableStateOf(app.linguasInstaladas()) }
+
+    // Um dicionário escolhido à mão: é assim que se instala o de inglês quando
+    // não vem dentro da app (a língua sai do próprio ficheiro).
+    val seletor = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        aInstalar = true
+        ambito.launch {
+            mensagem = when (val r = app.importarDicionario(uri)) {
+                is ResultadoImportacao.Feito ->
+                    "Instalado o dicionário de ${Lingua.nome(r.lingua).lowercase()}."
+                is ResultadoImportacao.Erro -> "Falhou: ${r.motivo}"
+            }
+            aInstalar = false
+            instaladas = app.linguasInstaladas()
+            porInstalar = app.linguasPorInstalar()
+        }
+    }
 
     Scaffold(containerColor = Cores.bg) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -579,47 +598,59 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
             ) {
                 Text("Dicionário e licenças", style = Estilo.tituloEcra, color = Cores.ink)
 
-                Seccao("Dicionário")
-                val d = app.dicionario
-                GrupoCartao {
-                    Linha("Construído em", d?.construidoEm?.take(10) ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Lemas", d?.totalLemas?.let { "%,d".format(it) } ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Aceções", d?.totalAcecoes?.let { "%,d".format(it) } ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Formas flexionadas", d?.totalFormas?.let { "%,d".format(it) } ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Exemplos", d?.totalExemplos?.let { "%,d".format(it) } ?: "-")
+                // Um bloco por língua instalada; o português sempre, mesmo vazio.
+                for (lingua in (listOf(Lingua.PT) + instaladas).distinct()) {
+                    Seccao(if (lingua == Lingua.PT) "Dicionário" else "Dicionário de ${Lingua.nome(lingua).lowercase()}")
+                    val d = app.dicionario(lingua)
+                    GrupoCartao {
+                        Linha("Construído em", d?.construidoEm?.take(10) ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Lemas", d?.totalLemas?.let { "%,d".format(it) } ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Aceções", d?.totalAcecoes?.let { "%,d".format(it) } ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Formas flexionadas", d?.totalFormas?.let { "%,d".format(it) } ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Exemplos", d?.totalExemplos?.let { "%,d".format(it) } ?: "-")
+                    }
                 }
 
-                if (haNovoNoApk) {
+                if (porInstalar.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     BotaoPrincipal(
                         if (aInstalar) "A instalar…" else "Instalar o dicionário da app",
                         {
                             aInstalar = true
                             ambito.launch {
-                                mensagem = when (val r = app.instalarDicionarioEmpacotado()) {
-                                    is ResultadoImportacao.Feito ->
-                                        "Instalado. Fecha e volta a abrir a app."
-                                    is ResultadoImportacao.Erro -> "Falhou: ${r.motivo}"
+                                val falhas = porInstalar.mapNotNull { l ->
+                                    (app.instalarDicionarioEmpacotado(l) as? ResultadoImportacao.Erro)?.motivo
                                 }
+                                mensagem = if (falhas.isEmpty()) "Instalado. Fecha e volta a abrir a app."
+                                    else "Falhou: ${falhas.first()}"
                                 aInstalar = false
-                                haNovoNoApk = app.temDicionarioEmpacotado()
+                                porInstalar = app.linguasPorInstalar()
+                                instaladas = app.linguasInstaladas()
                             }
                         },
                         ativo = !aInstalar,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+                BotaoContornado(
+                    "Instalar um ficheiro de dicionário",
+                    { if (!aInstalar) seletor.launch(arrayOf("*/*")) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 mensagem?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, style = Estilo.ajuda, color = Cores.ink)
                 }
 
                 Seccao("Fontes")
-                val fontes = app.dicionario?.fontes().orEmpty()
+                // As fontes de todos os dicionários instalados, sem repetir.
+                val fontes = instaladas.flatMap { app.dicionario(it)?.fontes().orEmpty() }
+                    .distinctBy { it.nome }
                 if (fontes.isNotEmpty()) {
                     GrupoCartao {
                         fontes.forEachIndexed { i, fonte ->

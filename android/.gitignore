@@ -11,6 +11,11 @@ app/src/main/assets/dicionario.db.gz
 # A marca de versão vai junto: sozinha faria a app julgar que traz um
 # dicionário que na verdade não está lá.
 app/src/main/assets/dicionario.versao
+# O de inglês, igual (~95 MB):
+#   python -m palavrame.cli en
+#   python -m palavrame.cli empacotar --lingua en --db out/dicionario-en-1.db
+app/src/main/assets/dicionario-en.db.gz
+app/src/main/assets/dicionario-en.versao
 
 # A chave de assinatura e as palavras-passe nunca sao versionadas.
 keystore.properties

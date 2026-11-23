@@ -15,6 +15,10 @@ import unicodedata
 # resto que não seja letra ou dígito vira espaço e depois desaparece.
 _LIMPEZA = re.compile(r"[^\w\-']+", re.UNICODE)
 _ESPACOS = re.compile(r"\s+")
+# Apóstrofos tipográficos -> o simples. Os ebooks escrevem `wouldn’t` e
+# `d’água` com o ’ (U+2019), e sem isto o ’ virava espaço: `wouldn t` não
+# encontrava nada. A app (`Texto.kt`) faz exatamente o mesmo.
+_APOSTROFOS = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "′": "'"})
 # `_palavra_` — itálico do Dicionário Aberto.
 _ITALICO = re.compile(r"_([^_]+)_")
 
@@ -68,7 +72,7 @@ def normalize(s: str) -> str:
 
     É o que vai para as colunas `normalized` de `lemmas` e `forms`.
     """
-    s = strip_accents(s.strip().lower())
+    s = strip_accents(s.strip().lower().translate(_APOSTROFOS))
     s = _LIMPEZA.sub(" ", s)
     return _ESPACOS.sub(" ", s).strip()
 

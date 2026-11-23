@@ -12,6 +12,56 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [0.36.0] - 2026-11-23 · app v1.23.0 (versionCode 36)
+
+O dicionário de inglês (branch `Ingles`). **Construir e empacotar as duas
+bases antes de publicar** (`palavrame f1` e `palavrame en`, depois
+`empacotar` e `empacotar --lingua en`).
+
+### Added
+
+- **Build do dicionário de inglês** (`palavrame fetch --lingua en`,
+  `palavrame en`): palavras inglesas com definições em inglês, do Wiktionary
+  inglês (kaikki.org, CC BY-SA 4.0), com a frequência do Leipzig (corpus
+  britânico). As flexões (`ran` -> `run`) viram formas do lema; as grafias
+  alternativas (`colour` -> `color`) remetem para o destino; os exemplos feitos
+  de propósito vêm antes das citações; ficam de fora os nomes próprios e os
+  erros ortográficos. A base sai como `out/dicionario-en-N.db`, com
+  `meta.lingua = en`.
+- `empacotar --lingua en` escreve `dicionario-en.db.gz` ao lado do português.
+- Lista de protótipo `seeds/lemas-en.txt` (155 palavras, todas encontradas).
+- **App: o inglês.** Um dicionário por língua (`dicionario-en.db` ao lado do
+  português). **Vai dentro do APK** (`dicionario-en.db.gz`, 94 MB; 729 mil
+  palavras) e instala-se no primeiro arranque, a seguir ao português; também
+  se pode escolher como ficheiro em Dicionário e licenças (a língua sai da
+  `meta.lingua` da base). O `verificarDicionario` e o `verificarApk` passam a
+  exigir os dois.
+  - Os livros têm língua, escolhida ao acrescentá-los e na ficha; a pesquisa
+    abre na língua do livro em curso.
+  - PT/EN na pesquisa e no "não encontrada", que oferece "Ver no dicionário de
+    inglês" quando a palavra lá está. Possessivos ingleses (`Darcy’s`)
+    encontram a palavra.
+  - As palavras guardam a língua: `real` pode estar na coleção nas duas. Na
+    Coleção, as inglesas têm a etiqueta EN. A cópia de segurança leva a língua
+    (as de antes são português).
+  - O jogo usa o dicionário de cada palavra e só põe distrações da mesma
+    língua. As notificações levam a língua com a palavra.
+  - As palavras inglesas não entram em "Propor ao dicionário" (a curadoria é
+    do português).
+
+### Changed
+
+- `utilizador.db` v8: coluna `lingua` em `saved_words` e `livros`; a palavra
+  passa a ser única por `(lemma, lingua)`. Migração só acrescenta.
+
+### Fixed
+
+- **Apóstrofo tipográfico** (`’`) na normalização, no pipeline e na app: os
+  ebooks escrevem `wouldn’t` e `d’água`, que antes não se encontravam.
+  Reconstruir o dicionário português para o apanhar também nos dados.
+- **A build parava horas** a contar as aceções sem exemplo: as contagens
+  (`NOT EXISTS`) corriam antes de haver índices. Passam a correr depois deles.
+
 ## [app v1.21.1] - 2026-11-21 (versionCode 34)
 
 Só app, com o dicionário da 1.21.0. Feita no GitHub (commits 2f0e187 e

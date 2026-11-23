@@ -132,6 +132,15 @@ def build_database(
             source_ids = _write_sources(conn, infos)
             stats = _write_entries(conn, entries, source_ids)
             conn.executescript(INDEX_SQL)
+            # Depois dos índices, e não antes: são `NOT EXISTS` sobre
+            # `examples.sense_id` e `senses.lemma_id`, e sem índice cada um
+            # percorria a tabela inteira por linha. No português passava; no
+            # inglês (um milhão de aceções) a build ficava horas parada aqui.
+            stats["senses_without_example"] = _senses_without_example(conn)
+            stats["lemmas_without_sense"] = conn.execute(
+                "SELECT COUNT(*) FROM lemmas l WHERE NOT EXISTS"
+                " (SELECT 1 FROM senses s WHERE s.lemma_id = l.id)"
+            ).fetchone()[0]
             conn.executescript(FTS_SQL)
             conn.execute(
                 "INSERT INTO lemmas_fts(lemmas_fts) VALUES ('rebuild')"
@@ -280,12 +289,8 @@ def _write_entries(
             counts["synonyms"] += 1
 
     _limpar_fonte_nao_usada(conn, unknown_id)
-
-    counts["senses_without_example"] = _senses_without_example(conn)
-    counts["lemmas_without_sense"] = conn.execute(
-        "SELECT COUNT(*) FROM lemmas l WHERE NOT EXISTS"
-        " (SELECT 1 FROM senses s WHERE s.lemma_id = l.id)"
-    ).fetchone()[0]
+    # `senses_without_example` e `lemmas_without_sense` contam-se em
+    # `build_database`, já com os índices criados.
     return counts
 
 
