@@ -12,6 +12,73 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [app v1.30.0] - 2026-11-24 (versionCode 37)
+
+A versão publicada a seguir à 1.21.1. Junta a 1.22 (os livros) e a 1.23 (o
+inglês), que não saíram, com o que está abaixo. **`utilizador.db` v9.**
+
+Em resumo, para quem vem da 1.21:
+
+- **Livros:** um separador novo, com o que estás a ler e a página onde vais,
+  os lidos por ano, as datas de cada leitura e uma imagem para partilhar.
+- **Inglês:** um dicionário de inglês, com definições em inglês. PT ou EN na
+  caixa de pesquisa; os livros e as palavras têm língua.
+- **Corrigir ou acrescentar** um significado, por baixo das definições, e
+  submetê-lo ao dicionário, logo ou mais tarde.
+- **Revisão a escrever a palavra**, e a palavra escondida nos lembretes, se
+  quiseres.
+- **"Como funciona"**, um tutorial de cinco ecrãs na primeira abertura (e em
+  Definições, Sobre).
+
+### Added
+
+- **Sugestões ao dicionário, num sítio só.** Por baixo das definições, um
+  botão "Corrigir ou acrescentar" (antes um item escondido no menu ⋮). No
+  diálogo escolhe-se a aceção errada ou "Falta um sentido", escreve-se, e
+  **Guardar**: fica sempre para a pessoa **e** nas sugestões por enviar. A
+  mensagem a seguir tem **Submeter ao dicionário**, para quem quer mandar
+  logo.
+  - Uma correção a uma aceção aparece por baixo dela ("A tua correção");
+    tocar abre-a para mudar ou apagar.
+  - Um sentido em falta é "O teu significado", por cima das definições.
+    Numa palavra que não está na coleção, guardá-lo regista-a (com o livro
+    que se está a ler).
+  - Na "não encontrada", registar a palavra põe-na nas sugestões e oferece
+    o "Submeter ao dicionário"; já registada sem significado, há o mesmo
+  botão.
+- **As palavras inglesas também se submetem** (na 1.23 ficavam de fora): uma
+  palavra ou um sentido que falta ao dicionário de inglês entra na lista e
+  no "Submeter ao dicionário", marcada `[EN]` no email. O CSV para o
+  `seeds/curadoria.csv` continua a levar só as portuguesas.
+- **Definições, Contribuir: "Submeter ao dicionário"** (era "Submeter por
+  mail", só palavras). Lista as palavras em falta, os sentidos e as
+  correções, com quantas há; envia as marcadas num só email (com o CSV da
+  curadoria) e marca-as como enviadas, para não voltarem. Uma palavra cujo
+  significado mude depois de enviada volta à lista.
+- `utilizador.db` v9: tabela `correcoes` e `saved_words.enviado`. Migração só
+  acrescenta. A cópia de segurança leva as correções e o que já se enviou.
+
+### Changed
+
+- O tutorial "Como funciona" passa a cinco ecrãs: o primeiro fala do PT/EN,
+  e há um novo, "Falta um sentido?", sobre o "Corrigir ou acrescentar". A
+  nota de novidades da 1.30 leva a ele.
+- **O mínimo de 3 palavras para jogar conta-se por língua.** Antes contava
+  as línguas juntas: com 3 portuguesas, a primeira palavra inglesa entrava
+  logo no jogo, nos lembretes e no "Rever". Agora o inglês só começa à
+  terceira palavra inglesa jogável. As opções continuam a ser sempre da
+  mesma língua da palavra perguntada. O "Ainda não dá" diz "na mesma língua".
+- **Dicionário e licenças:** as fontes aparecem por dicionário ("Fontes:
+  português", "Fontes: inglês"), e o NOTICE passa a listar as do inglês
+  (Wiktionary inglês e Leipzig inglês). "Instalar um ficheiro de
+  dicionário" só aparece no Modo Desenvolvedor: os dois dicionários vêm
+  dentro da app.
+- **PT/EN dentro da caixa de pesquisa**, à direita: a língua é da pesquisa,
+  não da app. O cabeçalho fica só com o logótipo e a sequência de dias.
+- A folha de registo perde o campo opcional "O teu significado" (passou para
+  o "Corrigir ou acrescentar"). Continua a pedir o significado às palavras
+  sem definição, e os já escritos guardam-se ao editar.
+
 ## [0.36.0] - 2026-11-23 · app v1.23.0 (versionCode 36)
 
 O dicionário de inglês (branch `Ingles`). **Construir e empacotar as duas

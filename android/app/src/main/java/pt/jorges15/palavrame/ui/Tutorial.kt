@@ -33,7 +33,7 @@ import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
 
 /*
- * "Como funciona" (1.22): quatro ecrãs curtos, para quem abre a app pela
+ * "Como funciona" (1.22): cinco ecrãs curtos, para quem abre a app pela
  * primeira vez. Aparece uma vez só, na instalação nova; quem atualiza chega
  * cá pelo botão das Novidades, e qualquer pessoa pelas Definições.
  *
@@ -41,6 +41,9 @@ import pt.jorges15.palavrame.ui.theme.Estilo
  * pede permissões (as notificações continuam a pedir-se só quando se ligam os
  * lembretes). As ilustrações são peças da própria app, com as cores do tema.
  * Desenho no Claude Design ("Palavra-me: tutorial").
+ *
+ * 1.30: o inglês no primeiro passo (o PT/EN da caixa de pesquisa) e um passo
+ * novo, "Corrigir ou acrescentar", entre guardar e os livros.
  */
 
 private class PassoTutorial(val titulo: String, val texto: String)
@@ -49,11 +52,17 @@ private val PASSOS = listOf(
     PassoTutorial(
         "Encontraste uma palavra?",
         "Escreve-a, ou seleciona-a no teu leitor de e-books e escolhe Palavra-me. "
-            + "Mesmo flexionada, a app chega à palavra.",
+            + "Mesmo flexionada, a app chega à palavra. Em português ou em inglês: "
+            + "PT ou EN, na caixa de pesquisa.",
     ),
     PassoTutorial(
         "Guarda-a com o livro",
         "Com a página e a frase onde a encontraste. O livro que estás a ler já vem escolhido.",
+    ),
+    PassoTutorial(
+        "Falta um sentido?",
+        "Se uma definição está errada, ou falta o sentido em que a leste, toca em "
+            + "Corrigir ou acrescentar. Fica para ti, e podes submetê-lo ao dicionário.",
     ),
     PassoTutorial(
         "Os teus livros, numa estante",
@@ -172,7 +181,8 @@ private fun Ilustracao(passo: Int) {
         when (passo) {
             0 -> IlustracaoProcurar()
             1 -> IlustracaoGuardar()
-            2 -> IlustracaoLivros()
+            2 -> IlustracaoCorrigir()
+            3 -> IlustracaoLivros()
             else -> IlustracaoRever()
         }
     }
@@ -237,6 +247,23 @@ private fun IlustracaoProcurar() {
         Spacer(Modifier.width(10.dp))
         Text("ensonados", style = Estilo.texto.copy(fontSize = 17.sp), color = Cores.ink, modifier = Modifier.weight(1f))
         Text("ensonado", style = Estilo.meta.copy(fontSize = 12.sp), color = Cores.ink3)
+        Spacer(Modifier.width(10.dp))
+        // O PT/EN da caixa de pesquisa, com o português escolhido.
+        Row(
+            Modifier.clip(RoundedCornerShape(10.dp)).background(Cores.sunk).padding(2.dp),
+        ) {
+            listOf("PT", "EN").forEachIndexed { i, sigla ->
+                Text(
+                    sigla,
+                    style = Estilo.controloForte.copy(fontSize = 12.sp),
+                    color = if (i == 0) Cores.ink else Cores.ink3,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (i == 0) Cores.card else Cores.sunk)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -300,6 +327,49 @@ private fun CaixaDeExemplo(texto: String, destaque: Boolean = false, italico: Bo
             .border(1.dp, if (destaque) Cores.accent else Cores.line, forma)
             .padding(horizontal = 12.dp, vertical = 11.dp),
     )
+}
+
+/** Uma aceção, o botão "Corrigir ou acrescentar" e o teu significado por cima. */
+@Composable
+private fun IlustracaoCorrigir() {
+    TextoMarcado("rebarbativo", Estilo.lema.copy(fontSize = 26.sp))
+    Column {
+        Overline("O teu significado", cor = Cores.accentInk)
+        Spacer(Modifier.height(4.dp))
+        Text("Antipático, desagradável.", style = Estilo.acecao.copy(fontSize = 17.sp), color = Cores.ink)
+    }
+    Row {
+        Text("1", style = Estilo.numeroAcecao, color = Cores.accent, modifier = Modifier.width(22.dp))
+        Text(
+            "Que tem rebarba; áspero.",
+            style = Estilo.texto.copy(fontSize = 15.sp, lineHeight = 1.45.em),
+            color = Cores.ink2,
+        )
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.5.dp, Cores.accent, RoundedCornerShape(14.dp)),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.EditNote, contentDescription = null, tint = Cores.accentInk, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Corrigir ou acrescentar", style = Estilo.controloForte, color = Cores.accentInk)
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Cores.invBg)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Significado guardado.", style = Estilo.meta.copy(fontSize = 13.sp), color = Cores.invInk, modifier = Modifier.weight(1f))
+        Text("Submeter", style = Estilo.controloForte.copy(fontSize = 13.sp), color = Cores.invFill)
+    }
 }
 
 /** "A ler agora" com a página e o lápis, e uma prateleira de lidos. */

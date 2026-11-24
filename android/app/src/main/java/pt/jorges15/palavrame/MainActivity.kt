@@ -333,7 +333,7 @@ class MainActivity : ComponentActivity() {
                                     aoVoltar = { ecra = Ecra.PESQUISA },
                                     aspetoAberto = abrirAspeto,
                                 )
-                                Ecra.LICENCAS -> EcraLicencas(aoVoltar = { ecra = Ecra.DEFINICOES })
+                                Ecra.LICENCAS -> EcraLicencas(preferencias, aoVoltar = { ecra = Ecra.DEFINICOES })
                                 Ecra.JOGO -> {
                                     // A chave leva a sessão e o modo dentro: cada abertura
                                     // começa do zero (a fila mudou, o limite do dia

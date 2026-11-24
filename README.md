@@ -1,6 +1,6 @@
 # Palavra-me
 
-**Um dicionário de português que se lembra das palavras que aprendeste.**
+**Um dicionário de português (e de inglês) que se lembra das palavras que aprendeste.**
 
 Estás a ler um livro, encontras uma palavra que não conheces, e procura-la.
 Vês o significado, os sinónimos, frases onde ela aparece — e ela fica guardada
@@ -36,6 +36,8 @@ sequer de a copiar.
 ## O que a app faz
 
 - **Procura que percebe flexões** — escreves *couberam* e chegas a *caber*.
+- **Português e inglês** — um dicionário de inglês, com as definições em
+  inglês, para quem também lê em inglês. PT ou EN na caixa de pesquisa.
 - **Significados de várias fontes**, com sinónimos, antónimos e as palavras
   da mesma família, todos tocáveis.
 - **Coleção pessoal** agrupada por livro, com contagens, ordenação e notas.
@@ -45,8 +47,9 @@ sequer de a copiar.
 - **Revisão espaçada** — o jogo diário que transforma a coleção em memória.
   Também só das palavras de um livro, e, se quiseres, a escrever a palavra a
   partir da definição.
-- **Corrigir uma definição** ou dizer que falta um significado, num email
-  preparado pela app.
+- **Corrigir ou acrescentar um significado**, por baixo das definições:
+  fica para ti, e podes submetê-lo ao dicionário num email preparado pela
+  app, logo ou mais tarde.
 - **A tua coleção é tua** — exporta-a e importa-a num ficheiro, quando
   quiseres.
 - **Tudo offline**, sempre.
@@ -76,8 +79,10 @@ internet.
 ## Contribuir
 
 **A ajuda mais valiosa não exige saber programar: escrever as definições que
-faltam.** Se dás por uma palavra sem significado na app, podes escrever-lho —
-uma linha num ficheiro de texto, e ela passa a estar lá para toda a gente.
+faltam.** Se dás por uma palavra sem significado na app, ou por uma definição
+errada, toca em *Corrigir ou acrescentar* e depois em *Submeter ao
+dicionário*. Também se faz à mão: uma linha num ficheiro de texto, e ela passa
+a estar lá para toda a gente.
 
 Ver [`CONTRIBUTING.md`](CONTRIBUTING.md).
 

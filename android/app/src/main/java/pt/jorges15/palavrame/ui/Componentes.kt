@@ -274,13 +274,14 @@ fun EscolhaLingua(
     aoEscolher: (String) -> Unit,
     modifier: Modifier = Modifier,
     altura: Dp = 36.dp,
+    larguraPorOpcao: Dp = 56.dp,
 ) {
     if (linguas.size < 2) return
     Segmentado(
         opcoes = linguas.map(Lingua::sigla),
         selecionado = linguas.indexOf(atual).coerceAtLeast(0),
         aoEscolher = { aoEscolher(linguas[it]) },
-        modifier = modifier.width((56 * linguas.size).dp),
+        modifier = modifier.width(larguraPorOpcao * linguas.size),
         altura = altura,
     )
 }
@@ -298,6 +299,8 @@ fun CampoPesquisa(
     raio: Dp = 18.dp,
     estilo: TextStyle = Estilo.pesquisa,
     tamanhoIcone: Dp = 24.dp,
+    /** Algo no fim do campo, à direita (o PT/EN da pesquisa, desde a 1.24). */
+    fim: (@Composable () -> Unit)? = null,
 ) {
     val forma = RoundedCornerShape(raio)
     BasicTextField(
@@ -338,7 +341,11 @@ fun CampoPesquisa(
                         Icon(Icons.Rounded.Close, "Limpar", tint = Cores.ink2)
                     }
                 } else {
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(if (fim != null) 6.dp else 14.dp))
+                }
+                if (fim != null) {
+                    fim()
+                    Spacer(Modifier.width(5.dp))
                 }
             }
         },

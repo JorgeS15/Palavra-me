@@ -19,7 +19,6 @@ import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -109,6 +108,77 @@ fun EcraPesquisa(
         }
     }
 
+    // As correções da pessoa às aceções da palavra aberta (1.30).
+    val entradaAberta = estado.entrada
+    val correcoesDaEntrada by remember(entradaAberta?.lemma, entradaAberta?.lingua) {
+        entradaAberta?.let { vm.correcoesDe(it.lemma, it.lingua) }
+            ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+
+    // Depois de guardar uma sugestão: a mensagem, com "Submeter ao dicionário" se há
+    // alguma coisa a enviar. Quem não toca, encontra-a em Definições,
+    // Contribuir, nas sugestões por enviar.
+    suspend fun oferecerEnvio(
+        mensagem: String,
+        faltas: List<PalavraEmFalta>,
+        correcoes: List<CorrecaoGuardada>,
+    ) {
+        if (faltas.isEmpty() && correcoes.isEmpty()) {
+            estadoSnackbar.showSnackbar(mensagem)
+            return
+        }
+        val r = estadoSnackbar.showSnackbar(
+            mensagem, actionLabel = "Submeter ao dicionário", duration = SnackbarDuration.Long,
+        )
+        if (r == SnackbarResult.ActionPerformed) {
+            if (enviarSugestoes(context, faltas, correcoes)) vm.marcarEnviadas(faltas, correcoes)
+            else estadoSnackbar.showSnackbar("Não encontrei uma app de email neste telemóvel.")
+        }
+    }
+
+    // O que se escreveu em "Corrigir ou acrescentar": fica sempre para a
+    // pessoa e nas sugestões por enviar. Um significado numa palavra que não
+    // está na coleção regista-a (com o livro que se está a ler): o significado
+    // é dela, e é o que o jogo usa quando o dicionário não a define.
+    fun guardarEscrito(lemma: String, lingua: String, entrada: Entrada?, escrito: Escrito) {
+        ambito.launch {
+            when (escrito) {
+                is Escrito.Correcao -> {
+                    val a = escrito.acecao
+                    val classe = (a.pos ?: entrada?.pos)
+                        ?.takeIf { it.isNotBlank() && it != "desconhecido" }?.let(::rotuloPos)
+                    val c = vm.guardarCorrecao(lemma, lingua, a, classe, escrito.texto)
+                    if (c == null) estadoSnackbar.showSnackbar("Apagaste a tua correção.")
+                    else oferecerEnvio("Correção guardada.", emptyList(), listOf(c))
+                }
+                is Escrito.Sentido -> {
+                    val existente = palavras.firstOrNull { it.lemma == lemma && it.lingua == lingua }
+                    if (existente == null && escrito.texto == null) return@launch
+                    val titulo = livroEmCurso?.titulo
+                    val palavra = existente?.copy(significado = escrito.texto)
+                        ?: PalavraGuardada(
+                            lemma = lemma,
+                            lingua = lingua,
+                            livro = titulo,
+                            autor = livros.firstOrNull { it.titulo == titulo }?.autor,
+                            significado = escrito.texto,
+                        )
+                    vm.guardarAgora(palavra)
+                    if (escrito.texto == null) {
+                        estadoSnackbar.showSnackbar("Apagaste o teu significado.")
+                        return@launch
+                    }
+                    if (existente == null) talvezPedirAvaliacao()
+                    oferecerEnvio(
+                        if (existente == null) "Registada, com o teu significado." else "Significado guardado.",
+                        listOfNotNull(vm.faltaDe(palavra)),
+                        emptyList(),
+                    )
+                }
+            }
+        }
+    }
+
     // Ao abrir uma palavra (por pesquisa, sugestão, candidato ou sinónimo)
     // fecha-se o teclado: a definição não deve ser vista com o teclado por
     // cima, e com ele aberto o primeiro "retroceder" fechava só o teclado.
@@ -165,6 +235,8 @@ fun EcraPesquisa(
                         )
                     },
                     aoSeguir = { vm.procurar(it) },
+                    correcoes = correcoesDaEntrada,
+                    aoGuardarEscrito = { guardarEscrito(entrada.lemma, entrada.lingua, entrada, it) },
                 )
 
                 estado.candidatos.isNotEmpty() ->
@@ -190,6 +262,7 @@ fun EcraPesquisa(
                             lemaARegistar = termo
                             pedirSignificadoNoRegisto = true
                         },
+                        aoGuardarEscrito = { guardarEscrito(termo, estado.lingua, null, it) },
                     )
                 }
 
@@ -269,10 +342,12 @@ fun EcraPesquisa(
                 if (existente == null) {
                     ambito.launch {
                         if (eraFalta) {
-                            estadoSnackbar.showSnackbar(
-                                "Palavra registada. Podes propô-la ao dicionário em "
-                                    + "Definições, Contribuir.",
-                                duration = SnackbarDuration.Long,
+                            // Uma palavra que falta ao dicionário fica nas
+                            // sugestões por enviar; pode ir já.
+                            oferecerEnvio(
+                                "Palavra registada.",
+                                listOfNotNull(vm.faltaDe(palavra)),
+                                emptyList(),
                             )
                         } else {
                             estadoSnackbar.showSnackbar("\"${palavra.lemma}\" está na tua coleção.")
@@ -408,10 +483,7 @@ private fun Inicio(
         ) {
             Logotipo()
             Spacer(Modifier.weight(1f))
-            // Em que dicionário se procura. Abre na língua do livro em curso.
-            EscolhaLingua(estado.lingua, linguas, aoEscolherLingua)
             if (sequencia >= 1) {
-                if (linguas.size > 1) Spacer(Modifier.width(8.dp))
                 Pilula(
                     if (sequencia == 1) "1 dia" else "$sequencia dias",
                     fundo = Cores.accentSoft,
@@ -438,6 +510,17 @@ private fun Inicio(
             aoMudar = aoEscrever,
             aoProcurar = { if (estado.texto.isNotBlank()) aoProcurar(estado.texto) },
             aoLimpar = aoLimpar,
+            // Em que dicionário se procura: é da pesquisa, não da app, por isso
+            // vive dentro do campo (1.24; antes estava no cabeçalho). Abre na
+            // língua do livro em curso. Sem o inglês instalado, não aparece.
+            fim = if (linguas.size > 1) {
+                {
+                    EscolhaLingua(
+                        estado.lingua, linguas, aoEscolherLingua,
+                        altura = 40.dp, larguraPorOpcao = 46.dp,
+                    )
+                }
+            } else null,
         )
 
         if (estado.texto.isNotBlank()) {
@@ -832,10 +915,26 @@ private fun VistaEntrada(
     aoRegistar: () -> Unit,
     aoPartilhar: () -> Unit,
     aoSeguir: (String) -> Unit,
+    /** As correções da pessoa às aceções desta palavra (1.30). */
+    correcoes: List<CorrecaoGuardada>,
+    /** Guarda o que se escreveu em "Corrigir ou acrescentar". */
+    aoGuardarEscrito: (Escrito) -> Unit,
 ) {
     val significadoProprio = guardada?.significado?.takeIf { it.isNotBlank() }
+    // Aberto: o diálogo de sugerir, já na aceção dada (nula = a escolha normal).
     var aCorrigir by remember(entrada.lemmaId) { mutableStateOf(false) }
-    if (aCorrigir) DialogoCorrigir(entrada, aoFechar = { aCorrigir = false })
+    var acecaoACorrigir by remember(entrada.lemmaId) { mutableStateOf<Int?>(null) }
+    if (aCorrigir) {
+        DialogoSugerir(
+            lemma = entrada.lemma,
+            acecoes = entrada.acecoes,
+            significadoProprio = significadoProprio,
+            correcoes = correcoes,
+            aoGuardar = aoGuardarEscrito,
+            aoFechar = { aCorrigir = false; acecaoACorrigir = null },
+            acecaoInicial = acecaoACorrigir,
+        )
+    }
     // Coluna + lista com peso: o texto rola, mas a barra de registar fica
     // sempre em baixo. Registar é o gesto central da app; numa entrada com
     // sete aceções, o botão não pode desaparecer ao rolar.
@@ -843,34 +942,11 @@ private fun VistaEntrada(
         BarraVoltar(
             aoVoltar,
             direita = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Partilhar leva o significado para fora da app, sem rede.
-                    IconButton(onClick = aoPartilhar, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Rounded.Share, "Partilhar", tint = Cores.ink)
-                    }
-                    // "Corrigir uma definição" (1.22): no menu, para não
-                    // pôr mais um ícone à vista numa barra que é da palavra.
-                    run {
-                        var menu by remember { mutableStateOf(false) }
-                        Box {
-                            IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp)) {
-                                Icon(Icons.Rounded.MoreVert, "Mais", tint = Cores.ink)
-                            }
-                            DropdownMenu(
-                                expanded = menu,
-                                onDismissRequest = { menu = false },
-                                containerColor = Cores.card,
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text("Corrigir uma definição", style = Estilo.controlo, color = Cores.ink)
-                                    },
-                                    leadingIcon = { Icon(Icons.Rounded.EditNote, null, tint = Cores.ink) },
-                                    onClick = { menu = false; aCorrigir = true },
-                                )
-                            }
-                        }
-                    }
+                // Partilhar leva o significado para fora da app, sem rede.
+                // (O "Corrigir" esteve aqui, num menu ⋮, até à 1.24: agora é
+                // um botão por baixo das definições, onde se está a ler.)
+                IconButton(onClick = aoPartilhar, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.Rounded.Share, "Partilhar", tint = Cores.ink)
                 }
             },
         )
@@ -923,11 +999,10 @@ private fun VistaEntrada(
             // O significado que o próprio escreveu fica sempre visível, tenha
             // a palavra definição ou não: o teu contributo não se perde quando
             // a palavra entra no dicionário numa versão seguinte.
+            // Toca-se para o mudar ou apagar, no mesmo diálogo de corrigir.
             significadoProprio?.let { meu ->
                 item {
-                    Overline("O teu significado")
-                    Spacer(Modifier.height(6.dp))
-                    Text(meu, style = Estilo.acecao, color = Cores.ink)
+                    BlocoSignificadoProprio(meu) { acecaoACorrigir = null; aCorrigir = true }
                     Spacer(Modifier.height(22.dp))
                 }
             }
@@ -1016,9 +1091,28 @@ private fun VistaEntrada(
                             Spacer(Modifier.height(10.dp))
                             CaixaExemplo(it, desenvolvedor)
                         }
+                        // A correção que a pessoa fez a esta aceção (1.30).
+                        correcoes.firstOrNull { it.acecaoOrd == acecao.ord }?.let { c ->
+                            Spacer(Modifier.height(10.dp))
+                            CaixaCorrecao(c) { acecaoACorrigir = acecao.ord; aCorrigir = true }
+                        }
                     }
                 }
               }
+            }
+
+            // Corrigir ou acrescentar, à mão de quem acabou de ler (1.30): um
+            // botão a sério por baixo das definições, e não um item no menu.
+            item(key = "corrigir") {
+                BotaoContornado(
+                    if (entrada.acecoes.isEmpty() && significadoProprio == null) "Acrescentar um significado"
+                    else "Corrigir ou acrescentar",
+                    { acecaoACorrigir = null; aCorrigir = true },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 22.dp),
+                    icone = Icons.Rounded.EditNote,
+                    cor = Cores.accentInk,
+                    borda = Cores.accent,
+                )
             }
 
             val soltos = entrada.exemplosSoltos
@@ -1092,6 +1186,49 @@ private fun VistaEntrada(
                 )
             }
         }
+    }
+}
+
+/**
+ * "O teu significado": o sentido escrito pela pessoa, por cima das definições
+ * (ou sozinho, numa palavra que o dicionário não tem). Toca-se para o mudar.
+ */
+@Composable
+private fun BlocoSignificadoProprio(texto: String, aoTocar: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = aoTocar),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Overline("O teu significado", Modifier.weight(1f))
+            Icon(Icons.Rounded.EditNote, "Mudar", tint = Cores.ink3, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(texto, style = Estilo.acecao, color = Cores.ink)
+    }
+}
+
+/** A correção da pessoa a uma aceção, logo por baixo dela. Toca-se para a mudar. */
+@Composable
+private fun CaixaCorrecao(c: CorrecaoGuardada, aoTocar: () -> Unit) {
+    val forma = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .border(1.dp, Cores.accent, forma)
+            .clickable(onClick = aoTocar)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(
+            if (c.enviadaEm != null) "A tua correção · enviada" else "A tua correção",
+            style = Estilo.ajuda,
+            color = Cores.accentInk,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(c.texto, style = Estilo.texto.copy(fontSize = 15.sp), color = Cores.ink)
     }
 }
 
@@ -1284,7 +1421,20 @@ private fun NaoEncontrada(
     /** A outra língua, se a palavra estiver lá. */
     existeNaOutra: String? = null,
     aoEscolherLingua: (String) -> Unit = {},
+    /** Guarda o que se escreveu em "Acrescentar um significado" (1.30). */
+    aoGuardarEscrito: (Escrito) -> Unit = {},
 ) {
+    var aSugerir by remember(termo) { mutableStateOf(false) }
+    if (aSugerir) {
+        DialogoSugerir(
+            lemma = termo,
+            acecoes = emptyList(),
+            significadoProprio = significadoProprio?.takeIf { it.isNotBlank() },
+            correcoes = emptyList(),
+            aoGuardar = aoGuardarEscrito,
+            aoFechar = { aSugerir = false },
+        )
+    }
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { BarraVoltar(aoVoltar) }
@@ -1366,9 +1516,7 @@ private fun NaoEncontrada(
 
             significadoProprio?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(22.dp))
-                Overline("O teu significado")
-                Spacer(Modifier.height(6.dp))
-                Text(it, style = Estilo.acecao, color = Cores.ink)
+                BlocoSignificadoProprio(it) { aSugerir = true }
             }
 
             if (termo.isNotBlank()) {
@@ -1380,6 +1528,17 @@ private fun NaoEncontrada(
                         cor = Cores.ok,
                         icone = Icons.Rounded.Bookmark,
                     )
+                    // Na coleção mas sem significado: o mesmo botão da palavra.
+                    if (significadoProprio.isNullOrBlank()) {
+                        Spacer(Modifier.height(18.dp))
+                        BotaoContornado(
+                            "Acrescentar um significado", { aSugerir = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            icone = Icons.Rounded.EditNote,
+                            cor = Cores.accentInk,
+                            borda = Cores.accent,
+                        )
+                    }
                 } else {
                     Column(
                         Modifier
@@ -1396,7 +1555,7 @@ private fun NaoEncontrada(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "Podes guardá-la na tua coleção e escrever o que quer "
-                                + "dizer, se souberes.",
+                                + "dizer, se souberes. Depois podes submetê-la ao dicionário.",
                             style = Estilo.texto.copy(fontSize = 14.sp, lineHeight = 1.45.em),
                             color = Cores.ink2,
                         )

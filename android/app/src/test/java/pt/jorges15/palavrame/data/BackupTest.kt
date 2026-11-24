@@ -2,6 +2,7 @@ package pt.jorges15.palavrame.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -183,5 +184,29 @@ class BackupTest {
         val volta = Backup.desserializar(json)!!
         assertEquals(Lingua.PT, volta.palavras.single().lingua)
         assertEquals(Lingua.PT, volta.livros.single().ficha.lingua)
+    }
+
+    @Test
+    fun `o round-trip preserva as correcoes e o que ja se enviou`() {
+        val c = CorrecaoGuardada(
+            lemma = "crèdor", acecaoOrd = 2, acecaoTexto = "Que tem crédito.",
+            acecaoFonte = "Wikcionário", classe = "substantivo",
+            texto = "Grafia antiga de credor.", criadaEm = 1000L, enviadaEm = 2000L,
+        )
+        val p = PalavraGuardada(lemma = "rebarbativo", significado = "Antipático.", enviado = "Antipático.")
+        val volta = Backup.desserializar(
+            Backup.serializar(listOf(p), null, "1.30.0", correcoes = listOf(c))
+        )!!
+        assertEquals(c.copy(id = 0), volta.correcoes.single().copy(id = 0))
+        assertEquals("Antipático.", volta.palavras.single().enviado)
+    }
+
+    @Test
+    fun `uma copia sem correcoes le-se como antes`() {
+        val volta = Backup.desserializar(
+            Backup.serializar(listOf(PalavraGuardada(lemma = "acervo")), null, "1.0")
+        )!!
+        assertTrue(volta.correcoes.isEmpty())
+        assertNull(volta.palavras.single().enviado)
     }
 }

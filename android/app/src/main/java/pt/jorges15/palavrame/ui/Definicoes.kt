@@ -42,12 +42,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.ResultadoImportacao
 import pt.jorges15.palavrame.data.Backup
+import pt.jorges15.palavrame.data.CorrecaoGuardada
 import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.livrosCompletos
 import pt.jorges15.palavrame.data.Preferencias
@@ -95,7 +97,8 @@ fun EcraDefinicoes(
             ).values.toList()
             mensagemBackup = when (
                 val r = Backup.exportar(
-                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME, livros
+                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME, livros,
+                    app.utilizador.correcoes().todas(),
                 )
             ) {
                 is Backup.Resultado.Feito -> "Exportadas ${r.novas} palavras."
@@ -145,6 +148,14 @@ fun EcraDefinicoes(
     // email (é o email que envia; a app continua sem permissão de Internet).
     var mensagemFalta by remember { mutableStateOf<String?>(null) }
     var mostrarSubmissao by remember { mutableStateOf(false) }
+    // Quantas sugestões há por enviar (1.30); recontam-se ao fechar a lista.
+    var porEnviar by remember { mutableStateOf(0) }
+    LaunchedEffect(mostrarSubmissao) {
+        if (!mostrarSubmissao) {
+            porEnviar = palavrasEmFalta(app::dicionario, app.utilizador).size +
+                app.utilizador.correcoes().porEnviar().size
+        }
+    }
 
     Scaffold(containerColor = Cores.bg) { padding ->
         Column(
@@ -202,11 +213,25 @@ fun EcraDefinicoes(
 
             Seccao("Contribuir")
             GrupoCartao {
+                // Tudo o que se guardou em "Corrigir ou acrescentar", e as
+                // palavras registadas que o dicionário não tem, à espera de ir
+                // por email (1.30; antes, "Submeter por mail", só as palavras).
                 LinhaGrupo(
-                    "Submeter por mail",
-                    subtitulo = "Contribui com novas palavras para o dicionário.",
+                    "Submeter ao dicionário",
+                    subtitulo = if (porEnviar == 0)
+                        "Palavras novas, sentidos e correções que guardares ficam aqui."
+                    else if (porEnviar == 1) "1 sugestão por submeter."
+                    else "$porEnviar sugestões por submeter.",
                     aoTocar = { mostrarSubmissao = true },
-                    direita = { Chevron() },
+                    direita = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (porEnviar > 0) {
+                                Pilula("$porEnviar", fundo = Cores.accentSoft, cor = Cores.accentInk)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Chevron()
+                        }
+                    },
                 )
                 mensagemFalta?.let {
                     Text(
@@ -221,7 +246,7 @@ fun EcraDefinicoes(
                 // O tutorial da primeira abertura, para rever quando se quiser.
                 LinhaGrupo(
                     "Como funciona",
-                    subtitulo = "Procurar, guardar, os livros e a revisão, em quatro ecrãs.",
+                    subtitulo = "Procurar, guardar, corrigir, os livros e a revisão, em cinco ecrãs.",
                     aoTocar = { verTutorial = true },
                     direita = { Chevron() },
                 )
@@ -290,22 +315,18 @@ fun EcraDefinicoes(
     }
 
     if (mostrarSubmissao) {
-        DialogoSubmeterFaltas(
+        DialogoSugestoes(
             app = app,
             aoFechar = { mostrarSubmissao = false },
-            aoEnviar = { escolhidas ->
-                val intent = intentEmail(
-                    para = EMAIL_SUBMISSAO,
-                    assunto = assuntoSubmissao(escolhidas.size),
-                    corpo = corpoDeFalta(
-                        escolhidas, BuildConfig.VERSION_NAME,
-                        app.dicionario?.construidoEm,
-                    ),
-                )
-                try {
-                    context.startActivity(intent)
+            aoEnviar = { faltas, correcoes ->
+                if (enviarSugestoes(context, faltas, correcoes)) {
                     mensagemFalta = null
-                } catch (e: Exception) {
+                    ambito.launch {
+                        marcarSugestoesEnviadas(app.utilizador, faltas, correcoes)
+                        porEnviar = palavrasEmFalta(app::dicionario, app.utilizador).size +
+                            app.utilizador.correcoes().porEnviar().size
+                    }
+                } else {
                     mensagemFalta = "Não encontrei uma app de email neste telemóvel."
                 }
             },
@@ -561,8 +582,9 @@ private fun LinhaLetra(id: LetraId, ativa: Boolean, aoTocar: () -> Unit) {
  * atribuição obrigatória, e este ecrã é o que cumpre essa obrigação (plano, F5).
  */
 @Composable
-fun EcraLicencas(aoVoltar: () -> Unit) {
+fun EcraLicencas(preferencias: Preferencias, aoVoltar: () -> Unit) {
     val context = LocalContext.current
+    val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
     val app = context.applicationContext as PalavrameApp
     val ambito = rememberCoroutineScope()
     var aInstalar by remember { mutableStateOf(false) }
@@ -570,8 +592,9 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
     var porInstalar by remember { mutableStateOf(app.linguasPorInstalar()) }
     var instaladas by remember { mutableStateOf(app.linguasInstaladas()) }
 
-    // Um dicionário escolhido à mão: é assim que se instala o de inglês quando
-    // não vem dentro da app (a língua sai do próprio ficheiro).
+    // Um dicionário escolhido à mão (a língua sai do próprio ficheiro). Só no
+    // Modo Desenvolvedor (1.30): os dois dicionários vêm dentro da app, e isto
+    // serve para experimentar uma base nova sem compilar.
     val seletor = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         aInstalar = true
@@ -636,22 +659,28 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                BotaoContornado(
-                    "Instalar um ficheiro de dicionário",
-                    { if (!aInstalar) seletor.launch(arrayOf("*/*")) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (desenvolvedor) {
+                    Spacer(Modifier.height(12.dp))
+                    BotaoContornado(
+                        "Instalar um ficheiro de dicionário",
+                        { if (!aInstalar) seletor.launch(arrayOf("*/*")) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 mensagem?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, style = Estilo.ajuda, color = Cores.ink)
                 }
 
-                Seccao("Fontes")
-                // As fontes de todos os dicionários instalados, sem repetir.
-                val fontes = instaladas.flatMap { app.dicionario(it)?.fontes().orEmpty() }
-                    .distinctBy { it.nome }
-                if (fontes.isNotEmpty()) {
+                // As fontes de cada dicionário instalado, cada um no seu grupo
+                // (1.30: o inglês tem as dele, o Wiktionary e o Leipzig ingleses).
+                for (lingua in instaladas) {
+                    val fontes = app.dicionario(lingua)?.fontes().orEmpty()
+                    if (fontes.isEmpty()) continue
+                    Seccao(
+                        if (instaladas.size == 1) "Fontes"
+                        else "Fontes: ${Lingua.nome(lingua).lowercase()}"
+                    )
                     GrupoCartao {
                         fontes.forEachIndexed { i, fonte ->
                             if (i > 0) DivisoriaGrupo()
@@ -661,7 +690,7 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "A base de dados deriva destas fontes e é distribuída sob "
+                    "Cada dicionário deriva das suas fontes e é distribuído sob "
                         + "CC BY-SA, como elas exigem.",
                     style = Estilo.ajuda,
                     color = Cores.ink2,
@@ -1008,70 +1037,105 @@ private fun Linha(etiqueta: String, valor: String) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DialogoSubmeterFaltas(
+private fun DialogoSugestoes(
     app: PalavrameApp,
     aoFechar: () -> Unit,
-    aoEnviar: (List<PalavraEmFalta>) -> Unit,
+    aoEnviar: (List<PalavraEmFalta>, List<CorrecaoGuardada>) -> Unit,
 ) {
-    // null = ainda a procurar; lista vazia = não há nada em falta.
+    // null = ainda a procurar; listas vazias = não há nada por enviar.
     var faltas by remember { mutableStateOf<List<PalavraEmFalta>?>(null) }
+    var correcoes by remember { mutableStateOf<List<CorrecaoGuardada>>(emptyList()) }
     val marcadas = remember { mutableStateMapOf<String, Boolean>() }
     LaunchedEffect(Unit) {
-        val lista = palavrasEmFalta(app.dicionario, app.utilizador)
-        lista.forEach { marcadas[it.lemma] = true }
+        val lista = palavrasEmFalta(app::dicionario, app.utilizador)
+        val corr = app.utilizador.correcoes().porEnviar()
+        lista.forEach { marcadas["f:" + it.lingua + ":" + it.lemma] = true }
+        corr.forEach { marcadas["c:" + it.id] = true }
+        correcoes = corr
         faltas = lista
     }
-    val escolhidas = faltas.orEmpty().filter { marcadas[it.lemma] == true }
+    val faltasEscolhidas = faltas.orEmpty().filter { marcadas["f:" + it.lingua + ":" + it.lemma] == true }
+    val correcoesEscolhidas = correcoes.filter { marcadas["c:" + it.id] == true }
+    val vazio = faltas != null && faltas.orEmpty().isEmpty() && correcoes.isEmpty()
 
     AlertDialog(
         onDismissRequest = aoFechar,
         containerColor = Cores.card,
-        title = { Text("Submeter palavras em falta", style = Estilo.grupoTitulo, color = Cores.ink) },
+        title = { Text("Submeter ao dicionário", style = Estilo.grupoTitulo, color = Cores.ink) },
         text = {
             val lista = faltas
             when {
                 lista == null -> Text("A procurar…")
-                lista.isEmpty() ->
-                    Text("Não tens palavras em falta. Está tudo no dicionário.")
+                vazio -> Text(
+                    "Não tens nada por submeter. As palavras que o dicionário não tem, "
+                        + "e o que guardares em \"Corrigir ou acrescentar\", aparecem aqui."
+                )
                 else -> Column(
-                    Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())
+                    Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())
                 ) {
                     lista.forEach { f ->
-                        val marcada = marcadas[f.lemma] ?: true
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable { marcadas[f.lemma] = !marcada }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                checked = marcada,
-                                onCheckedChange = { marcadas[f.lemma] = it },
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(f.lemma, style = Estilo.linhaLema.copy(fontSize = 17.sp), color = Cores.ink)
-                                Text(
-                                    rotuloFalta(f.tipo),
-                                    style = Estilo.meta,
-                                    color = Cores.ink3,
-                                )
-                            }
-                        }
+                        LinhaSugestao(
+                            chave = "f:" + f.lingua + ":" + f.lemma,
+                            marcadas = marcadas,
+                            titulo = if (f.lingua == Lingua.PT) f.lemma
+                                else f.lemma + " · " + Lingua.sigla(f.lingua),
+                            detalhe = rotuloFalta(f.tipo) +
+                                (f.significadoProprio?.let { ": $it" } ?: ""),
+                        )
+                    }
+                    correcoes.forEach { c ->
+                        LinhaSugestao(
+                            chave = "c:" + c.id,
+                            marcadas = marcadas,
+                            titulo = c.lemma,
+                            detalhe = "corrige o significado ${c.acecaoOrd}: ${c.texto}",
+                        )
                     }
                 }
             }
         },
         confirmButton = {
-            if (!faltas.isNullOrEmpty()) {
+            if (haSugestoes(faltas, correcoes)) {
                 TextButton(
-                    enabled = escolhidas.isNotEmpty(),
-                    onClick = { aoEnviar(escolhidas); aoFechar() },
-                ) { Text("Enviar por email") }
+                    enabled = faltasEscolhidas.isNotEmpty() || correcoesEscolhidas.isNotEmpty(),
+                    onClick = { aoEnviar(faltasEscolhidas, correcoesEscolhidas); aoFechar() },
+                ) { Text("Submeter por email") }
             }
         },
         dismissButton = { TextButton(onClick = aoFechar) { Text("Fechar") } },
     )
+}
+
+private fun haSugestoes(faltas: List<PalavraEmFalta>?, correcoes: List<CorrecaoGuardada>) =
+    !faltas.isNullOrEmpty() || correcoes.isNotEmpty()
+
+@Composable
+private fun LinhaSugestao(
+    chave: String,
+    marcadas: MutableMap<String, Boolean>,
+    titulo: String,
+    detalhe: String,
+) {
+    val marcada = marcadas[chave] ?: true
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable { marcadas[chave] = !marcada }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = marcada, onCheckedChange = { marcadas[chave] = it })
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(titulo, style = Estilo.linhaLema.copy(fontSize = 17.sp), color = Cores.ink)
+            Text(
+                detalhe,
+                style = Estilo.meta,
+                color = Cores.ink3,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 // Para onde vão as submissões e como as identificar na caixa de entrada. É o

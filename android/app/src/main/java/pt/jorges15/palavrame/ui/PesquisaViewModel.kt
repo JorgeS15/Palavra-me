@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pt.jorges15.palavrame.data.Candidato
+import pt.jorges15.palavrame.data.CorrecaoGuardada
 import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
 import pt.jorges15.palavrame.data.Leitura
@@ -424,6 +425,53 @@ class PesquisaViewModel(
         }
     }
 
+    // --- sugestões ao dicionário (1.30) ---------------------------------------
+
+    /** As correções que a pessoa fez às aceções desta palavra. */
+    fun correcoesDe(lemma: String, lingua: String): Flow<List<CorrecaoGuardada>> =
+        utilizador.correcoes().daPalavra(lemma, lingua)
+
+    /** Guarda (texto) ou apaga (nulo) a correção a uma aceção; devolve a guardada. */
+    suspend fun guardarCorrecao(
+        lemma: String,
+        lingua: String,
+        acecao: pt.jorges15.palavrame.data.Acecao,
+        classe: String?,
+        texto: String?,
+    ): CorrecaoGuardada? = withContext(Dispatchers.IO) {
+        val dao = utilizador.correcoes()
+        if (texto == null) {
+            dao.apagar(lemma, lingua, acecao.ord)
+            return@withContext null
+        }
+        val c = CorrecaoGuardada(
+            id = dao.da(lemma, lingua, acecao.ord)?.id ?: 0,
+            lemma = lemma,
+            lingua = lingua,
+            acecaoOrd = acecao.ord,
+            acecaoTexto = acecao.definicao,
+            acecaoFonte = acecao.fonte + if (acecao.modernizada) " (fraseado adaptado)" else "",
+            classe = classe,
+            texto = texto,
+        )
+        c.copy(id = dao.guardar(c))
+    }
+
+    /** A palavra como sugestão por enviar, se o é (para o "Submeter ao dicionário"). */
+    suspend fun faltaDe(palavra: PalavraGuardada): PalavraEmFalta? =
+        faltaDe(obterDicionario(palavra.lingua), palavra)
+
+    suspend fun marcarEnviadas(faltas: List<PalavraEmFalta>, correcoes: List<CorrecaoGuardada>) =
+        marcarSugestoesEnviadas(utilizador, faltas, correcoes)
+
+    /** Guarda já, e não em `viewModelScope.launch`: quem chama quer a palavra guardada a seguir. */
+    suspend fun guardarAgora(palavra: PalavraGuardada) = withContext(Dispatchers.IO) {
+        val existente = utilizador.palavras().porLema(palavra.lemma, palavra.lingua)
+        if (existente != null) utilizador.palavras().atualizar(palavra.copy(id = existente.id))
+        else utilizador.palavras().guardar(palavra)
+        utilizador.acertarLivros()
+    }
+
     fun esquecer(lemma: String, lingua: String = _estado.value.lingua) {
         viewModelScope.launch { utilizador.palavras().esquecer(lemma, lingua) }
     }
@@ -475,9 +523,14 @@ class PesquisaViewModel(
      * disso com elegância.
      */
     val porRever: Flow<Int> = palavrasGuardadas.map { lista ->
-        if (lista.size < MINIMO_PARA_JOGAR) return@map 0
+        // Como no jogo: só contam as línguas com o mínimo de palavras (uma
+        // primeira palavra inglesa não faz aparecer o "Rever").
+        val porLingua = lista.groupingBy { it.lingua }.eachCount()
         val agora = System.currentTimeMillis()
-        lista.count { it.proximaRevisao == null || it.proximaRevisao <= agora }
+        lista.count {
+            (porLingua[it.lingua] ?: 0) >= MINIMO_PARA_JOGAR &&
+                (it.proximaRevisao == null || it.proximaRevisao <= agora)
+        }
     }
 }
 
@@ -498,41 +551,81 @@ data class PalavraEmFalta(
     val lemma: String,
     val significadoProprio: String?,
     val tipo: TipoFalta,
+    /** De que dicionário falta (1.30: também o inglês). */
+    val lingua: String = Lingua.PT,
 )
 
 /**
- * As palavras registadas que o dicionário não cobre: as que não existem lá de
- * todo, as que existem mas sem significado atribuído, e as que têm definição
- * mas a que o utilizador juntou a sua (um sentido em falta). É o que se
- * submete para a curadoria, e distingue-se cada caso, como o Jorge pediu.
+ * Se a palavra falta ao dicionário da língua dela, e como: não existe lá de
+ * todo, existe sem significado, ou tem definição mas a pessoa juntou a sua
+ * (um sentido em falta). Nula se não há nada a propor.
+ *
+ * Primeiro a grafia exata; se falhar, pelas formas (como a pesquisa). Assim
+ * uma palavra registada no plural ou com outra grafia deixa de contar como
+ * "em falta" quando o dicionário a passa a ter.
+ */
+private fun classificarFalta(dic: Dicionario, p: PalavraGuardada): PalavraEmFalta? {
+    val entrada = dic.entradaPorLema(p.lemma)
+        ?: dic.procurar(p.lemma).firstOrNull()?.let { dic.entrada(it.lemmaId) }
+    val tipo = when {
+        entrada == null -> TipoFalta.NAO_ENCONTRADA
+        entrada.acecoes.isEmpty() -> TipoFalta.SEM_SIGNIFICADO
+        // Com definição e com o significado do próprio: falta um sentido. Se a
+        // curadoria já lhe acrescentou um, o pedido foi atendido (o significado
+        // do utilizador fica na coleção, mas deixa de se propor).
+        !p.significado.isNullOrBlank() &&
+            entrada.acecoes.none { it.fonte == FONTE_CURADORIA } -> TipoFalta.SENTIDO_EM_FALTA
+        else -> return null
+    }
+    return PalavraEmFalta(p.lemma, p.significado, tipo, p.lingua)
+}
+
+/**
+ * As palavras registadas que o dicionário não cobre (ver `classificarFalta`).
+ * É o que se submete para a curadoria. Desde a 1.30, de todas as línguas
+ * instaladas: as inglesas também se propõem, marcadas como tal no email.
  *
  * Corre em IO: percorre a coleção e consulta o dicionário por cada palavra.
  */
 suspend fun palavrasEmFalta(
-    dicionario: Dicionario?,
+    /** O dicionário de cada língua; nulo se não está instalado. */
+    dicionarioDe: (String) -> Dicionario?,
     utilizador: UtilizadorDb,
+    /**
+     * Só as que ainda não foram enviadas (1.30): uma palavra enviada não volta
+     * a propor-se, a não ser que o significado dela tenha mudado desde então.
+     */
+    soPorEnviar: Boolean = true,
 ): List<PalavraEmFalta> = withContext(Dispatchers.IO) {
-    val dic = dicionario ?: return@withContext emptyList()
-    // A curadoria é do dicionário português: as palavras inglesas não se propõem.
-    utilizador.palavras().todasAgora().filter { it.lingua == Lingua.PT }.mapNotNull { p ->
-        // Primeiro a grafia exata; se falhar, pelas formas (como a pesquisa).
-        // Assim uma palavra registada no plural ou com outra grafia deixa de
-        // contar como "em falta" quando o dicionário a passa a ter.
-        val entrada = dic.entradaPorLema(p.lemma)
-            ?: dic.procurar(p.lemma).firstOrNull()?.let { dic.entrada(it.lemmaId) }
-        when {
-            entrada == null ->
-                PalavraEmFalta(p.lemma, p.significado, TipoFalta.NAO_ENCONTRADA)
-            entrada.acecoes.isEmpty() ->
-                PalavraEmFalta(p.lemma, p.significado, TipoFalta.SEM_SIGNIFICADO)
-            // Com definição e com o significado do próprio: falta um sentido.
-            // Se a curadoria já lhe acrescentou um, o pedido foi atendido (o
-            // significado do utilizador fica na coleção, mas deixa de se
-            // propor de novo a cada envio).
-            !p.significado.isNullOrBlank() &&
-                entrada.acecoes.none { it.fonte == FONTE_CURADORIA } ->
-                PalavraEmFalta(p.lemma, p.significado, TipoFalta.SENTIDO_EM_FALTA)
-            else -> null
-        }
+    utilizador.palavras().todasAgora()
+        .filter { !soPorEnviar || it.enviado == null || it.enviado != it.significado.orEmpty() }
+        .mapNotNull { p -> dicionarioDe(p.lingua)?.let { classificarFalta(it, p) } }
+}
+
+/**
+ * Marca como enviadas as sugestões que acabaram de ir por email (1.30), para
+ * não voltarem à lista. Não se sabe se o email chegou a sair (é a app de email
+ * que o envia), mas abrir o email já é a decisão de enviar.
+ */
+suspend fun marcarSugestoesEnviadas(
+    utilizador: UtilizadorDb,
+    faltas: List<PalavraEmFalta>,
+    correcoes: List<pt.jorges15.palavrame.data.CorrecaoGuardada>,
+) = withContext(Dispatchers.IO) {
+    faltas.forEach {
+        utilizador.palavras().marcarEnviada(it.lemma, it.lingua, it.significadoProprio.orEmpty())
     }
+    if (correcoes.isNotEmpty()) utilizador.correcoes().marcarEnviadas(correcoes.map { it.id })
+}
+
+/**
+ * A palavra como sugestão por enviar, se o for: o mesmo critério da lista de
+ * Definições, Contribuir, para uma palavra só (o "Submeter ao dicionário"
+ * depois de guardar). Nula se não há nada a propor.
+ */
+suspend fun faltaDe(
+    dicionario: Dicionario?,
+    palavra: PalavraGuardada,
+): PalavraEmFalta? = withContext(Dispatchers.IO) {
+    dicionario?.let { classificarFalta(it, palavra) }
 }

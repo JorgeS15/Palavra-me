@@ -62,6 +62,12 @@ data class PalavraGuardada(
     @ColumnInfo(name = "proxima_revisao") val proximaRevisao: Long? = null,
     /** De que dicionário é a palavra (`Lingua`). As de antes da 1.23 são todas "pt". */
     @ColumnInfo(defaultValue = "'pt'") val lingua: String = Lingua.PT,
+    /**
+     * O significado tal como foi enviado à curadoria ("" se foi sem
+     * significado); nulo = nunca enviada (1.30). Enquanto for igual ao
+     * `significado`, a palavra não volta às sugestões por enviar.
+     */
+    val enviado: String? = null,
 )
 
 /**
@@ -109,6 +115,10 @@ interface PalavrasDao {
 
     @Update
     suspend fun atualizar(palavra: PalavraGuardada)
+
+    /** Marca o que se enviou à curadoria (ver `PalavraGuardada.enviado`). */
+    @Query("UPDATE saved_words SET enviado = :enviado WHERE lemma = :lemma AND lingua = :lingua")
+    suspend fun marcarEnviada(lemma: String, lingua: String, enviado: String)
 
     @Query("DELETE FROM saved_words WHERE lemma = :lemma AND lingua = :lingua")
     suspend fun esquecer(lemma: String, lingua: String = Lingua.PT)
@@ -254,17 +264,22 @@ val MIGRACAO_7_8 = object : Migration(7, 8) {
  */
 val MIGRACOES = arrayOf(
     MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4, MIGRACAO_4_5, MIGRACAO_5_6, MIGRACAO_6_7, MIGRACAO_7_8,
+    MIGRACAO_8_9,
 )
 
 @Database(
-    entities = [PalavraGuardada::class, Progresso::class, FichaLivro::class, Leitura::class],
-    version = 8,
+    entities = [
+        PalavraGuardada::class, Progresso::class, FichaLivro::class, Leitura::class,
+        CorrecaoGuardada::class,
+    ],
+    version = 9,
     exportSchema = true,
 )
 abstract class UtilizadorDb : RoomDatabase() {
     abstract fun palavras(): PalavrasDao
     abstract fun progresso(): ProgressoDao
     abstract fun livros(): LivrosDao
+    abstract fun correcoes(): CorrecoesDao
 
     companion object {
         @Volatile private var instancia: UtilizadorDb? = null

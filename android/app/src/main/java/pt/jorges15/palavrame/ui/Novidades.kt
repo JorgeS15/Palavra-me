@@ -20,7 +20,10 @@ import pt.jorges15.palavrame.ui.theme.Estilo
  *
  * Indexa-se pelo código e não pelo nome porque nem todas as versões se
  * publicam: quem salta da 1.19 para a 1.20.1 tem de ver as notas da 1.20.0.
- * Mostram-se as mais recentes que a pessoa ainda não viu (`notasPorVer`).
+ * Mostra-se UMA nota: a da versão mais recente que a pessoa ainda não viu
+ * (`notasPorVer`). Por isso, quando uma publicação junta versões que não
+ * saíram, a nota dela tem de contar tudo: a 1.30 conta a 1.22 e a 1.23, que
+ * quem vem da 1.21.1 nunca viu.
  */
 
 /** Para onde leva o botão da nota, quando a novidade tem um sítio na app. */
@@ -33,6 +36,15 @@ class Novidades(val itens: List<String>, val acao: AcaoNovidade? = null)
 
 /** As notas por `versionCode`. Só as versões com algo a contar. */
 val NOVIDADES: Map<Int, Novidades> = mapOf(
+    37 to Novidades(          // 1.30.0 (junta a 1.22 e a 1.23, que não saíram)
+        itens = listOf(
+            "Novo separador Livros: o que estás a ler e a página onde vais, os lidos por ano e as datas de cada leitura.",
+            "Dicionário de inglês, com as definições em inglês. Escolhe PT ou EN na caixa de pesquisa.",
+            "Uma definição errada, ou falta um sentido? \"Corrigir ou acrescentar\", por baixo das definições. Fica para ti, e podes submetê-lo ao dicionário.",
+            "Na revisão, podes escrever a palavra a partir da definição. Liga-o em Definições, Rever.",
+        ),
+        acao = AcaoNovidade.TUTORIAL,
+    ),
     36 to Novidades(          // 1.23.0
         itens = listOf(
             "Dicionário de inglês: palavras inglesas, com as definições em inglês.",
@@ -46,7 +58,7 @@ val NOVIDADES: Map<Int, Novidades> = mapOf(
             "Novo separador Livros: o que estás a ler, os lidos por ano, as datas de cada leitura, uma nota e um resumo, que se partilha como imagem.",
             "Novo na revisão: escrever a palavra a partir da definição. Liga-o em Definições, Rever.",
             "Podes esconder a palavra nos lembretes, em Definições. No ecrã bloqueado fica sempre escondida.",
-            "Uma definição errada ou antiquada? Avisa no menu da palavra. E \"crèdor\" e afins passam à grafia de hoje.",
+            "Uma definição errada ou antiquada? Corrige-a por baixo das definições. E \"crèdor\" e afins passam à grafia de hoje.",
         ),
         acao = AcaoNovidade.TUTORIAL,
     ),

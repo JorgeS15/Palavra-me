@@ -85,8 +85,8 @@ fun EcraJogo(vm: JogoViewModel, aoVoltar: () -> Unit) {
                     is EstadoJogo.PoucasPalavras -> Explicacao(
                         titulo = "Ainda não dá",
                         texto = "O jogo precisa de pelo menos $MINIMO_PARA_JOGAR palavras "
-                            + "com definição: uma para a pergunta e duas para as opções "
-                            + "erradas. Tens ${e.jogaveis}.\n\nRegista mais umas quantas "
+                            + "com definição na mesma língua: uma para a pergunta e duas "
+                            + "para as opções erradas. Tens ${e.jogaveis}.\n\nRegista mais umas quantas "
                             + "à medida que lês e volta cá.",
                         aoVoltar = aoVoltar,
                     )

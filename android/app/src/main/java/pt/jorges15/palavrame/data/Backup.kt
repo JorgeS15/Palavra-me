@@ -46,6 +46,8 @@ object Backup {
         val progresso: Progresso?,
         /** As fichas dos livros, com as leituras (1.22). Vazio numa cópia anterior. */
         val livros: List<LivroCompleto> = emptyList(),
+        /** As correções às definições (1.30). Vazio numa cópia anterior. */
+        val correcoes: List<CorrecaoGuardada> = emptyList(),
     )
 
     // --- serialização pura (testável sem Android) -------------------------
@@ -55,6 +57,7 @@ object Backup {
         progresso: Progresso?,
         versaoDaApp: String,
         livros: List<LivroCompleto> = emptyList(),
+        correcoes: List<CorrecaoGuardada> = emptyList(),
     ): String {
         val raiz = JSONObject().apply {
             put("formato", FORMATO)
@@ -65,6 +68,9 @@ object Backup {
             progresso?.let { put("progresso", progressoParaJson(it)) }
             if (livros.isNotEmpty()) {
                 put("livros", JSONArray().apply { livros.forEach { put(livroParaJson(it)) } })
+            }
+            if (correcoes.isNotEmpty()) {
+                put("correcoes", JSONArray().apply { correcoes.forEach { put(correcaoParaJson(it)) } })
             }
         }
         return raiz.toString(2)
@@ -83,7 +89,10 @@ object Backup {
         val livros = raiz.optJSONArray("livros")?.let { l ->
             (0 until l.length()).mapNotNull { livroDeJson(l.getJSONObject(it)) }
         }.orEmpty()
-        return Conteudo(palavras, progresso, livros)
+        val correcoes = raiz.optJSONArray("correcoes")?.let { l ->
+            (0 until l.length()).mapNotNull { correcaoDeJson(l.getJSONObject(it)) }
+        }.orEmpty()
+        return Conteudo(palavras, progresso, livros, correcoes)
     }
 
     // --- IO ---------------------------------------------------------------
@@ -95,9 +104,10 @@ object Backup {
         progresso: Progresso?,
         versaoDaApp: String,
         livros: List<LivroCompleto> = emptyList(),
+        correcoes: List<CorrecaoGuardada> = emptyList(),
     ): Resultado = withContext(Dispatchers.IO) {
         try {
-            val json = serializar(palavras, progresso, versaoDaApp, livros)
+            val json = serializar(palavras, progresso, versaoDaApp, livros, correcoes)
             // "wt": truncar. Sem o modo, escrever por cima de uma cópia mais
             // comprida deixava o resto da antiga no fim, e o JSON ficava
             // inválido sem ninguém dar por isso até precisar dele.
@@ -182,6 +192,10 @@ object Backup {
             }
             livrosDao.preencherEmFalta()
             livrosDao.preencherAutores()
+
+            // As correções juntam-se como as palavras: a que já existe aqui
+            // (a mesma aceção da mesma palavra) fica como está.
+            conteudo.correcoes.forEach { db.correcoes().inserirSeNova(it.copy(id = 0)) }
             }
 
             Resultado.Feito(novas, jaExistiam)
@@ -209,6 +223,8 @@ object Backup {
         // Só o inglês se escreve: uma palavra sem "lingua" é português, que é
         // como as cópias de antes da 1.23 se continuam a ler.
         if (p.lingua != Lingua.PT) put("lingua", p.lingua)
+        // O que já se enviou à curadoria não volta a propor-se depois de restaurar.
+        p.enviado?.let { put("enviado", it) }
     }
 
     private fun deJson(o: JSONObject): PalavraGuardada? {
@@ -230,6 +246,36 @@ object Backup {
             revistaEm = if (o.has("revista_em")) o.optLong("revista_em") else null,
             proximaRevisao = if (o.has("proxima_revisao")) o.optLong("proxima_revisao") else null,
             lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
+            enviado = if (o.has("enviado")) o.optString("enviado") else null,
+        )
+    }
+
+    private fun correcaoParaJson(c: CorrecaoGuardada) = JSONObject().apply {
+        put("lema", c.lemma)
+        if (c.lingua != Lingua.PT) put("lingua", c.lingua)
+        put("acecao", c.acecaoOrd)
+        put("acecao_texto", c.acecaoTexto)
+        c.acecaoFonte?.let { put("acecao_fonte", it) }
+        c.classe?.let { put("classe", it) }
+        put("texto", c.texto)
+        put("criada_em", c.criadaEm)
+        c.enviadaEm?.let { put("enviada_em", it) }
+    }
+
+    private fun correcaoDeJson(o: JSONObject): CorrecaoGuardada? {
+        val lema = o.optString("lema").takeIf { it.isNotBlank() } ?: return null
+        val texto = o.optString("texto").takeIf { it.isNotBlank() } ?: return null
+        if (!o.has("acecao")) return null
+        return CorrecaoGuardada(
+            lemma = lema,
+            lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
+            acecaoOrd = o.optInt("acecao"),
+            acecaoTexto = o.optString("acecao_texto"),
+            acecaoFonte = o.optString("acecao_fonte").takeIf { it.isNotBlank() },
+            classe = o.optString("classe").takeIf { it.isNotBlank() },
+            texto = texto,
+            criadaEm = o.optLong("criada_em", System.currentTimeMillis()),
+            enviadaEm = if (o.has("enviada_em")) o.optLong("enviada_em") else null,
         )
     }
 

@@ -153,6 +153,8 @@ class JogoViewModel(
     val progresso = utilizador.progresso().observar()
 
     private var todas: Map<String, Candidata> = emptyMap()
+    /** As que se podem perguntar: de uma língua com o mínimo (ver `alvosPossiveis`). */
+    private var alvos: Map<String, Candidata> = emptyMap()
     private var semCalendario = false
 
     /**
@@ -200,15 +202,16 @@ class JogoViewModel(
         // As mesmas funções que o lembrete usa (ver `Escolha.kt`): a palavra
         // anunciada na notificação é sempre uma que o jogo consegue perguntar.
         todas = candidatas(dicionarios, guardadas)
+        alvos = alvosPossiveis(todas)
 
-        if (todas.size < MINIMO_PARA_JOGAR) {
-            return EstadoJogo.PoucasPalavras(todas.size)
+        if (alvos.isEmpty()) {
+            return EstadoJogo.PoucasPalavras(maisNumaLingua(todas))
         }
 
         if (livro != null) return montarLivro(livro, guardadas)
 
         val vencidas = utilizador.palavras().vencidas(agora())
-            .filter { it.chave in todas }
+            .filter { it.chave in alvos }
         semCalendario = vencidas.isEmpty()
 
         val bruta = when {
@@ -217,7 +220,7 @@ class JogoViewModel(
             !treinoLivre -> return EstadoJogo.NadaARever
             // Com treino livre: a menos recentemente revista, e o
             // calendário não mexe (ver `aplicarResposta`).
-            else -> guardadas.filter { it.chave in todas }
+            else -> guardadas.filter { it.chave in alvos }
                 .sortedBy { it.revistaEm ?: 0L }
         }
         // A palavra anunciada pela notificação passa à frente. Se já não
@@ -229,7 +232,7 @@ class JogoViewModel(
         // Percorre-se a fila até uma palavra dar pergunta. Uma que não dê
         // não é falha nenhuma: quer dizer que não havia distrações à altura.
         for (palavra in fila) {
-            val alvo = todas[palavra.chave] ?: continue
+            val alvo = alvos[palavra.chave] ?: continue
             val pergunta = perguntaPara(dicionarios, alvo, todas, aleatorio) ?: continue
             return EstadoJogo.AJogar(
                 pergunta = pergunta,
@@ -245,7 +248,7 @@ class JogoViewModel(
     /** As palavras do livro ainda por perguntar nesta sessão, as vencidas primeiro. */
     private suspend fun filaDoLivro(titulo: String, guardadas: List<PalavraGuardada>): List<PalavraGuardada> {
         val doLivro = guardadas.filter {
-            it.livro?.trim() == titulo && it.chave in todas && it.chave !in perguntadas
+            it.livro?.trim() == titulo && it.chave in alvos && it.chave !in perguntadas
         }
         val vencidas = utilizador.palavras().vencidas(agora()).map { it.chave }.toSet()
         return doLivro.sortedWith(
@@ -257,7 +260,7 @@ class JogoViewModel(
     private suspend fun montarLivro(titulo: String, guardadas: List<PalavraGuardada>): EstadoJogo {
         val vencidas = utilizador.palavras().vencidas(agora()).map { it.chave }.toSet()
         for (palavra in filaDoLivro(titulo, guardadas)) {
-            val alvo = todas[palavra.chave] ?: continue
+            val alvo = alvos[palavra.chave] ?: continue
             val pergunta = perguntaPara(dicionarios, alvo, todas, aleatorio) ?: continue
             semCalendario = palavra.chave !in vencidas
             return EstadoJogo.AJogar(
@@ -332,12 +335,12 @@ class JogoViewModel(
                     // Só conta se alguma ainda dá pergunta: senão "Palavra
                     // seguinte" levava direto a "Livro revisto".
                     val haMais = filaDoLivro(livro, utilizador.palavras().todasAgora()).any { p ->
-                        todas[p.chave]?.let { perguntaPara(dicionarios, it, todas, aleatorio) } != null
+                        alvos[p.chave]?.let { perguntaPara(dicionarios, it, todas, aleatorio) } != null
                     }
                     if (haMais) 1 else 0
                 } else {
                     utilizador.palavras().vencidas(agora())
-                        .count { it.chave in todas && it.chave != chave }
+                        .count { it.chave in alvos && it.chave != chave }
                 }
                 Resultado(
                     dicionarios(lingua)?.entradaPorLema(lemma), avanco, avanco.ganho(anterior),

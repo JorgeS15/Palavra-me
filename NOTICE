@@ -10,12 +10,13 @@ DADOS — NÃO ESTÃO SOB A APACHE 2.0
 
 O código é Apache 2.0. A **base de dados** que o pipeline constrói, não.
 
-A `dicionario.db` deriva de fontes com licenças próprias, algumas delas
+A `dicionario.db` (português) e a `dicionario-en.db` (inglês) derivam de
+fontes com licenças próprias, algumas delas
 copyleft, e é por isso distribuída sob CC BY-SA. Quem a redistribuir — dentro
 de uma aplicação ou não — fica sujeito a essas condições, e não às deste
 ficheiro.
 
-Fontes e respetivas licenças:
+Fontes do dicionário de português e respetivas licenças:
 
   Dicionário Aberto                          CC BY-SA 2.5 PT
   https://dicionario-aberto.net/
@@ -49,6 +50,17 @@ Fontes e respetivas licenças:
   pipeline/seeds/curadoria.csv
   Definições escritas à mão para este projeto, onde nenhuma fonte aberta
   define a palavra.
+
+Fontes do dicionário de inglês (desde a app 1.23):
+
+  Wiktionary em inglês                       CC BY-SA 4.0
+  https://en.wiktionary.org/
+  Extraído com wiktextract (https://kaikki.org/).
+
+  Leipzig Corpora Collection (inglês)        CC BY
+  https://wortschatz.uni-leipzig.de/
+  D. Goldhahn, T. Eckart, U. Quasthoff: Building Large Monolingual
+  Dictionaries at the Leipzig Corpora Collection, LREC 2012.
 
 Cada aceção e cada frase guarda a sua proveniência na própria base de dados,
 na tabela `sources`. A aplicação mostra esta lista no ecrã "Fontes e

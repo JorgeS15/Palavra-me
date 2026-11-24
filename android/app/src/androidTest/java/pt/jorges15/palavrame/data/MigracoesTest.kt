@@ -159,6 +159,15 @@ class MigracoesTest {
             assertTrue(db.palavras().guardar(PalavraGuardada(lemma = "lânguido", lingua = Lingua.EN)) > 0)
             assertEquals(-1L, db.palavras().guardar(PalavraGuardada(lemma = "lânguido")))
 
+            // A versão 9: nada enviado ainda, e as correções guardam-se.
+            assertNull(p.enviado)
+            db.palavras().marcarEnviada("lânguido", Lingua.PT, "Sem forças.")
+            assertEquals("Sem forças.", db.palavras().porLema("lânguido")!!.enviado)
+            db.correcoes().guardar(
+                CorrecaoGuardada(lemma = "lânguido", acecaoOrd = 1, acecaoTexto = "x", texto = "y")
+            )
+            assertEquals(1, db.correcoes().porEnviar().size)
+
             val prog = db.progresso().atual()!!
             assertEquals(523, prog.pontos)
             assertEquals(11, prog.sequencia)

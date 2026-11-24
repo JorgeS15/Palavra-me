@@ -66,12 +66,14 @@ suspend fun escolherPalavra(
     val vencidas = utilizador.palavras().vencidas(agora)
     if (vencidas.isEmpty()) return null
     val todas = candidatas(dicionarios, utilizador.palavras().todasAgora())
-    // Com menos do que isto o jogo diz "ainda não dá": não se anuncia nada.
-    if (todas.size < MINIMO_PARA_JOGAR) return null
+    // Só se anunciam palavras de uma língua com o mínimo na coleção (ver
+    // `alvosPossiveis`); sem nenhuma, o jogo diz "ainda não dá".
+    val alvos = alvosPossiveis(todas)
+    if (alvos.isEmpty()) return null
     // A ordem vem do DAO: primeiro as que nunca foram jogadas, depois as mais
     // atrasadas.
     return vencidas.firstOrNull { p ->
-        val alvo = todas[p.chave] ?: return@firstOrNull false
+        val alvo = alvos[p.chave] ?: return@firstOrNull false
         perguntaPara(dicionarios, alvo, todas, Random.Default) != null
     }
 }
@@ -95,6 +97,24 @@ fun candidata(dicionarios: Dicionarios, p: PalavraGuardada): Candidata? {
         lingua = p.lingua,
     )
 }
+
+/**
+ * As candidatas que podem ser perguntadas: só as de uma língua com pelo menos
+ * `MINIMO_PARA_JOGAR` palavras jogáveis na coleção (1.30). Antes o mínimo
+ * contava as línguas todas juntas, e a primeira palavra inglesa entrava logo
+ * no jogo e nos lembretes, com as opções todas tiradas do dicionário. Agora o
+ * inglês só começa à terceira palavra inglesa, como o português começou.
+ *
+ * As distrações continuam a vir de `todas` (e sempre da mesma língua).
+ */
+fun alvosPossiveis(todas: Map<String, Candidata>): Map<String, Candidata> {
+    val porLingua = todas.values.groupingBy { it.lingua }.eachCount()
+    return todas.filterValues { (porLingua[it.lingua] ?: 0) >= MINIMO_PARA_JOGAR }
+}
+
+/** Quantas palavras jogáveis tem a língua com mais (para o "ainda não dá"). */
+fun maisNumaLingua(todas: Map<String, Candidata>): Int =
+    todas.values.groupingBy { it.lingua }.eachCount().values.maxOrNull() ?: 0
 
 /** As candidatas de toda a coleção, pela chave (ver `chaveDe`). */
 fun candidatas(dicionarios: Dicionarios, guardadas: List<PalavraGuardada>): Map<String, Candidata> =
