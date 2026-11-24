@@ -179,16 +179,33 @@ object Backup {
 
             progressoDaCopia?.let { progressoDao.guardar(it.copy(id = 1)) }
 
-            // As fichas da cópia só entram para os livros que ainda não existem
-            // aqui (com as suas leituras); o livro em curso fica o desta
-            // instalação. Os livros das palavras sem ficha na cópia (uma cópia
-            // anterior à 1.22) ganham-na a partir delas.
+            // Os livros juntam-se como as palavras, sem apagar nada (1.30):
+            // - um livro que não existe aqui entra com a ficha e as leituras;
+            // - um que já existe (por exemplo, criado ao registar uma palavra
+            //   dele antes de importar) fica com o que tinha e ganha da cópia
+            //   o que lhe falta: autor, páginas, nota, e as leituras (datas)
+            //   que aqui não há. Antes, a cópia era ignorada para ele.
+            // O livro em curso: o desta instalação, se há; se não há nenhum,
+            // o da cópia. Antes perdia-se sempre.
+            // Os livros das palavras sem ficha na cópia (uma cópia anterior à
+            // 1.22) ganham-na a partir delas.
             val livrosDao = db.livros()
+            var haEmCurso = livrosDao.fichasAgora().any { it.emCurso }
             for (livro in conteudo.livros) {
-                if (livrosDao.porTitulo(livro.titulo) != null) continue
-                val id = livrosDao.inserir(livro.ficha.copy(id = 0, emCurso = false))
-                if (id <= 0) continue
-                livro.leituras.forEach { livrosDao.inserirLeitura(it.copy(id = 0, livroId = id)) }
+                val emCurso = livro.ficha.emCurso && !haEmCurso
+                if (emCurso) haEmCurso = true
+                val local = livrosDao.porTitulo(livro.titulo)
+                if (local == null) {
+                    val id = livrosDao.inserir(livro.ficha.copy(id = 0, emCurso = emCurso))
+                    if (id <= 0) continue
+                    livro.leituras.forEach { livrosDao.inserirLeitura(it.copy(id = 0, livroId = id)) }
+                } else {
+                    livrosDao.atualizar(
+                        completarFicha(local, livro.ficha).let { if (emCurso) it.copy(emCurso = true) else it }
+                    )
+                    leiturasNovas(livrosDao.leiturasDe(local.id), livro.leituras)
+                        .forEach { livrosDao.inserirLeitura(it.copy(id = 0, livroId = local.id)) }
+                }
             }
             livrosDao.preencherEmFalta()
             livrosDao.preencherAutores()
@@ -203,6 +220,28 @@ object Backup {
             Resultado.Erro(e.message ?: "Falhou a importação.")
         }
     }
+
+    // --- juntar um livro que já existe (puro, testável) ---------------------
+
+    /**
+     * A ficha daqui, completada com o que só a cópia tem. O que está escrito
+     * aqui ganha sempre; a data de criação fica a mais antiga das duas.
+     */
+    internal fun completarFicha(local: FichaLivro, daCopia: FichaLivro): FichaLivro = local.copy(
+        autor = local.autor ?: daCopia.autor,
+        paginas = local.paginas ?: daCopia.paginas,
+        nota = local.nota ?: daCopia.nota,
+        criadoEm = listOf(local.criadoEm, daCopia.criadoEm).filter { it > 0 }.minOrNull() ?: local.criadoEm,
+    )
+
+    /**
+     * As leituras da cópia que aqui não existem: a mesma leitura é a que
+     * começou e acabou nas mesmas datas. Importar duas vezes não as duplica.
+     */
+    internal fun leiturasNovas(locais: List<Leitura>, daCopia: List<Leitura>): List<Leitura> =
+        daCopia.filter { c ->
+            locais.none { it.iniciadaEm == c.iniciadaEm && it.terminadaEm == c.terminadaEm }
+        }
 
     // --- JSON de cada peça ------------------------------------------------
 

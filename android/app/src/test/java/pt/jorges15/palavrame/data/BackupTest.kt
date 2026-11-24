@@ -209,4 +209,30 @@ class BackupTest {
         assertTrue(volta.correcoes.isEmpty())
         assertNull(volta.palavras.single().enviado)
     }
+
+    @Test
+    fun `um livro que ja existe ganha da copia o que lhe falta`() {
+        val local = FichaLivro(id = 7, titulo = "Os Maias", criadoEm = 5000L)
+        val daCopia = FichaLivro(titulo = "Os Maias", autor = "Eça de Queirós", paginas = 714,
+            nota = "Releitura.", criadoEm = 1000L)
+        val junto = Backup.completarFicha(local, daCopia)
+        assertEquals(7L, junto.id)
+        assertEquals("Eça de Queirós", junto.autor)
+        assertEquals(714, junto.paginas)
+        assertEquals("Releitura.", junto.nota)
+        assertEquals(1000L, junto.criadoEm)
+        // O que está escrito aqui ganha.
+        assertEquals("Minha.", Backup.completarFicha(local.copy(nota = "Minha."), daCopia).nota)
+    }
+
+    @Test
+    fun `as leituras da copia entram sem repetir as que ja ca estao`() {
+        val lida = Leitura(livroId = 7, iniciadaEm = 1000L, terminadaEm = 5000L)
+        val aLer = Leitura(livroId = 0, iniciadaEm = 9000L, pagina = 120)
+        val novas = Backup.leiturasNovas(
+            locais = listOf(lida),
+            daCopia = listOf(lida.copy(livroId = 0), aLer),
+        )
+        assertEquals(listOf(aLer), novas)
+    }
 }

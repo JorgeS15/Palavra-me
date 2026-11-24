@@ -63,6 +63,11 @@ Em resumo, para quem vem da 1.21:
 - O tutorial "Como funciona" passa a cinco ecrãs: o primeiro fala do PT/EN,
   e há um novo, "Falta um sentido?", sobre o "Corrigir ou acrescentar". A
   nota de novidades da 1.30 leva a ele.
+- **Importar uma cópia junta os livros em vez de os saltar.** Um livro que
+  já existia no telemóvel (por exemplo, criado ao registar uma palavra dele
+  antes de importar) ganha da cópia o autor, as páginas, a nota e as
+  leituras com as datas que lhe faltam, sem repetir as que já tem. O livro
+  em curso da cópia passa a valer quando o telemóvel não tem nenhum.
 - **O mínimo de 3 palavras para jogar conta-se por língua.** Antes contava
   as línguas juntas: com 3 portuguesas, a primeira palavra inglesa entrava
   logo no jogo, nos lembretes e no "Rever". Agora o inglês só começa à
