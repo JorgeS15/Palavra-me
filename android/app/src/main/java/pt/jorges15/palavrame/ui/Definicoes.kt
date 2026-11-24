@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.ResultadoImportacao
+import pt.jorges15.palavrame.data.Anki
 import pt.jorges15.palavrame.data.Backup
 import pt.jorges15.palavrame.data.CorrecaoGuardada
 import pt.jorges15.palavrame.data.Lingua
@@ -102,6 +103,30 @@ fun EcraDefinicoes(
                 )
             ) {
                 is Backup.Resultado.Feito -> "Exportadas ${r.novas} palavras."
+                is Backup.Resultado.Erro -> "Falhou: ${r.motivo}"
+            }
+        }
+    }
+
+    // Exportar para o Anki (1.31): um ficheiro de texto que o Anki importa
+    // sozinho. Ver `data/Anki.kt`.
+    val exportadorAnki = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { destino ->
+        if (destino == null) return@rememberLauncherForActivityResult
+        ambito.launch {
+            val palavras = app.utilizador.palavras().todasAgora()
+            mensagemBackup = when (val r = Anki.exportar(context, destino, palavras, app::dicionario)) {
+                is Backup.Resultado.Feito -> buildString {
+                    append(if (r.novas == 1) "Exportada 1 palavra" else "Exportadas ${r.novas} palavras")
+                    append(" para o Anki. No Anki: Ficheiro, Importar.")
+                    if (r.repetidas > 0) {
+                        append(
+                            if (r.repetidas == 1) " 1 ficou de fora, por não ter significado."
+                            else " ${r.repetidas} ficaram de fora, por não terem significado."
+                        )
+                    }
+                }
                 is Backup.Resultado.Erro -> "Falhou: ${r.motivo}"
             }
         }
@@ -201,6 +226,14 @@ fun EcraDefinicoes(
                             // o seletor mostrava a cópia a cinzento.
                             { importador.launch(arrayOf("*/*")) },
                             icone = Icons.Rounded.Download,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        // Para rever no Anki ou no AnkiDroid. Exportar outra vez
+                        // atualiza as notas que já lá estão, sem as repetir.
+                        BotaoContornado(
+                            "Exportar para Anki",
+                            { exportadorAnki.launch(Anki.nomeSugerido()) },
+                            icone = Icons.Rounded.Upload,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

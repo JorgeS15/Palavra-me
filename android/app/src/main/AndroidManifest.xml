@@ -59,6 +59,28 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+
+            <!--
+              O "procurar no dicionário" dos leitores de e-books (1.31): o
+              ReadEra, o Moon+, o FBReader e outros não usam o menu de seleção
+              nem o "Partilhar", chamam uma app de dicionário pelos pedidos
+              que o ColorDict e o Aard 2 tornaram habituais. Respondendo a
+              eles, a Palavra-me aparece na lista de dicionários desses
+              leitores. A pesquisa padrão do Android vai pelo mesmo caminho.
+              Ver `PedidoDeTexto`.
+            -->
+            <intent-filter>
+                <action android:name="colordict.intent.action.SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="aard2.lookup" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!--

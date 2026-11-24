@@ -36,6 +36,12 @@ class Novidades(val itens: List<String>, val acao: AcaoNovidade? = null)
 
 /** As notas por `versionCode`. Só as versões com algo a contar. */
 val NOVIDADES: Map<Int, Novidades> = mapOf(
+    39 to Novidades(          // 1.31.0 (o 38 é a 1.30.1)
+        itens = listOf(
+            "No ReadEra e noutros leitores, a Palavra-me aparece em \"procurar no dicionário\".",
+            "Exporta as tuas palavras para o Anki, com o significado, a frase e o livro. Em Definições, As minhas palavras.",
+        ),
+    ),
     37 to Novidades(          // 1.30.0 (junta a 1.22 e a 1.23, que não saíram)
         itens = listOf(
             "Novo separador Livros: o que estás a ler e a página onde vais, os lidos por ano e as datas de cada leitura.",

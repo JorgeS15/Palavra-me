@@ -12,6 +12,28 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
+## [app v1.31.0] - 2026-11-25 (versionCode 39)
+
+Das sugestões do Reddit: os leitores de e-books e o Anki.
+
+### Added
+
+- **A Palavra-me no "procurar no dicionário" dos leitores.** O ReadEra, o
+  Moon+ Reader, o FBReader e outros chamam a app de dicionário pelos pedidos
+  do ColorDict (`colordict.intent.action.SEARCH`) e do Aard 2
+  (`aard2.lookup`), ou pela pesquisa do Android (`SEARCH`). A app passa a
+  responder a eles (além do menu de seleção e do "Partilhar"), e aparece na
+  lista de dicionários desses leitores. A leitura do pedido está em
+  `PedidoDeTexto`, testada na JVM.
+- **Exportar para Anki**, em Definições, As minhas palavras. Um ficheiro de
+  texto que o Anki e o AnkiDroid importam sozinhos (Ficheiro, Importar), no
+  baralho "Palavra-me": a palavra na frente; no verso a classe, o teu
+  significado, até três significados, a frase e o livro. Etiquetas por livro
+  (`livro::Os_Maias`) e `ingles`. Cada palavra tem um GUID fixo, por isso
+  exportar outra vez atualiza as notas sem as repetir nem perder o progresso
+  do Anki. Ficam de fora as palavras sem significado nenhum. Sem rede, como a
+  cópia de segurança.
+
 ## [app v1.30.0] - 2026-11-24 (versionCode 37)
 
 A versão publicada a seguir à 1.21.1. Junta a 1.22 (os livros) e a 1.23 (o

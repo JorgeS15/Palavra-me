@@ -401,12 +401,10 @@ class MainActivity : ComponentActivity() {
         false
     }
 
-    private fun textoRecebido(): String? = when (intent?.action) {
-        Intent.ACTION_PROCESS_TEXT ->
-            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
-        Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
-        else -> null
-    }?.takeIf { it.isNotBlank() }
+    private fun textoRecebido(): String? {
+        val i = intent ?: return null
+        return PedidoDeTexto.texto(i.action) { chave -> i.getCharSequenceExtra(chave)?.toString() }
+    }
 
     private fun fabrica(app: PalavrameApp) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
