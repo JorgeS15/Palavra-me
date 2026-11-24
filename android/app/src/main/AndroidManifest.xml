@@ -8,7 +8,7 @@
       mostra vem do dicionario.db que está no dispositivo.
 
       Continua a ser verdade com o modo jogo: o lembrete diário decide-se
-      todo dentro do telemóvel, a partir da utilizador.db.
+      inteiramente no telemóvel, a partir da utilizador.db.
     -->
 
     <!--
@@ -31,7 +31,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>

@@ -393,7 +393,7 @@ def _check_licenses(
         report.add(
             "licenças por verificar", severity,
             f"{len(unverified)} fontes com licença não confirmada",
-            "; ".join(unverified) + ". Preencher docs/fontes.md e pôr "
+            "; ".join(unverified) + ". Preencher notas/fontes.md e pôr "
             "License(verified=True) antes de distribuir.",
         )
     if non_redistributable:

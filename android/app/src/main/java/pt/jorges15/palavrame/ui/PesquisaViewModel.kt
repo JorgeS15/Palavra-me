@@ -10,19 +10,39 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pt.jorges15.palavrame.data.Candidato
+import pt.jorges15.palavrame.data.CorrecaoGuardada
 import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
+import pt.jorges15.palavrame.data.Leitura
+import pt.jorges15.palavrame.data.Lingua
+import pt.jorges15.palavrame.data.LivroCompleto
+import pt.jorges15.palavrame.data.acertarLivros
+import pt.jorges15.palavrame.data.apagarLivro
+import pt.jorges15.palavrame.data.criarLivro
+import pt.jorges15.palavrame.data.editarLivro
+import pt.jorges15.palavrame.data.escolherEmCurso
+import pt.jorges15.palavrame.data.juntarLivros
+import pt.jorges15.palavrame.data.livrosCompletos
+import pt.jorges15.palavrame.data.marcarPagina
+import pt.jorges15.palavrame.data.pararLivro
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.Parecida
 import pt.jorges15.palavrame.data.Sugestao
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.data.UtilizadorDb
+import pt.jorges15.palavrame.data.comecarLivro
+import pt.jorges15.palavrame.data.terminarLivro
 import pt.jorges15.palavrame.jogo.MINIMO_PARA_JOGAR
+import pt.jorges15.palavrame.jogo.chave
+import pt.jorges15.palavrame.jogo.chaveDe
+import pt.jorges15.palavrame.jogo.lemaDaChave
+import pt.jorges15.palavrame.jogo.linguaDaChave
 
 data class EstadoPesquisa(
     val texto: String = "",
@@ -32,10 +52,17 @@ data class EstadoPesquisa(
     val procurou: Boolean = false,
     /** "Querias dizer", com a primeira definição de cada uma. */
     val parecidas: List<Parecida> = emptyList(),
+    /** Em que dicionário se procura (`Lingua`). */
+    val lingua: String = Lingua.PT,
+    /**
+     * Não encontrada nesta língua, mas existe na outra: a língua onde está,
+     * para o ecrã oferecer "Ver em inglês". Nula no caso normal.
+     */
+    val existeNaOutra: String? = null,
 )
 
 /** Um livro já na coleção, com o autor que lhe ficou associado (se algum). */
-data class Livro(val titulo: String, val autor: String?)
+data class Livro(val titulo: String, val autor: String?, val lingua: String = Lingua.PT)
 
 class PesquisaViewModel(
     /**
@@ -43,11 +70,17 @@ class PesquisaViewModel(
      * do arranque: instalar uma base nova (em "Dicionário e licenças") fecha a
      * antiga, e uma referência guardada rebentava na pesquisa seguinte.
      */
-    private val obterDicionario: () -> Dicionario?,
+    private val obterDicionario: (lingua: String) -> Dicionario?,
     private val utilizador: UtilizadorDb,
+    /** As línguas com dicionário instalado: só essas se oferecem na pesquisa. */
+    private val obterLinguas: () -> List<String> = { listOf(Lingua.PT) },
 ) : ViewModel() {
 
-    private val dicionario: Dicionario? get() = obterDicionario()
+    /** O dicionário da língua em que se está a procurar. */
+    private val dicionario: Dicionario? get() = obterDicionario(_estado.value.lingua)
+
+    /** As línguas a oferecer. Sem o inglês instalado, a escolha não aparece. */
+    val linguas: List<String> get() = obterLinguas().ifEmpty { listOf(Lingua.PT) }
 
     private val _estado = MutableStateFlow(EstadoPesquisa())
     val estado: StateFlow<EstadoPesquisa> = _estado.asStateFlow()
@@ -91,17 +124,129 @@ class PesquisaViewModel(
      * recente** que foi escrito para ele: se o corrigiste na última palavra
      * que registaste desse livro, é essa correção que passa a preencher-se.
      */
-    val livrosUsados: Flow<List<Livro>> = palavrasGuardadas.map { lista ->
+    val livrosUsados: Flow<List<Livro>> = combine(
+        palavrasGuardadas, utilizador.livros().fichas(),
+    ) { lista, fichas ->
         // A lista vem por data decrescente (ver o DAO), portanto o primeiro
-        // registo de cada título é o mais recente. `groupBy` mantém essa ordem
-        // dentro de cada grupo, e fica-se com o primeiro autor escrito. (Era
-        // `associate`, que guarda o ÚLTIMO valor de cada chave: pré-preenchia
-        // o autor mais antigo, ao contrário do que se queria.)
-        lista.filter { !it.livro.isNullOrBlank() }
-            .groupBy { it.livro!! }
+        // registo de cada título é o mais recente. O autor da ficha do livro
+        // (1.22) vale mais do que o das palavras; sem ficha, o mais recente
+        // escrito.
+        val autorDaFicha = fichas.associate { it.titulo to it.autor }
+        val linguaDaFicha = fichas.associate { it.titulo to it.lingua }
+        val dasPalavras = lista.filter { !it.livro.isNullOrBlank() }
+            .groupBy { it.livro!!.trim() }
             .map { (titulo, registos) ->
-                Livro(titulo, registos.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) })
+                Livro(
+                    titulo,
+                    autorDaFicha[titulo]
+                        ?: registos.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
+                    linguaDaFicha[titulo] ?: registos.first().lingua,
+                )
             }
+        // Os livros começados sem palavras também se escolhem, os mais novos primeiro.
+        val usados = dasPalavras.map { it.titulo }.toSet()
+        dasPalavras + fichas.filter { it.titulo !in usados }
+            .sortedByDescending { it.criadoEm }
+            .map { Livro(it.titulo, it.autor, it.lingua) }
+    }
+
+    /**
+     * Os livros (1.22): as fichas com as leituras, por título. As palavras
+     * apontam para eles pelo título (ver `data/Livros.kt`).
+     */
+    val livros: StateFlow<Map<String, LivroCompleto>> = combine(
+        utilizador.livros().fichas(), utilizador.livros().leituras(),
+    ) { fichas, leituras -> livrosCompletos(fichas, leituras) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** O livro que vem já escolhido ao registar uma palavra. */
+    val livroEmCurso: StateFlow<Livro?> = livros.map { mapa ->
+        mapa.values.firstOrNull { it.ficha.emCurso }?.let { Livro(it.titulo, it.ficha.autor, it.ficha.lingua) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    init {
+        // A pesquisa abre na língua do livro que se está a ler: quem lê um
+        // romance em inglês procura em inglês sem ter de o dizer. Muda só
+        // quando muda o livro em curso; a escolha à mão vale até lá.
+        viewModelScope.launch {
+            var anterior: String? = null
+            livroEmCurso.collect { livro ->
+                val l = livro?.lingua ?: return@collect
+                if (l == anterior || l !in linguas) return@collect
+                anterior = l
+                val e = _estado.value
+                if (e.lingua != l && !e.procurou && e.texto.isEmpty() && e.entrada == null) {
+                    _estado.value = e.copy(lingua = l)
+                }
+            }
+        }
+    }
+
+    /**
+     * PT/EN, na pesquisa. Com uma pesquisa feita, refaz-se na outra língua;
+     * a meio de escrever, refazem-se as sugestões.
+     */
+    fun escolherLingua(lingua: String) {
+        if (lingua == _estado.value.lingua || lingua !in linguas) return
+        val antes = _estado.value
+        historico.clear()
+        _estado.value = antes.copy(lingua = lingua, existeNaOutra = null, entrada = null, candidatos = emptyList())
+        when {
+            antes.entrada != null -> procurar(antes.entrada.lemma)
+            antes.procurou -> procurar(antes.texto)
+            antes.texto.isNotEmpty() -> escrever(antes.texto)
+        }
+    }
+
+    private fun agora() = System.currentTimeMillis()
+
+    /** "Estou a ler", "Retomar", "Voltar a ler". */
+    fun comecarLivro(titulo: String) {
+        viewModelScope.launch { utilizador.comecarLivro(titulo.trim(), agora()) }
+    }
+
+    /** "Em que página vais?" (e, se vier, as páginas do livro). */
+    fun marcarPagina(titulo: String, pagina: Int, paginasDoLivro: Int?) {
+        viewModelScope.launch { utilizador.marcarPagina(titulo.trim(), pagina, paginasDoLivro, agora()) }
+    }
+
+    fun pararLivro(titulo: String) {
+        viewModelScope.launch { utilizador.pararLivro(titulo.trim()) }
+    }
+
+    fun terminarLivro(titulo: String) {
+        viewModelScope.launch { utilizador.terminarLivro(titulo.trim(), agora()) }
+    }
+
+    /** Só "vem já escolhido ao registar" (nulo: nenhum). */
+    fun escolherEmCurso(titulo: String?) {
+        viewModelScope.launch { utilizador.escolherEmCurso(titulo?.trim()) }
+    }
+
+    suspend fun criarLivro(
+        titulo: String, autor: String?, paginas: Int?, comecar: Boolean, lingua: String = Lingua.PT,
+    ): Boolean = utilizador.criarLivro(titulo, autor, paginas, comecar, agora(), lingua)
+
+    suspend fun editarLivro(
+        id: Long, titulo: String, autor: String?, paginas: Int?, nota: String?, lingua: String? = null,
+    ) = utilizador.editarLivro(id, titulo, autor, paginas, nota, lingua)
+
+    fun juntarLivros(deId: Long, paraId: Long) {
+        viewModelScope.launch { utilizador.juntarLivros(deId, paraId) }
+    }
+
+    suspend fun apagarLivro(id: Long): Boolean = utilizador.apagarLivro(id)
+
+    /** Corrigir as datas de uma leitura (ou acrescentar uma, com id 0). */
+    fun gravarLeitura(leitura: Leitura) {
+        viewModelScope.launch {
+            val dao = utilizador.livros()
+            if (leitura.id == 0L) dao.inserirLeitura(leitura) else dao.atualizarLeitura(leitura)
+        }
+    }
+
+    fun apagarLeitura(id: Long) {
+        viewModelScope.launch { utilizador.livros().apagarLeitura(id) }
     }
 
     /** O trabalho da tecla anterior: cancela-se quando se escreve outra. */
@@ -190,6 +335,14 @@ class PesquisaViewModel(
             val parecidas = if (candidatos.isEmpty()) {
                 withContext(Dispatchers.IO) { dicionario?.parecidasComDefinicao(texto).orEmpty() }
             } else emptyList()
+            // E se estiver no outro dicionário? Quem procura "wistful" com o
+            // português escolhido não deve ficar só com "não encontrada".
+            val existeNaOutra = if (candidatos.isEmpty()) {
+                val outra = Lingua.outra(_estado.value.lingua)
+                withContext(Dispatchers.IO) {
+                    outra.takeIf { it in linguas && obterDicionario(it)?.procurar(texto).orEmpty().isNotEmpty() }
+                }
+            } else null
 
             empilhar(entrada)
             _estado.value = _estado.value.copy(
@@ -199,9 +352,23 @@ class PesquisaViewModel(
                 entrada = entrada,
                 procurou = true,
                 parecidas = parecidas,
+                existeNaOutra = existeNaOutra,
             )
             depois()
         }
+    }
+
+    /**
+     * Abre uma palavra da coleção, pela chave (`chaveDe`): procura-a no
+     * dicionário da língua dela, seja qual for a escolhida.
+     */
+    fun procurarGuardada(chave: String, depois: () -> Unit = {}) {
+        val l = linguaDaChave(chave)
+        if (l in linguas && l != _estado.value.lingua) {
+            historico.clear()
+            _estado.value = _estado.value.copy(lingua = l, entrada = null, candidatos = emptyList())
+        }
+        procurar(lemaDaChave(chave), depois)
     }
 
     fun abrir(candidato: Candidato) {
@@ -242,7 +409,8 @@ class PesquisaViewModel(
         aEscrever?.cancel()
         historico.clear()
         _fraseSugerida.value = null
-        _estado.value = EstadoPesquisa()
+        // A língua escolhida fica: limpar a pesquisa não é mudar de livro.
+        _estado.value = EstadoPesquisa(lingua = _estado.value.lingua)
     }
 
     fun fecharEntrada() {
@@ -250,15 +418,69 @@ class PesquisaViewModel(
     }
 
     fun registar(palavra: PalavraGuardada) {
-        viewModelScope.launch { utilizador.palavras().guardar(palavra) }
+        viewModelScope.launch {
+            utilizador.palavras().guardar(palavra)
+            // Um livro novo ganha a ficha dele.
+            utilizador.acertarLivros()
+        }
     }
 
-    fun esquecer(lemma: String) {
-        viewModelScope.launch { utilizador.palavras().esquecer(lemma) }
+    // --- sugestões ao dicionário (1.30) ---------------------------------------
+
+    /** As correções que a pessoa fez às aceções desta palavra. */
+    fun correcoesDe(lemma: String, lingua: String): Flow<List<CorrecaoGuardada>> =
+        utilizador.correcoes().daPalavra(lemma, lingua)
+
+    /** Guarda (texto) ou apaga (nulo) a correção a uma aceção; devolve a guardada. */
+    suspend fun guardarCorrecao(
+        lemma: String,
+        lingua: String,
+        acecao: pt.jorges15.palavrame.data.Acecao,
+        classe: String?,
+        texto: String?,
+    ): CorrecaoGuardada? = withContext(Dispatchers.IO) {
+        val dao = utilizador.correcoes()
+        if (texto == null) {
+            dao.apagar(lemma, lingua, acecao.ord)
+            return@withContext null
+        }
+        val c = CorrecaoGuardada(
+            id = dao.da(lemma, lingua, acecao.ord)?.id ?: 0,
+            lemma = lemma,
+            lingua = lingua,
+            acecaoOrd = acecao.ord,
+            acecaoTexto = acecao.definicao,
+            acecaoFonte = acecao.fonte + if (acecao.modernizada) " (fraseado adaptado)" else "",
+            classe = classe,
+            texto = texto,
+        )
+        c.copy(id = dao.guardar(c))
+    }
+
+    /** A palavra como sugestão por enviar, se o é (para o "Submeter ao dicionário"). */
+    suspend fun faltaDe(palavra: PalavraGuardada): PalavraEmFalta? =
+        faltaDe(obterDicionario(palavra.lingua), palavra)
+
+    suspend fun marcarEnviadas(faltas: List<PalavraEmFalta>, correcoes: List<CorrecaoGuardada>) =
+        marcarSugestoesEnviadas(utilizador, faltas, correcoes)
+
+    /** Guarda já, e não em `viewModelScope.launch`: quem chama quer a palavra guardada a seguir. */
+    suspend fun guardarAgora(palavra: PalavraGuardada) = withContext(Dispatchers.IO) {
+        val existente = utilizador.palavras().porLema(palavra.lemma, palavra.lingua)
+        if (existente != null) utilizador.palavras().atualizar(palavra.copy(id = existente.id))
+        else utilizador.palavras().guardar(palavra)
+        utilizador.acertarLivros()
+    }
+
+    fun esquecer(lemma: String, lingua: String = _estado.value.lingua) {
+        viewModelScope.launch { utilizador.palavras().esquecer(lemma, lingua) }
     }
 
     fun atualizar(palavra: PalavraGuardada) {
-        viewModelScope.launch { utilizador.palavras().atualizar(palavra) }
+        viewModelScope.launch {
+            utilizador.palavras().atualizar(palavra)
+            utilizador.acertarLivros()
+        }
     }
 
     fun apagar(palavra: PalavraGuardada) {
@@ -281,14 +503,14 @@ class PesquisaViewModel(
      * imagem: pela grafia exata e, se falhar, pelas formas (como a pesquisa).
      * Nula se a palavra não está no dicionário.
      */
-    suspend fun entradaPara(lemma: String): Entrada? = withContext(Dispatchers.IO) {
-        val d = dicionario ?: return@withContext null
+    suspend fun entradaPara(lemma: String, lingua: String = Lingua.PT): Entrada? = withContext(Dispatchers.IO) {
+        val d = obterDicionario(lingua) ?: return@withContext null
         d.entradaPorLema(lemma) ?: d.procurar(lemma).firstOrNull()?.let { d.entrada(it.lemmaId) }
     }
 
-    /** Lemas já na coleção — o botão precisa de saber se já lá está. */
+    /** Palavras já na coleção, pela chave (`chaveDe`): o botão precisa de saber se já lá está. */
     val lemasGuardados: Flow<Set<String>> =
-        palavrasGuardadas.map { lista -> lista.map { it.lemma }.toSet() }
+        palavrasGuardadas.map { lista -> lista.map { it.chave }.toSet() }
 
     /**
      * Há mesmo alguma coisa a rever agora? Alimenta o botão "Rever" do ecrã
@@ -301,9 +523,14 @@ class PesquisaViewModel(
      * disso com elegância.
      */
     val porRever: Flow<Int> = palavrasGuardadas.map { lista ->
-        if (lista.size < MINIMO_PARA_JOGAR) return@map 0
+        // Como no jogo: só contam as línguas com o mínimo de palavras (uma
+        // primeira palavra inglesa não faz aparecer o "Rever").
+        val porLingua = lista.groupingBy { it.lingua }.eachCount()
         val agora = System.currentTimeMillis()
-        lista.count { it.proximaRevisao == null || it.proximaRevisao <= agora }
+        lista.count {
+            (porLingua[it.lingua] ?: 0) >= MINIMO_PARA_JOGAR &&
+                (it.proximaRevisao == null || it.proximaRevisao <= agora)
+        }
     }
 }
 
@@ -324,40 +551,81 @@ data class PalavraEmFalta(
     val lemma: String,
     val significadoProprio: String?,
     val tipo: TipoFalta,
+    /** De que dicionário falta (1.30: também o inglês). */
+    val lingua: String = Lingua.PT,
 )
 
 /**
- * As palavras registadas que o dicionário não cobre: as que não existem lá de
- * todo, as que existem mas sem significado atribuído, e as que têm definição
- * mas a que o utilizador juntou a sua (um sentido em falta). É o que se
- * submete para a curadoria, e distingue-se cada caso, como o Jorge pediu.
+ * Se a palavra falta ao dicionário da língua dela, e como: não existe lá de
+ * modo nenhum, existe sem significado, ou tem definição mas a pessoa juntou a sua
+ * (um sentido em falta). Nula se não há nada a propor.
+ *
+ * Primeiro a grafia exata; se falhar, pelas formas (como a pesquisa). Assim
+ * uma palavra registada no plural ou com outra grafia deixa de contar como
+ * "em falta" quando o dicionário a passa a ter.
+ */
+private fun classificarFalta(dic: Dicionario, p: PalavraGuardada): PalavraEmFalta? {
+    val entrada = dic.entradaPorLema(p.lemma)
+        ?: dic.procurar(p.lemma).firstOrNull()?.let { dic.entrada(it.lemmaId) }
+    val tipo = when {
+        entrada == null -> TipoFalta.NAO_ENCONTRADA
+        entrada.acecoes.isEmpty() -> TipoFalta.SEM_SIGNIFICADO
+        // Com definição e com o significado do próprio: falta um sentido. Se a
+        // curadoria já lhe acrescentou um, o pedido foi atendido (o significado
+        // do utilizador fica na coleção, mas deixa de se propor).
+        !p.significado.isNullOrBlank() &&
+            entrada.acecoes.none { it.fonte == FONTE_CURADORIA } -> TipoFalta.SENTIDO_EM_FALTA
+        else -> return null
+    }
+    return PalavraEmFalta(p.lemma, p.significado, tipo, p.lingua)
+}
+
+/**
+ * As palavras registadas que o dicionário não cobre (ver `classificarFalta`).
+ * É o que se submete para a curadoria. Desde a 1.30, de todas as línguas
+ * instaladas: as inglesas também se propõem, marcadas como tal no email.
  *
  * Corre em IO: percorre a coleção e consulta o dicionário por cada palavra.
  */
 suspend fun palavrasEmFalta(
-    dicionario: Dicionario?,
+    /** O dicionário de cada língua; nulo se não está instalado. */
+    dicionarioDe: (String) -> Dicionario?,
     utilizador: UtilizadorDb,
+    /**
+     * Só as que ainda não foram enviadas (1.30): uma palavra enviada não volta
+     * a propor-se, a não ser que o significado dela tenha mudado desde então.
+     */
+    soPorEnviar: Boolean = true,
 ): List<PalavraEmFalta> = withContext(Dispatchers.IO) {
-    val dic = dicionario ?: return@withContext emptyList()
-    utilizador.palavras().todasAgora().mapNotNull { p ->
-        // Primeiro a grafia exata; se falhar, pelas formas (como a pesquisa).
-        // Assim uma palavra registada no plural ou com outra grafia deixa de
-        // contar como "em falta" quando o dicionário a passa a ter.
-        val entrada = dic.entradaPorLema(p.lemma)
-            ?: dic.procurar(p.lemma).firstOrNull()?.let { dic.entrada(it.lemmaId) }
-        when {
-            entrada == null ->
-                PalavraEmFalta(p.lemma, p.significado, TipoFalta.NAO_ENCONTRADA)
-            entrada.acecoes.isEmpty() ->
-                PalavraEmFalta(p.lemma, p.significado, TipoFalta.SEM_SIGNIFICADO)
-            // Com definição e com o significado do próprio: falta um sentido.
-            // Se a curadoria já lhe acrescentou um, o pedido foi atendido (o
-            // significado do utilizador fica na coleção, mas deixa de se
-            // propor de novo a cada envio).
-            !p.significado.isNullOrBlank() &&
-                entrada.acecoes.none { it.fonte == FONTE_CURADORIA } ->
-                PalavraEmFalta(p.lemma, p.significado, TipoFalta.SENTIDO_EM_FALTA)
-            else -> null
-        }
+    utilizador.palavras().todasAgora()
+        .filter { !soPorEnviar || it.enviado == null || it.enviado != it.significado.orEmpty() }
+        .mapNotNull { p -> dicionarioDe(p.lingua)?.let { classificarFalta(it, p) } }
+}
+
+/**
+ * Marca como enviadas as sugestões que acabaram de ir por email (1.30), para
+ * não voltarem à lista. Não se sabe se o email chegou a sair (é a app de email
+ * que o envia), mas abrir o email já é a decisão de enviar.
+ */
+suspend fun marcarSugestoesEnviadas(
+    utilizador: UtilizadorDb,
+    faltas: List<PalavraEmFalta>,
+    correcoes: List<pt.jorges15.palavrame.data.CorrecaoGuardada>,
+) = withContext(Dispatchers.IO) {
+    faltas.forEach {
+        utilizador.palavras().marcarEnviada(it.lemma, it.lingua, it.significadoProprio.orEmpty())
     }
+    if (correcoes.isNotEmpty()) utilizador.correcoes().marcarEnviadas(correcoes.map { it.id })
+}
+
+/**
+ * A palavra como sugestão por enviar, se o for: o mesmo critério da lista de
+ * Definições, Contribuir, para uma palavra só (o "Submeter ao dicionário"
+ * depois de guardar). Nula se não há nada a propor.
+ */
+suspend fun faltaDe(
+    dicionario: Dicionario?,
+    palavra: PalavraGuardada,
+): PalavraEmFalta? = withContext(Dispatchers.IO) {
+    dicionario?.let { classificarFalta(it, palavra) }
 }

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,7 +29,11 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -61,7 +65,8 @@ import kotlin.math.roundToInt
 /*
  * "Partilhar palavra": uma imagem com a palavra, o significado e o livro,
  * pronta para Stories ou para uma publicação. Desenho em
- * `design_handoff_partilhar_palavra/`.
+ * `design_handoff_partilhar_palavra/`. Também a imagem do livro lido
+ * (título, datas, quantas palavras e algumas delas), no mesmo estilo.
  *
  * Tudo no telemóvel e sem rede: o cartão é um composable desenhado a 360 dp
  * de largura com a densidade fixada em 3, e por isso sai sempre com 1080 px,
@@ -468,6 +473,285 @@ private fun Assinatura(c: CoresCartao) {
     }
 }
 
+// --- o cartão do livro lido -----------------------------------------------------
+
+/** O que vai na imagem do livro lido (ver `dadosLivroLido`, em Livros.kt). */
+internal data class DadosLivroLido(
+    val titulo: String,
+    val autor: String?,
+    /** "Lido de março a maio de 2026"; sai em maiúsculas. Nulo sem datas. */
+    val periodo: String?,
+    /** "Guardei 32 palavras neste livro, em 47 dias de leitura." */
+    val frase: String,
+    /** A parte da frase em destaque ("32 palavras"), se a houver. */
+    val destaque: String?,
+    /** Até quatro: a palavra e uma linha de significado (pode faltar). */
+    val palavras: List<Pair<String, String?>>,
+)
+
+private class MedidasLivro(
+    val altura: Dp,
+    val cima: Dp, val lados: Dp, val baixo: Dp,
+    val espaco: Dp,
+    val capa: Pair<Dp, Dp>, val espacoCapa: Dp,
+    val tituloCapa: Float, val autorCapa: Float,
+    /** O título: máximo e mínimo, com capa ao lado e sem ela (cor do livro). */
+    val tituloComCapa: Pair<Float, Float>, val tituloSemCapa: Pair<Float, Float>,
+    val autor: Float, val rotulo: Float,
+    val frase: Float, val fraseEntrelinha: Float,
+    val raioBloco: Dp, val paddingBloco: Dp, val espacoPalavras: Dp,
+    val palavra: Float, val significado: Float,
+    val quantas: Int,
+    /** Significado por baixo da palavra (Stories) ou ao lado (Publicação). */
+    val significadoPorBaixo: Boolean,
+)
+
+private val LIVRO_STORIES = MedidasLivro(
+    altura = 640.dp, cima = 60.dp, lados = 30.dp, baixo = 72.dp, espaco = 24.dp,
+    capa = 76.dp to 108.dp, espacoCapa = 16.dp, tituloCapa = 10.5f, autorCapa = 7f,
+    tituloComCapa = 34f to 24f, tituloSemCapa = 52f to 30f,
+    autor = 17f, rotulo = 10.5f, frase = 18f, fraseEntrelinha = 1.45f,
+    raioBloco = 16.dp, paddingBloco = 14.dp, espacoPalavras = 10.dp,
+    palavra = 19f, significado = 14f, quantas = 4, significadoPorBaixo = true,
+)
+
+private val LIVRO_PUBLICACAO = MedidasLivro(
+    altura = 450.dp, cima = 30.dp, lados = 28.dp, baixo = 26.dp, espaco = 16.dp,
+    capa = 56.dp to 80.dp, espacoCapa = 14.dp, tituloCapa = 8.5f, autorCapa = 6f,
+    tituloComCapa = 30f to 22f, tituloSemCapa = 40f to 26f,
+    autor = 15f, rotulo = 10f, frase = 16f, fraseEntrelinha = 1.42f,
+    raioBloco = 14.dp, paddingBloco = 12.dp, espacoPalavras = 8.dp,
+    palavra = 17f, significado = 13f, quantas = 3, significadoPorBaixo = false,
+)
+
+/** Desenho em `Palavra-me: imagem do livro lido` (Claude Design, 2026-11-22). */
+@Composable
+private fun CartaoLivroLido(dados: DadosLivroLido, formato: FormatoPartilha, usarCorDoLivro: Boolean) {
+    val m = if (formato == FormatoPartilha.STORIES) LIVRO_STORIES else LIVRO_PUBLICACAO
+    val corLivro = if (usarCorDoLivro) corDoLivro(dados.titulo) else null
+    val c = if (corLivro != null) cartaoCorDoLivro(corLivro) else coresDaPaleta()
+    val lombada = if (corLivro != null) 12.dp else 0.dp
+    val larguraUtil = LARGURA_CARTAO - m.lados.value * 2 - lombada.value
+
+    Box(Modifier.size(LARGURA_CARTAO.dp, m.altura).background(c.bg)) {
+        if (corLivro != null) {
+            Box(Modifier.fillMaxHeight().width(12.dp).background(Color.Black.copy(alpha = 0.24f)))
+            Box(
+                Modifier.fillMaxHeight().width(1.dp).offset(x = 12.dp)
+                    .background(Color.White.copy(alpha = 0.08f))
+            )
+        }
+        Column(
+            Modifier.fillMaxSize()
+                .padding(start = m.lados + lombada, end = m.lados, top = m.cima, bottom = m.baixo),
+        ) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(m.espaco, Alignment.CenterVertically),
+            ) {
+                if (corLivro == null) {
+                    // Cores da app: a capa ao lado do título.
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        CapaLivroLido(dados.titulo, dados.autor, m)
+                        Spacer(Modifier.width(m.espacoCapa))
+                        CabecalhoLivro(
+                            dados, m, c, m.tituloComCapa,
+                            larguraUtil - m.capa.first.value - m.espacoCapa.value,
+                        )
+                    }
+                } else {
+                    // Cor do livro: o cartão já é a capa.
+                    CabecalhoLivro(dados, m, c, m.tituloSemCapa, larguraUtil)
+                }
+                val estiloFrase = TextStyle(
+                    fontFamily = Estilo.leitura, fontSize = m.frase.sp, lineHeight = m.fraseEntrelinha.em,
+                )
+                Text(
+                    buildAnnotatedString {
+                        val i = dados.destaque?.let { dados.frase.indexOf(it) } ?: -1
+                        if (i < 0) append(dados.frase)
+                        else {
+                            append(dados.frase.substring(0, i))
+                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(dados.destaque!!) }
+                            append(dados.frase.substring(i + dados.destaque!!.length))
+                        }
+                    },
+                    style = estiloFrase,
+                    color = c.ink,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val palavras = dados.palavras.take(m.quantas)
+                if (palavras.isNotEmpty()) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(m.raioBloco))
+                            .background(c.bloco)
+                            .padding(m.paddingBloco),
+                        verticalArrangement = Arrangement.spacedBy(m.espacoPalavras),
+                    ) {
+                        palavras.forEach { (lema, significado) -> LinhaPalavraLivro(lema, significado, m, c) }
+                    }
+                }
+            }
+            Assinatura(c)
+        }
+    }
+}
+
+/** O rótulo das datas, o título com o marcador e o autor. */
+@Composable
+private fun CabecalhoLivro(
+    dados: DadosLivroLido,
+    m: MedidasLivro,
+    c: CoresCartao,
+    tamanhos: Pair<Float, Float>,
+    util: Float,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        dados.periodo?.let {
+            Text(
+                it.uppercase(),
+                style = TextStyle(
+                    fontFamily = Estilo.controlos, fontWeight = FontWeight.Bold,
+                    fontSize = m.rotulo.sp, letterSpacing = 0.12.em,
+                ),
+                color = c.accent,
+                maxLines = 2,
+            )
+        }
+        TituloComMarcador(dados.titulo, tamanhos, util, c)
+        dados.autor?.let {
+            Text(
+                it,
+                style = TextStyle(fontFamily = Estilo.leitura, fontStyle = FontStyle.Italic, fontSize = m.autor.sp),
+                color = c.ink2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * O título, que pode ter várias linhas: o tamanho desce até a palavra mais
+ * comprida caber, e o marcador desenha-se em cada linha.
+ */
+@Composable
+private fun TituloComMarcador(titulo: String, tamanhos: Pair<Float, Float>, util: Float, c: CoresCartao) {
+    val (maximo, minimo) = tamanhos
+    val medidor = rememberTextMeasurer()
+    val densidade = LocalDensity.current
+    val base = TextStyle(
+        fontFamily = Estilo.leitura, fontWeight = FontWeight.SemiBold,
+        lineHeight = 1.02.em, letterSpacing = (-0.03).em,
+    )
+    val tamanho = remember(titulo, util, tamanhos, base) {
+        val maior = titulo.split(" ").filter { it.isNotBlank() }.maxOfOrNull { palavra ->
+            val px = medidor.measure(palavra, base.copy(fontSize = 100.sp), softWrap = false).size.width
+            with(densidade) { px.toDp().value }
+        } ?: 0f
+        val cabe = if (maior <= 0f) maximo else util / maior * 100f * 0.97f
+        // Um título comprido desce um pouco, para não ocupar meio cartão.
+        val teto = if (titulo.length > 28) maximo * 0.78f else maximo
+        cabe.coerceAtMost(teto).coerceAtLeast(minimo)
+    }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    Text(
+        titulo,
+        style = base.copy(fontSize = tamanho.sp),
+        color = c.ink,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { layout = it },
+        modifier = Modifier.drawBehind {
+            val l = layout ?: return@drawBehind
+            val folga = 0.06f * tamanho * density
+            for (i in 0 until l.lineCount) {
+                val topo = l.getLineTop(i)
+                val altura = l.getLineBottom(i) - topo
+                val esquerda = l.getLineLeft(i) - folga
+                drawRect(
+                    c.mark,
+                    topLeft = Offset(esquerda, topo + altura * 0.60f),
+                    size = Size(l.getLineRight(i) + folga - esquerda, altura * 0.30f),
+                )
+            }
+        },
+    )
+}
+
+/** A capa do livro lido (só nas cores da app): como a da partilha de uma palavra, maior. */
+@Composable
+private fun CapaLivroLido(titulo: String, autor: String?, m: MedidasLivro) {
+    val (largura, altura) = m.capa
+    Box(
+        Modifier.size(largura, altura)
+            .clip(RoundedCornerShape(2.dp, 5.dp, 5.dp, 2.dp))
+            .background(corDoLivro(titulo) ?: Color.Gray)
+    ) {
+        Box(Modifier.fillMaxHeight().width(largura * 0.066f).background(Color.Black.copy(alpha = 0.22f)))
+        Column(
+            Modifier.fillMaxSize()
+                .padding(start = largura * 0.16f, end = largura * 0.09f, top = altura * 0.085f, bottom = altura * 0.075f),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                titulo,
+                style = TextStyle(
+                    fontFamily = Estilo.leitura, fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.SemiBold, fontSize = m.tituloCapa.sp, lineHeight = 1.15.em,
+                ),
+                color = TextoCapa,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+            autor?.let {
+                Text(
+                    it.uppercase(),
+                    style = TextStyle(fontFamily = Estilo.controlos, fontSize = m.autorCapa.sp, letterSpacing = 0.04.em),
+                    color = TextoCapa.copy(alpha = 0.8f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** Uma palavra do livro, com uma linha do significado. */
+@Composable
+private fun LinhaPalavraLivro(lema: String, significado: String?, m: MedidasLivro, c: CoresCartao) {
+    val estiloLema = TextStyle(
+        fontFamily = Estilo.leitura, fontWeight = FontWeight.SemiBold,
+        fontSize = m.palavra.sp, lineHeight = 1.25.em,
+    )
+    val estiloSignificado = TextStyle(fontFamily = Estilo.leitura, fontSize = m.significado.sp, lineHeight = 1.4.em)
+    if (m.significadoPorBaixo) {
+        Column {
+            Text(lema, style = estiloLema, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            significado?.let {
+                Text(it, style = estiloSignificado, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    } else {
+        Row {
+            Text(
+                lema, style = estiloLema, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.alignByBaseline(),
+            )
+            significado?.let {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    it, style = estiloSignificado, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false).alignByBaseline(),
+                )
+            }
+        }
+    }
+}
+
 // --- ajuste e corte da palavra (puro, testado) ----------------------------------
 
 private const val VOGAIS = "aeiouáéíóúâêôãõàüy"
@@ -562,6 +846,30 @@ fun DialogoPartilhar(
     dados: DadosPartilha,
     aoFechar: () -> Unit,
     aoPartilharTexto: (() -> Unit)? = null,
+) = DialogoImagem(
+    nomeFicheiro = dados.lemma,
+    temLivro = dados.livro != null,
+    aoFechar = aoFechar,
+    aoPartilharTexto = aoPartilharTexto,
+) { formato, corDoLivro -> CartaoPartilha(dados, formato, corDoLivro && dados.livro != null) }
+
+/** A imagem do livro lido: o mesmo ecrã, com o cartão do livro. */
+@Composable
+internal fun DialogoPartilharLivro(dados: DadosLivroLido, aoFechar: () -> Unit) = DialogoImagem(
+    nomeFicheiro = "livro " + dados.titulo,
+    temLivro = true,
+    aoFechar = aoFechar,
+    aoPartilharTexto = null,
+) { formato, corDoLivro -> CartaoLivroLido(dados, formato, corDoLivro) }
+
+/** O ecrã de partilha, com o cartão que se lhe der. */
+@Composable
+private fun DialogoImagem(
+    nomeFicheiro: String,
+    temLivro: Boolean,
+    aoFechar: () -> Unit,
+    aoPartilharTexto: (() -> Unit)?,
+    cartao: @Composable (FormatoPartilha, Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val ambito = rememberCoroutineScope()
@@ -588,7 +896,7 @@ fun DialogoPartilhar(
                     camada = camada,
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                 ) {
-                    CartaoPartilha(dados, formato, comCorDoLivro && dados.livro != null)
+                    cartao(formato, comCorDoLivro)
                 }
                 Column(
                     Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
@@ -600,7 +908,7 @@ fun DialogoPartilhar(
                         aoEscolher = { formato = FormatoPartilha.entries[it] },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    if (dados.livro != null) {
+                    if (temLivro) {
                         Segmentado(
                             listOf("Cores da app", "Cor do livro"),
                             selecionado = if (comCorDoLivro) 1 else 0,
@@ -616,7 +924,7 @@ fun DialogoPartilhar(
                             erro = null
                             ambito.launch {
                                 erro = try {
-                                    partilharImagem(context, camada, dados.lemma); null
+                                    partilharImagem(context, camada, nomeFicheiro); null
                                 } catch (e: Exception) {
                                     "Não foi possível preparar a imagem."
                                 }
@@ -624,7 +932,7 @@ fun DialogoPartilhar(
                             }
                         },
                         ativo = !aGerar,
-                        icone = Icons.Rounded.IosShare,
+                        icone = Icons.Rounded.Share,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (aoPartilharTexto != null) {

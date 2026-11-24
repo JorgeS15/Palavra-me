@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,6 +71,21 @@ class MigracoesTest {
         db.close()
     }
 
+    /** A v5 das versões de teste da 1.22: a tabela `livros` por título. */
+    private fun criarV5(preencher: SQLiteDatabase.() -> Unit) {
+        criarV3 {}
+        val db = SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(nome), null)
+        db.execSQL("ALTER TABLE saved_words ADD COLUMN significado TEXT")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `livros` (`titulo` TEXT NOT NULL,"
+                + " `iniciado_em` INTEGER, `terminado_em` INTEGER,"
+                + " `em_curso` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`titulo`))"
+        )
+        db.preencher()
+        db.version = 5
+        db.close()
+    }
+
     private fun criarV3(preencher: SQLiteDatabase.() -> Unit) {
         val db = SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(nome), null)
         db.execSQL(tabelaV1)
@@ -128,6 +144,30 @@ class MigracoesTest {
             db.palavras().atualizar(p.copy(significado = "Sem forças."))
             assertEquals("Sem forças.", db.palavras().porLema("lânguido")!!.significado)
 
+            // As versões 5 e 6: o livro ganha uma ficha, com o autor das
+            // palavras, criada no dia da primeira; sem leituras nem em curso.
+            val livro = db.livros().porTitulo("Os Maias")!!
+            assertEquals("Eça de Queirós", livro.autor)
+            assertEquals(1000L, livro.criadoEm)
+            assertEquals(false, livro.emCurso)
+            assertEquals(emptyList<Leitura>(), db.livros().leiturasDe(livro.id))
+
+            // A versão 8: o que já lá estava é português, e a mesma grafia
+            // passa a poder estar na coleção também em inglês.
+            assertEquals(Lingua.PT, p.lingua)
+            assertEquals(Lingua.PT, livro.lingua)
+            assertTrue(db.palavras().guardar(PalavraGuardada(lemma = "lânguido", lingua = Lingua.EN)) > 0)
+            assertEquals(-1L, db.palavras().guardar(PalavraGuardada(lemma = "lânguido")))
+
+            // A versão 9: nada enviado ainda, e as correções guardam-se.
+            assertNull(p.enviado)
+            db.palavras().marcarEnviada("lânguido", Lingua.PT, "Sem forças.")
+            assertEquals("Sem forças.", db.palavras().porLema("lânguido")!!.enviado)
+            db.correcoes().guardar(
+                CorrecaoGuardada(lemma = "lânguido", acecaoOrd = 1, acecaoTexto = "x", texto = "y")
+            )
+            assertEquals(1, db.correcoes().porEnviar().size)
+
             val prog = db.progresso().atual()!!
             assertEquals(523, prog.pontos)
             assertEquals(11, prog.sequencia)
@@ -176,6 +216,48 @@ class MigracoesTest {
             val prog = db.progresso().atual()!!
             assertEquals(0, prog.pontos)
             assertEquals(0, prog.acertos)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun da_versao_5_para_a_6_passa_as_datas_a_leituras() = runBlocking<Unit> {
+        criarV5 {
+            execSQL(
+                "INSERT INTO saved_words (id, lemma, saved_at, book_title, book_author, mastery)"
+                    + " VALUES (1, 'lânguido', 1000, ' Os Maias', 'Eça de Queirós', 0)"
+            )
+            execSQL(
+                "INSERT INTO saved_words (id, lemma, saved_at, book_title, mastery)"
+                    + " VALUES (2, 'ensonado', 2000, 'Ensaio', 0)"
+            )
+            execSQL(
+                "INSERT INTO saved_words (id, lemma, saved_at, book_title, mastery)"
+                    + " VALUES (3, 'parco', 3000, 'Parado', 0)"
+            )
+            execSQL("INSERT INTO livros VALUES ('Os Maias', 1000, 5000, 0)")
+            execSQL("INSERT INTO livros VALUES ('Ensaio', 2000, NULL, 1)")
+            execSQL("INSERT INTO livros VALUES ('Parado', 3000, NULL, 0)")
+        }
+
+        val db = abrirComAAppDeAgora()
+        try {
+            // O espaço à volta do título sai, nas palavras e na ficha.
+            assertEquals("Os Maias", db.palavras().porLema("lânguido")!!.livro)
+
+            val fichas = db.livros().fichasAgora().associateBy { it.titulo }
+            assertEquals(setOf("Os Maias", "Ensaio", "Parado"), fichas.keys)
+            assertEquals("Eça de Queirós", fichas["Os Maias"]!!.autor)
+            assertEquals(true, fichas["Ensaio"]!!.emCurso)
+
+            val leituras = db.livros().leiturasAgora()
+            fun de(t: String) = LivroCompleto(fichas[t]!!, leituras.filter { it.livroId == fichas[t]!!.id })
+            assertEquals(EstadoLeitura.LIDO, de("Os Maias").estado)
+            assertEquals(5000L, de("Os Maias").ultimaVezLido)
+            assertEquals(EstadoLeitura.A_LER, de("Ensaio").estado)
+            // O início automático da v5 não diz nada de leitura.
+            assertEquals(EstadoLeitura.SEM_LEITURA, de("Parado").estado)
         } finally {
             db.close()
         }

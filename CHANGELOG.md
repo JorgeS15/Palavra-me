@@ -12,7 +12,273 @@ nova sobe o MINOR.
 Nota: no esquema do `dicionario.db`, uma subida de MINOR pode trazer
 alterações incompatíveis enquanto o pipeline estiver antes da 1.0.0.
 
-## [0.34.0] - em curso · app v1.21.0
+## [app v1.30.0] - 2026-11-24 (versionCode 37)
+
+A versão publicada a seguir à 1.21.1. Junta a 1.22 (os livros) e a 1.23 (o
+inglês), que não saíram, com o que está abaixo. **`utilizador.db` v9.**
+
+Em resumo, para quem vem da 1.21:
+
+- **Livros:** um separador novo, com o que estás a ler e a página onde vais,
+  os lidos por ano, as datas de cada leitura e uma imagem para partilhar.
+- **Inglês:** um dicionário de inglês, com definições em inglês. PT ou EN na
+  caixa de pesquisa; os livros e as palavras têm língua.
+- **Corrigir ou acrescentar** um significado, por baixo das definições, e
+  submetê-lo ao dicionário, logo ou mais tarde.
+- **Revisão a escrever a palavra**, e a palavra escondida nos lembretes, se
+  quiseres.
+- **"Como funciona"**, um tutorial de cinco ecrãs na primeira abertura (e em
+  Definições, Sobre).
+
+### Added
+
+- **Sugestões ao dicionário, num sítio só.** Por baixo das definições, um
+  botão "Corrigir ou acrescentar" (antes um item escondido no menu ⋮). No
+  diálogo escolhe-se a aceção errada ou "Falta um sentido", escreve-se, e
+  **Guardar**: fica sempre para a pessoa **e** nas sugestões por enviar. A
+  mensagem a seguir tem **Submeter ao dicionário**, para quem quer mandar
+  logo.
+  - Uma correção a uma aceção aparece por baixo dela ("A tua correção");
+    tocar abre-a para mudar ou apagar.
+  - Um sentido em falta é "O teu significado", por cima das definições.
+    Numa palavra que não está na coleção, guardá-lo regista-a (com o livro
+    que se está a ler).
+  - Na "não encontrada", registar a palavra põe-na nas sugestões e oferece
+    o "Submeter ao dicionário"; já registada sem significado, há o mesmo
+  botão.
+- **As palavras inglesas também se submetem** (na 1.23 ficavam de fora): uma
+  palavra ou um sentido que falta ao dicionário de inglês entra na lista e
+  no "Submeter ao dicionário", marcada `[EN]` no email. O CSV para o
+  `seeds/curadoria.csv` continua a levar só as portuguesas.
+- **Definições, Contribuir: "Submeter ao dicionário"** (era "Submeter por
+  mail", só palavras). Lista as palavras em falta, os sentidos e as
+  correções, com quantas há; envia as marcadas num só email (com o CSV da
+  curadoria) e marca-as como enviadas, para não voltarem. Uma palavra cujo
+  significado mude depois de enviada volta à lista.
+- `utilizador.db` v9: tabela `correcoes` e `saved_words.enviado`. Migração só
+  acrescenta. A cópia de segurança leva as correções e o que já se enviou.
+
+### Changed
+
+- O tutorial "Como funciona" passa a cinco ecrãs: o primeiro fala do PT/EN,
+  e há um novo, "Falta um sentido?", sobre o "Corrigir ou acrescentar". A
+  nota de novidades da 1.30 leva a ele.
+- **O mínimo de 3 palavras para jogar conta-se por língua.** Antes contava
+  as línguas juntas: com 3 portuguesas, a primeira palavra inglesa entrava
+  logo no jogo, nos lembretes e no "Rever". Agora o inglês só começa à
+  terceira palavra inglesa jogável. As opções continuam a ser sempre da
+  mesma língua da palavra perguntada. O "Ainda não dá" diz "na mesma língua".
+- **Dicionário e licenças:** as fontes aparecem por dicionário ("Fontes:
+  português", "Fontes: inglês"), e o NOTICE passa a listar as do inglês
+  (Wiktionary inglês e Leipzig inglês). "Instalar um ficheiro de
+  dicionário" só aparece no Modo Desenvolvedor: os dois dicionários vêm
+  dentro da app.
+- **PT/EN dentro da caixa de pesquisa**, à direita: a língua é da pesquisa,
+  não da app. O cabeçalho fica só com o logótipo e a sequência de dias.
+- A folha de registo perde o campo opcional "O teu significado" (passou para
+  o "Corrigir ou acrescentar"). Continua a pedir o significado às palavras
+  sem definição, e os já escritos guardam-se ao editar.
+
+## [0.36.0] - 2026-11-23 · app v1.23.0 (versionCode 36)
+
+O dicionário de inglês (branch `Ingles`). **Construir e empacotar as duas
+bases antes de publicar** (`palavrame f1` e `palavrame en`, depois
+`empacotar` e `empacotar --lingua en`).
+
+### Added
+
+- **Build do dicionário de inglês** (`palavrame fetch --lingua en`,
+  `palavrame en`): palavras inglesas com definições em inglês, do Wiktionary
+  inglês (kaikki.org, CC BY-SA 4.0), com a frequência do Leipzig (corpus
+  britânico). As flexões (`ran` -> `run`) viram formas do lema; as grafias
+  alternativas (`colour` -> `color`) remetem para o destino; os exemplos feitos
+  de propósito vêm antes das citações; ficam de fora os nomes próprios e os
+  erros ortográficos. A base sai como `out/dicionario-en-N.db`, com
+  `meta.lingua = en`.
+- `empacotar --lingua en` escreve `dicionario-en.db.gz` ao lado do português.
+- Lista de protótipo `seeds/lemas-en.txt` (155 palavras, todas encontradas).
+- **App: o inglês.** Um dicionário por língua (`dicionario-en.db` ao lado do
+  português). **Vai dentro do APK** (`dicionario-en.db.gz`, 94 MB; 729 mil
+  palavras) e instala-se no primeiro arranque, a seguir ao português; também
+  se pode escolher como ficheiro em Dicionário e licenças (a língua sai da
+  `meta.lingua` da base). O `verificarDicionario` e o `verificarApk` passam a
+  exigir os dois.
+  - Os livros têm língua, escolhida ao acrescentá-los e na ficha; a pesquisa
+    abre na língua do livro em curso.
+  - PT/EN na pesquisa e no "não encontrada", que oferece "Ver no dicionário de
+    inglês" quando a palavra lá está. Possessivos ingleses (`Darcy’s`)
+    encontram a palavra.
+  - As palavras guardam a língua: `real` pode estar na coleção nas duas. Na
+    Coleção, as inglesas têm a etiqueta EN. A cópia de segurança leva a língua
+    (as de antes são português).
+  - O jogo usa o dicionário de cada palavra e só põe distrações da mesma
+    língua. As notificações levam a língua com a palavra.
+  - As palavras inglesas não entram em "Propor ao dicionário" (a curadoria é
+    do português).
+
+### Changed
+
+- `utilizador.db` v8: coluna `lingua` em `saved_words` e `livros`; a palavra
+  passa a ser única por `(lemma, lingua)`. Migração só acrescenta.
+
+### Fixed
+
+- **Apóstrofo tipográfico** (`’`) na normalização, no pipeline e na app: os
+  ebooks escrevem `wouldn’t` e `d’água`, que antes não se encontravam.
+  Reconstruir o dicionário português para o apanhar também nos dados.
+- **A build parava horas** a contar as aceções sem exemplo: as contagens
+  (`NOT EXISTS`) corriam antes de haver índices. Passam a correr depois deles.
+
+## [app v1.21.1] - 2026-11-21 (versionCode 34)
+
+Só app, com o dicionário da 1.21.0. Feita no GitHub (commits 2f0e187 e
+0b4082e) e trazida também para a 1.22.0.
+
+### Fixed
+
+- **Jogo aberto pela notificação: "Feito" passa a ser o botão grande**, e
+  "Rever mais" fica por baixo, discreto. Quem veio pelo lembrete veio por
+  uma palavra. Em "Rever" fica como estava: "Palavra seguinte" em destaque.
+- **A notificação sai da barra quando se responde à palavra que anunciava**,
+  também em "Rever". Antes ficava lá, e tocar-lhe abria outra palavra ou
+  "Nada a rever". A notificação de outra palavra não se toca.
+
+## [0.35.0] - 2026-11-22 · app v1.22.0 (versionCode 35)
+
+O livro que estou a ler (`notas/roadmap-2.md`, 1.22.0), e uma correção ao
+dicionário. **Reconstruir e empacotar o dicionário antes de publicar.**
+
+### Added
+
+- **Os livros.** Separador novo, "Livros", ao estilo de um diário de
+  leitura calmo (sem estrelas, metas nem desafios):
+  - **A estante:** no topo, "A ler agora", um cartão por livro (lado a lado
+    se houver vários) com a página, as palavras, o progresso e os botões
+    "Rever" e "Acabei de ler". Por baixo, as capas três a três, em
+    prateleiras: "Lidos em 2026" (por ano), "Em pausa" e "Outros livros" (com
+    palavras, sem leitura marcada), com os filtros Todos, Lidos e Em pausa.
+    O "+" ("Adicionar livro") cria um livro ainda sem palavras. Desenho no Claude Design
+    ("Palavra-me: separador Livros").
+  - **A página de cada livro:** capa tipográfica, título, autor e o estado
+    ("Lido de março a maio de 2026"); os números (dias, palavras, já
+    sabidas); a ação principal conforme o estado ("Rever as 11 palavras",
+    e, a ler, "Pausar leitura" e "Acabei de ler" lado a lado; "Retomar"
+    num livro em pausa); logo a seguir as palavras, com uma linha do
+    significado e "ainda custa" nas que custam; e no fim "Sobre a leitura":
+    as leituras com as datas, a nota e "Voltar a ler". Partilhar tem o mesmo
+    ícone em toda a app (o do ecrã da palavra).
+  - **Leituras:** "Estou a ler este livro", "Acabei este livro" (com o
+    resumo), "Pausar leitura", "Retomar" e "Voltar a ler". Voltar a ler abre
+    uma leitura nova e guarda as anteriores ("Lido 2 vezes"). As datas de
+    cada leitura corrigem-se à mão, e pode acrescentar-se uma leitura antiga.
+  - **Ficha:** título, autor, páginas e nota. Corrigir o título ou o autor
+    muda-os também nas palavras do livro. "Juntar a outro livro" para quando
+    o mesmo livro ficou com dois nomes ("Os maias" e "Os Maias"): as palavras
+    e as leituras passam para um, e o outro desaparece.
+  - **Progresso pelas palavras:** com o número de páginas, a página do livro
+    mostra "p. 214 de 480", da página da última palavra guardada, sem
+    atualizar nada à mão. E "Em que página vais?": tocar no progresso (ou
+    "Página onde vais", na ficha, ou o lápis no cartão da estante) marca a
+    página onde se pousou o livro, que pode ser depois da última palavra;
+    vale a mais recente das duas. Ao voltar a ler, só contam as palavras da
+    leitura nova.
+  - **Livro em curso:** o livro que vem já escolhido ao registar (antes vinha
+    o último usado). É o que se começou a ler por último; muda-se no menu da
+    página do livro, ou no diálogo de registar ("Estou a ler este livro").
+    O diálogo abre-se sempre, para a página, a frase e a nota.
+  - **No ecrã inicial**, em vez da estante de 12 livros, só o livro que se
+    está a ler (o cartão abre a página dele) e "Todos os livros", por cima
+    das últimas palavras registadas.
+  - Na Coleção, cada livro tem um botão para a sua página, e mostra o estado
+    da leitura por baixo do autor.
+  - **A imagem do livro lido:** ao acabar um livro ("Partilhar imagem", no
+    resumo) ou depois, no menu da página do livro ("Partilhar o livro
+    lido"). Leva as datas da leitura, o título com o marcador, o autor,
+    "Guardei 32 palavras neste livro, em 47 dias de leitura." e as primeiras
+    palavras guardadas (quatro no Stories, três na publicação), cada uma com
+    uma linha do significado. Os mesmos formatos e cores da partilha de uma
+    palavra (Stories ou publicação; cores da app ou cor do livro). Desenho
+    no Claude Design ("Palavra-me: imagem do livro lido").
+- **Escrever a palavra.** Uma variante da revisão: aparece a classe, a
+  definição e uma pista ("Começa por "l", 8 letras"), e escreve-se a
+  palavra, com o teclado sem correção automática. Conta certa sem acentos
+  nem maiúsculas ("laconico"), e mostra-se a grafia certa. "Não sei" conta
+  como errada. Só nas palavras já acertadas (caixa 2 ou mais) e sem
+  espaços, em metade das perguntas: a escolha múltipla continua. Desligada
+  por omissão; liga-se em Definições, Rever, "Escrever a palavra".
+- **Rever um livro.** "Rever este livro", na página do livro: uma
+  sessão só com as palavras desse livro, para retomar a leitura com elas
+  frescas. Primeiro as que estão por rever; depois as outras, por ordem de
+  revisão, sem repetir. Nestas o calendário não mexe (como no treino livre),
+  mas todas contam para o limite do dia. No fim, "Livro revisto", e volta-se
+  ao livro.
+- **Corrigir uma definição.** No ecrã da palavra, no menu (três pontos ao
+  lado de Partilhar): escolhe-se a aceção, escreve-se o que está mal (se se
+  quiser) e abre-se o email, com a palavra, a aceção, a fonte e a versão do
+  dicionário. Sem rede, como a submissão de palavras em falta. A última
+  opção, "Falta um significado", serve para acrescentar um (aí é preciso
+  escrevê-lo); por isso o menu aparece também em palavras sem aceções.
+- **Como funciona.** Quatro ecrãs curtos (procurar, guardar, os livros,
+  rever), com "Saltar" sempre à mão e ilustrações feitas com peças da própria
+  app. Abre sozinho só na primeira abertura de uma instalação nova; quem
+  atualiza chega-lhe pelo botão "Ver como funciona" das Novidades da 1.22.0,
+  e qualquer pessoa em Definições, Sobre, "Como funciona". Não pede
+  permissões. Desenho no Claude Design ("Palavra-me: tutorial").
+- **A palavra escondida nos lembretes.** Nas Definições, em Rever: "Mostrar a
+  palavra", ligado por omissão. Desligado, o lembrete diz só "Tens uma
+  palavra para rever". No ecrã bloqueado a palavra fica sempre escondida
+  (versão pública da notificação). Pedido de quem usa a app.
+
+### Changed
+
+- **`utilizador.db` v6:** tabelas `livros` (a ficha: título único, autor,
+  páginas, nota, criado em, em curso) e `leituras` (início, fim, parada). O
+  título continua a ser o elo com as palavras, e renomear ou juntar muda-o
+  nelas na mesma transação. A migração só acrescenta: cada livro das
+  palavras ganha ficha, com o autor delas, sem leitura marcada; os títulos
+  perdem os espaços à volta. A v5 (tabela `livros` por título, só nas versões
+  de teste) passa as datas a leituras. A cópia de segurança leva as fichas e
+  as leituras; uma cópia anterior importa-se como antes.
+- **`utilizador.db` v7:** as leituras ganham a página onde se vai e quando
+  foi escrita (`pagina`, `pagina_em`). Só acrescenta colunas; vai na cópia.
+- **Importar com outro progresso:** se a cópia e o telemóvel têm os dois
+  progresso de revisões (pontos, sequência, respostas) e são diferentes, a
+  app pergunta qual fica, com os dois resumidos ("2704 pontos · 266
+  respostas · sequência de 34 dias, até 1 de novembro"). Antes ficava sempre
+  o do telemóvel, e quem restaurava uma cópia perdia a sequência sem saber.
+  As palavras continuam a juntar-se como antes.
+
+### Fixed
+
+- **Curadoria:** "cruciverbalista" (substantivo), vinda de uma submissão.
+  O `seeds/curadoria.csv` tinha sido gravado pelo Excel, que o desfez (o
+  Excel português separa por ponto e vírgula e grava noutra codificação);
+  reposto em UTF-8, com as 791 linhas como estavam. Editar o ficheiro num
+  editor de texto, não no Excel.
+- **As notas de trabalho passam de `docs/` para `notas/`**, fora do
+  repositório; no GitHub, `docs/` é o site. As referências no código mudam
+  com elas.
+- **Sem o acento grave da ortografia de 1911:** "crèdor" passa a "credor",
+  "sòzinho" a "sozinho", "prègar" a "pregar", no Dicionário Aberto (lemas,
+  aceções, exemplos e formas). O grave marcava vogais abertas átonas e foi
+  abolido em 1945. "crèdor" era uma entrada à parte ao lado de "credor", e a
+  pesquisa dava as duas; agora juntam-se (123 casos na base de 2026-11-04;
+  541 lemas e cerca de 240 aceções corrigidos). Fica o grave das contrações: "à",
+  "às", "àquele", "barco à vela".
+- **Importar uma cópia antiga:** o título do livro de cada palavra entra sem
+  espaços à volta. Uma cópia de antes da 1.17.1 podia tê-los, e com os livros
+  ligados às palavras pelo título exato um livro renomeado partia-se em dois.
+- **Revisão de um livro:** o "retroceder" do telemóvel volta ao livro, como o
+  "×" (ia para Procurar), e "Palavra seguinte" só aparece se ainda houver uma
+  pergunta (levava direto a "Livro revisto").
+- Pormenores: a pista de "Escrever a palavra" diz "1 letra"; o email de
+  "Corrigir uma definição" já não diz "(desconhecido)" como classe; um livro
+  ainda sem ficha não deixa o "retroceder" preso no separador Livros.
+- **Página do livro:** a barra com o "voltar" ficava debaixo da barra de
+  estado, e não havia como regressar à lista dos livros sem o "retroceder"
+  do telemóvel. Tocar outra vez no separador Livros também volta à lista.
+
+## [0.34.0] - 2026-11 · app v1.21.0 (publicada)
 
 O dicionário novo (`docs/roadmap.md`, 1.21.0). Faz-se por partes e
 publica-se de uma vez, com uma só reconstrução do dicionário. **Não publicar
@@ -97,12 +363,6 @@ antes de reconstruir e empacotar o dicionário.**
 - **O pipeline tira também as remissões "Vide X" e "V. X" para o próprio
   lema** ("lacónico: Vide lacónico"); só conhecia "Ver X", "O mesmo que X"
   e "Idem". A app já as escondia desde a 1.20.1.
-- **Jogo aberto pela notificação: "Feito" passa a ser o botão grande**, e
-  "Rever mais" fica por baixo, discreto. Quem veio pelo lembrete veio por
-  uma palavra. Em "Rever" fica como estava: "Palavra seguinte" em destaque.
-- **A notificação sai da barra quando se responde à palavra que anunciava**,
-  também em "Rever". Antes ficava lá, e tocar-lhe abria outra palavra ou
-  "Nada a rever". A notificação de outra palavra não se toca.
 
 ## [app v1.20.1] - 2026-11-15
 

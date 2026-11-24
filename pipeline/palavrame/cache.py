@@ -138,7 +138,7 @@ class Cache:
                 # 4xx não melhora com insistência.
                 tmp.unlink(missing_ok=True)
                 raise DownloadError(
-                    f"HTTP {exc.code} em {url}. Verifica o URL em docs/fontes.md."
+                    f"HTTP {exc.code} em {url}. Verifica o URL em notas/fontes.md."
                 ) from exc
             except Exception as exc:  # rede, DNS, TLS, timeout
                 last = exc

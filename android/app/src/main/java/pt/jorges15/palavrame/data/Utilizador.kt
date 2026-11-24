@@ -33,8 +33,9 @@ import kotlinx.coroutines.flow.Flow
     tableName = "saved_words",
     // Uma palavra é uma palavra: a coleção é o registo do que já se
     // aprendeu, não um diário de encontros. Sem este índice, registar
-    // 'sumptuoso' duas vezes dava duas linhas iguais na lista.
-    indices = [Index(value = ["lemma"], unique = true)],
+    // 'sumptuoso' duas vezes dava duas linhas iguais na lista. Desde a 1.23
+    // é única por língua: `real` e `animal` existem nas duas.
+    indices = [Index(value = ["lemma", "lingua"], unique = true)],
 )
 data class PalavraGuardada(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -51,7 +52,7 @@ data class PalavraGuardada(
      * para a curadoria — e o que se mostra a quem volta a abrir a palavra.
      */
     val significado: String? = null,
-    /** Caixa da repetição espaçada, 0 a 5. Ver `docs/jogo.md`. */
+    /** Caixa da repetição espaçada, 0 a 5. Ver `notas/jogo.md`. */
     val mastery: Int = 0,
     @ColumnInfo(name = "last_reviewed") val revistaEm: Long? = null,
     /**
@@ -59,6 +60,14 @@ data class PalavraGuardada(
      * portanto está vencida desde sempre.
      */
     @ColumnInfo(name = "proxima_revisao") val proximaRevisao: Long? = null,
+    /** De que dicionário é a palavra (`Lingua`). As de antes da 1.23 são todas "pt". */
+    @ColumnInfo(defaultValue = "'pt'") val lingua: String = Lingua.PT,
+    /**
+     * O significado tal como foi enviado à curadoria ("" se foi sem
+     * significado); nulo = nunca enviada (1.30). Enquanto for igual ao
+     * `significado`, a palavra não volta às sugestões por enviar.
+     */
+    val enviado: String? = null,
 )
 
 /**
@@ -88,11 +97,11 @@ interface PalavrasDao {
     @Query("SELECT * FROM saved_words ORDER BY saved_at DESC")
     suspend fun todasAgora(): List<PalavraGuardada>
 
-    @Query("SELECT * FROM saved_words WHERE lemma = :lemma LIMIT 1")
-    suspend fun porLema(lemma: String): PalavraGuardada?
+    @Query("SELECT * FROM saved_words WHERE lemma = :lemma AND lingua = :lingua LIMIT 1")
+    suspend fun porLema(lemma: String, lingua: String = Lingua.PT): PalavraGuardada?
 
-    @Query("SELECT EXISTS(SELECT 1 FROM saved_words WHERE lemma = :lemma)")
-    fun estaGuardada(lemma: String): Flow<Boolean>
+    @Query("SELECT EXISTS(SELECT 1 FROM saved_words WHERE lemma = :lemma AND lingua = :lingua)")
+    fun estaGuardada(lemma: String, lingua: String = Lingua.PT): Flow<Boolean>
 
     @Query("SELECT DISTINCT book_title FROM saved_words WHERE book_title IS NOT NULL ORDER BY book_title")
     fun livros(): Flow<List<String>>
@@ -107,8 +116,12 @@ interface PalavrasDao {
     @Update
     suspend fun atualizar(palavra: PalavraGuardada)
 
-    @Query("DELETE FROM saved_words WHERE lemma = :lemma")
-    suspend fun esquecer(lemma: String)
+    /** Marca o que se enviou à curadoria (ver `PalavraGuardada.enviado`). */
+    @Query("UPDATE saved_words SET enviado = :enviado WHERE lemma = :lemma AND lingua = :lingua")
+    suspend fun marcarEnviada(lemma: String, lingua: String, enviado: String)
+
+    @Query("DELETE FROM saved_words WHERE lemma = :lemma AND lingua = :lingua")
+    suspend fun esquecer(lemma: String, lingua: String = Lingua.PT)
 
     /**
      * Palavras vencidas, a mais atrasada primeiro.
@@ -201,20 +214,72 @@ val MIGRACAO_3_4 = object : Migration(3, 4) {
 }
 
 /**
+ * v4 -> v5: os livros (datas de leitura e o livro em curso). Só existiu nas
+ * versões de teste da 1.22; a v6 refá-la (ver `MIGRACAO_5_6`, em `Livros.kt`).
+ * Fica para o caminho 4 -> 5 -> 6 ser sempre o mesmo.
+ *
+ * Só acrescenta uma tabela. Cada livro que já tem palavras ganha uma linha
+ * com o início no dia da primeira palavra guardada dele: é a melhor
+ * aproximação que há, e corrige-se à mão. Nenhum fica lido nem em curso.
+ */
+val MIGRACAO_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `livros` (`titulo` TEXT NOT NULL,"
+            + " `iniciado_em` INTEGER, `terminado_em` INTEGER,"
+            + " `em_curso` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`titulo`))"
+        )
+        db.execSQL(
+            "INSERT OR IGNORE INTO livros (titulo, iniciado_em, terminado_em, em_curso)"
+            + " SELECT TRIM(book_title), MIN(saved_at), NULL, 0 FROM saved_words"
+            + " WHERE book_title IS NOT NULL AND TRIM(book_title) <> ''"
+            + " GROUP BY TRIM(book_title)"
+        )
+    }
+}
+
+/**
+ * v7 -> v8: o inglês (1.23). As palavras e os livros ganham a língua; tudo o
+ * que já lá estava é português. A palavra passa a ser única por língua, e não
+ * só pela grafia: `real` pode estar na coleção em português e em inglês.
+ *
+ * Só acrescenta colunas e troca o índice; nada se apaga nem se reescreve.
+ */
+val MIGRACAO_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE saved_words ADD COLUMN `lingua` TEXT NOT NULL DEFAULT 'pt'")
+        db.execSQL("DROP INDEX IF EXISTS `index_saved_words_lemma`")
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_saved_words_lemma_lingua`"
+            + " ON `saved_words` (`lemma`, `lingua`)"
+        )
+        db.execSQL("ALTER TABLE livros ADD COLUMN `lingua` TEXT NOT NULL DEFAULT 'pt'")
+    }
+}
+
+/**
  * Todas as migrações, por ordem. A app e o teste de migrações
  * (`androidTest/.../MigracoesTest`) usam esta mesma lista, para não haver uma
  * migração que a app corre e o teste não verifica.
  */
-val MIGRACOES = arrayOf(MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4)
+val MIGRACOES = arrayOf(
+    MIGRACAO_1_2, MIGRACAO_2_3, MIGRACAO_3_4, MIGRACAO_4_5, MIGRACAO_5_6, MIGRACAO_6_7, MIGRACAO_7_8,
+    MIGRACAO_8_9,
+)
 
 @Database(
-    entities = [PalavraGuardada::class, Progresso::class],
-    version = 4,
+    entities = [
+        PalavraGuardada::class, Progresso::class, FichaLivro::class, Leitura::class,
+        CorrecaoGuardada::class,
+    ],
+    version = 9,
     exportSchema = true,
 )
 abstract class UtilizadorDb : RoomDatabase() {
     abstract fun palavras(): PalavrasDao
     abstract fun progresso(): ProgressoDao
+    abstract fun livros(): LivrosDao
+    abstract fun correcoes(): CorrecoesDao
 
     companion object {
         @Volatile private var instancia: UtilizadorDb? = null

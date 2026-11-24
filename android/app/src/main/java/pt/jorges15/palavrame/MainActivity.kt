@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -39,11 +40,13 @@ import pt.jorges15.palavrame.ui.EcraColecao
 import pt.jorges15.palavrame.ui.EcraDefinicoes
 import pt.jorges15.palavrame.ui.EcraJogo
 import pt.jorges15.palavrame.ui.EcraLicencas
+import pt.jorges15.palavrame.ui.EcraLivros
 import pt.jorges15.palavrame.ui.EcraPesquisa
 import pt.jorges15.palavrame.ui.PesquisaViewModel
 import pt.jorges15.palavrame.ui.AcaoNovidade
 import pt.jorges15.palavrame.ui.DialogoNovidades
 import pt.jorges15.palavrame.ui.NOVIDADES
+import pt.jorges15.palavrame.ui.Tutorial
 import pt.jorges15.palavrame.ui.mostrarNovidades
 import pt.jorges15.palavrame.ui.notasPorVer
 import pt.jorges15.palavrame.ui.BotaoPrincipal
@@ -52,7 +55,7 @@ import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
 import pt.jorges15.palavrame.ui.theme.TemaPalavrame
 
-private enum class Ecra { PESQUISA, COLECAO, DEFINICOES, LICENCAS, JOGO }
+private enum class Ecra { PESQUISA, COLECAO, LIVROS, DEFINICOES, LICENCAS, JOGO }
 
 class MainActivity : ComponentActivity() {
 
@@ -79,9 +82,9 @@ class MainActivity : ComponentActivity() {
 
             TemaPalavrame(preferido = tema, paleta = paleta, letra = letra) {
                 // Falta instalar se nao ha base nenhuma, ou se a que veio no
-                // APK e diferente da instalada.
+                // APK e diferente da instalada (em qualquer das linguas).
                 var temDicionario by remember {
-                    mutableStateOf(app.dicionario != null && !app.temDicionarioEmpacotado())
+                    mutableStateOf(app.dicionario != null && app.linguasPorInstalar().isEmpty())
                 }
 
                 // A atualização do dicionário falhou, mas a base antiga abriu:
@@ -126,9 +129,14 @@ class MainActivity : ComponentActivity() {
                 // A sessão 0, quando a app abriu pela notificação, é a do
                 // lembrete; as outras são revisões à mão ("Rever agora").
                 var sessaoJogo by rememberSaveable { mutableStateOf(0) }
+                // O livro a rever (pedido na Coleção), ou nulo para a revisão normal.
+                var livroARever by rememberSaveable { mutableStateOf<String?>(null) }
+                // Conta os toques no separador Livros já aberto (volta à lista).
+                var voltarAosLivros by remember { mutableStateOf(0) }
                 // A palavra aberta veio da Coleção: o "retroceder" da palavra
                 // leva de volta para lá, e não para o ecrã inicial.
-                var palavraDaColecao by rememberSaveable { mutableStateOf(false) }
+                // (Ou dos Livros, desde a 1.22: a página do livro abre palavras.)
+                var origemDaPalavra by rememberSaveable { mutableStateOf<Ecra?>(null) }
                 // Guarda o estado de cada separador (a posição na lista, o
                 // filtro, os livros recolhidos) enquanto se está noutro: voltar
                 // à Coleção encontra-a como se deixou.
@@ -140,8 +148,14 @@ class MainActivity : ComponentActivity() {
                 // palavras (dentro do EcraPesquisa) e a saída normal tratarem
                 // disso.
                 BackHandler(enabled = ecra != Ecra.PESQUISA) {
-                    palavraDaColecao = false
-                    ecra = if (ecra == Ecra.LICENCAS) Ecra.DEFINICOES else Ecra.PESQUISA
+                    origemDaPalavra = null
+                    ecra = when {
+                        ecra == Ecra.LICENCAS -> Ecra.DEFINICOES
+                        // A rever um livro, volta-se ao livro, como no "×".
+                        ecra == Ecra.JOGO && livroARever != null -> Ecra.LIVROS
+                        else -> Ecra.PESQUISA
+                    }
+                    livroARever = null
                 }
 
                 // Palavra vinda de outra app (o leitor de e-books): procura-se
@@ -172,6 +186,9 @@ class MainActivity : ComponentActivity() {
                 // versão só se marca como vista quando a nota aparece).
                 // O código da versão cujas notas estão abertas (nulo: nenhuma).
                 var notasAbertas by rememberSaveable { mutableStateOf<Int?>(null) }
+                // "Como funciona": sozinho só na instalação nova; depois, pelo
+                // botão das Novidades ou pelas Definições.
+                var tutorialAberto by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (!primeiraCriacao || daNotificacao || textoRecebido() != null) {
                         return@LaunchedEffect
@@ -182,9 +199,17 @@ class MainActivity : ComponentActivity() {
                     // Instalação nova (ou já vista): nada a mostrar, e as notas
                     // ficam dadas como vistas. Senão, as mais recentes por ver,
                     // mesmo que sejam de uma versão que não chegou a sair.
-                    if (mostrarNovidades(atual, vista, foiAtualizacao())) {
+                    val atualizacao = foiAtualizacao()
+                    if (mostrarNovidades(atual, vista, atualizacao)) {
                         notasAbertas = notasPorVer(atual, vista)
                     }
+                    if (!atualizacao && !preferencias.tutorialVisto()) tutorialAberto = true
+                }
+                if (tutorialAberto) {
+                    Tutorial(aoFechar = {
+                        tutorialAberto = false
+                        preferencias.marcarTutorialVisto()
+                    })
                 }
                 falhaDaAtualizacao?.let { motivo ->
                     AlertDialog(
@@ -228,6 +253,7 @@ class MainActivity : ComponentActivity() {
                                         abrirAspeto = true
                                         ecra = Ecra.DEFINICOES
                                     }
+                                    AcaoNovidade.TUTORIAL -> tutorialAberto = true
                                 }
                             },
                         )
@@ -237,7 +263,7 @@ class MainActivity : ComponentActivity() {
                 val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
                 // O Rever é um ecrã inteiro, com o seu "×"; as licenças são um
                 // subecrã das definições. Nos outros três há a barra de baixo.
-                val comBarra = ecra == Ecra.PESQUISA || ecra == Ecra.COLECAO ||
+                val comBarra = ecra == Ecra.PESQUISA || ecra == Ecra.COLECAO || ecra == Ecra.LIVROS ||
                     ecra == Ecra.DEFINICOES
 
                 Scaffold(
@@ -252,8 +278,10 @@ class MainActivity : ComponentActivity() {
                                 aoEscolher = { destino ->
                                     // Tocar outra vez em Procurar volta ao início.
                                     if (destino == Ecra.PESQUISA && ecra == Ecra.PESQUISA) vm.limpar()
+                                    // Tocar outra vez em Livros volta à lista dos livros.
+                                    if (destino == Ecra.LIVROS && ecra == Ecra.LIVROS) voltarAosLivros++
                                     // Mudar de separador à mão corta a ligação à Coleção.
-                                    palavraDaColecao = false
+                                    origemDaPalavra = null
                                     ecra = destino
                                 },
                             )
@@ -268,17 +296,36 @@ class MainActivity : ComponentActivity() {
                                     vm,
                                     desenvolvedor = desenvolvedor,
                                     aoVoltar = { ecra = Ecra.PESQUISA },
-                                    aoAbrirPalavra = { lema ->
+                                    aoAbrirPalavra = { chave ->
                                         // Só se muda de ecrã com a palavra já
                                         // pronta: senão via-se o início por um
-                                        // instante.
-                                        vm.procurar(lema) {
-                                            palavraDaColecao = true
+                                        // instante. A chave traz a língua.
+                                        vm.procurarGuardada(chave) {
+                                            origemDaPalavra = Ecra.COLECAO
                                             ecra = Ecra.PESQUISA
                                         }
                                     },
+                                    aoAbrirLivro = { titulo ->
+                                        livroPedido = titulo
+                                        ecra = Ecra.LIVROS
+                                    },
+                                )
+                                Ecra.LIVROS -> EcraLivros(
+                                    vm,
+                                    voltarALista = voltarAosLivros,
                                     livroInicial = livroPedido,
                                     aoUsarLivroInicial = { livroPedido = null },
+                                    aoAbrirPalavra = { chave ->
+                                        vm.procurarGuardada(chave) {
+                                            origemDaPalavra = Ecra.LIVROS
+                                            ecra = Ecra.PESQUISA
+                                        }
+                                    },
+                                    aoReverLivro = { titulo ->
+                                        livroARever = titulo
+                                        sessaoJogo++
+                                        ecra = Ecra.JOGO
+                                    },
                                 )
                                 Ecra.DEFINICOES -> EcraDefinicoes(
                                     preferencias,
@@ -286,7 +333,7 @@ class MainActivity : ComponentActivity() {
                                     aoVoltar = { ecra = Ecra.PESQUISA },
                                     aspetoAberto = abrirAspeto,
                                 )
-                                Ecra.LICENCAS -> EcraLicencas(aoVoltar = { ecra = Ecra.DEFINICOES })
+                                Ecra.LICENCAS -> EcraLicencas(preferencias, aoVoltar = { ecra = Ecra.DEFINICOES })
                                 Ecra.JOGO -> {
                                     // A chave leva a sessão e o modo dentro: cada abertura
                                     // começa do zero (a fila mudou, o limite do dia
@@ -294,34 +341,45 @@ class MainActivity : ComponentActivity() {
                                     // logo, sem fechar a app.
                                     val doLembrete = daNotificacao && sessaoJogo == 0
                                     val jogo: JogoViewModel = viewModel(
-                                        key = "jogo-$sessaoJogo-$desenvolvedor",
+                                        key = "jogo-$sessaoJogo-$desenvolvedor-${livroARever.orEmpty()}",
                                         factory = fabricaJogo(
                                             app, preferencias, desenvolvedor,
                                             lemaPreferido = if (doLembrete) lemaDaNotificacao else null,
                                             deLembrete = doLembrete,
+                                            livro = livroARever,
                                         ),
                                     )
-                                    EcraJogo(jogo, aoVoltar = { ecra = Ecra.PESQUISA })
+                                    // De um livro, volta-se à Coleção, de onde se veio.
+                                    EcraJogo(jogo, aoVoltar = {
+                                        ecra = if (livroARever != null) Ecra.LIVROS else Ecra.PESQUISA
+                                        livroARever = null
+                                    })
                                 }
                                 Ecra.PESQUISA -> EcraPesquisa(
                                     vm,
                                     preferencias,
                                     aoAbrirColecao = { ecra = Ecra.COLECAO },
+                                    aoAbrirLivros = {
+                                        livroPedido = null
+                                        voltarAosLivros++
+                                        ecra = Ecra.LIVROS
+                                    },
                                     aoAbrirJogo = {
+                                        livroARever = null
                                         sessaoJogo++
                                         ecra = Ecra.JOGO
                                     },
                                     aoAbrirLivro = { titulo ->
                                         livroPedido = titulo
-                                        ecra = Ecra.COLECAO
+                                        ecra = Ecra.LIVROS
                                     },
-                                    aoSairParaOrigem = if (palavraDaColecao) {
+                                    aoSairParaOrigem = origemDaPalavra?.let { origem ->
                                         {
                                             vm.limpar()
-                                            palavraDaColecao = false
-                                            ecra = Ecra.COLECAO
+                                            origemDaPalavra = null
+                                            ecra = origem
                                         }
-                                    } else null,
+                                    },
                                 )
                             }
                           }
@@ -353,7 +411,7 @@ class MainActivity : ComponentActivity() {
     private fun fabrica(app: PalavrameApp) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            PesquisaViewModel({ app.dicionario }, app.utilizador) as T
+            PesquisaViewModel({ l -> app.dicionario(l) }, app.utilizador, { app.linguasInstaladas() }) as T
     }
 
     private fun fabricaJogo(
@@ -362,17 +420,20 @@ class MainActivity : ComponentActivity() {
         treinoLivre: Boolean,
         lemaPreferido: String?,
         deLembrete: Boolean,
+        livro: String? = null,
     ) = object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             JogoViewModel(
-                { app.dicionario }, app.utilizador,
+                { l -> app.dicionario(l) }, app.utilizador,
                 treinoLivre = treinoLivre,
                 lemaPreferido = lemaPreferido,
                 deLembrete = deLembrete,
                 cotaRestante = { preferencias.cotaManual.value.restantes(LocalDate.now()) },
                 gastarCota = { preferencias.usarCotaManual() },
-                aoResponder = { lemma -> Lembrete.esquecerSeAnunciou(app, lemma) },
+                aoResponder = { chave -> Lembrete.esquecerSeAnunciou(app, chave) },
+                escreverAPalavra = { preferencias.escreverAPalavra.value },
+                livro = livro,
             ) as T
     }
 }
@@ -383,6 +444,7 @@ private data class Destino(val ecra: Ecra, val rotulo: String, val icone: ImageV
 private val DESTINOS = listOf(
     Destino(Ecra.PESQUISA, "Procurar", Icons.Rounded.Search),
     Destino(Ecra.COLECAO, "Coleção", Icons.Rounded.Bookmarks),
+    Destino(Ecra.LIVROS, "Livros", Icons.Rounded.AutoStories),
     Destino(Ecra.DEFINICOES, "Definições", Icons.Rounded.Tune),
 )
 
@@ -468,19 +530,26 @@ private fun EcraInstalarDicionario(
     var aCopiar by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
     val ambito = rememberCoroutineScope()
-    val empacotado = remember { app.temDicionarioEmpacotado() }
+    // O português primeiro: sem ele a app não arranca. O inglês, se vier no
+    // APK, instala-se a seguir, no mesmo ecrã.
+    val porInstalar = remember { app.linguasPorInstalar() }
     // O tamanho real, para o texto de espera (era "São 200 MB", escrito à mão).
-    val tamanhoMb = remember { app.tamanhoDoDicionarioEmpacotado()?.let { (it + (1 shl 20) - 1) shr 20 } }
+    val tamanhoMb = remember { app.tamanhoPorInstalarMb() }
 
-    LaunchedEffect(empacotado) {
-        if (!empacotado) return@LaunchedEffect
+    LaunchedEffect(porInstalar) {
+        if (porInstalar.isEmpty()) return@LaunchedEffect
         aCopiar = true
-        when (val r = app.instalarDicionarioEmpacotado()) {
-            is ResultadoImportacao.Feito -> { aCopiar = false; aoFicarPronto() }
-            is ResultadoImportacao.Erro -> {
-                aCopiar = false
-                if (app.dicionario != null) aoFalharComBaseAntiga(r.motivo) else erro = r.motivo
-            }
+        var falha: String? = null
+        for (lingua in porInstalar) {
+            val r = app.instalarDicionarioEmpacotado(lingua)
+            if (r is ResultadoImportacao.Erro && falha == null) falha = r.motivo
+        }
+        aCopiar = false
+        when {
+            falha == null -> aoFicarPronto()
+            // O português abriu (o antigo ou o novo): segue-se, e diz-se o que falhou.
+            app.dicionario != null -> aoFalharComBaseAntiga(falha)
+            else -> erro = falha
         }
     }
 
@@ -492,7 +561,10 @@ private fun EcraInstalarDicionario(
         erro = null
         ambito.launch {
             when (val r = app.importarDicionario(uri)) {
-                is ResultadoImportacao.Feito -> { aCopiar = false; aoFicarPronto() }
+                // Importar o inglês não chega para arrancar: falta o português.
+                is ResultadoImportacao.Feito ->
+                    if (app.dicionario != null) { aCopiar = false; aoFicarPronto() }
+                    else { aCopiar = false; erro = "Esse é o dicionário de inglês. Falta o de português." }
                 is ResultadoImportacao.Erro -> { aCopiar = false; erro = r.motivo }
             }
         }

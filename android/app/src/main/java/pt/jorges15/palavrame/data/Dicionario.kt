@@ -24,6 +24,10 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
 
         const val NOME_FICHEIRO = "dicionario.db"
 
+        /** O ficheiro de cada língua: o português com o nome de sempre. */
+        fun nomeDoFicheiro(lingua: String): String =
+            if (lingua == Lingua.PT) NOME_FICHEIRO else "dicionario-$lingua.db"
+
         fun abrir(ficheiro: File): Dicionario? = try {
             if (!ficheiro.exists()) null
             else Dicionario(
@@ -43,6 +47,12 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
             .use { if (it.moveToFirst()) it.getString(0) else null }
 
     val versao: String? get() = meta("db_version")
+
+    /**
+     * A língua deste dicionário (`Lingua`), da `meta.lingua` que o pipeline
+     * escreve. As bases de antes do inglês não a têm: são portuguesas.
+     */
+    val lingua: String by lazy { Lingua.deCodigo(meta("lingua")) }
 
     /**
      * Quando a base foi construída, em ISO-8601.
@@ -79,6 +89,15 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
         }
         val chave = Texto.normalizar(Texto.limparSelecao(escrito))
         if (chave.isEmpty()) return emptyList()
+        val achados = procurarPorChave(chave, limite)
+        if (achados.isNotEmpty() || lingua != Lingua.EN) return achados
+        // O possessivo inglês não está nas formas: "Darcy's", "the dogs'".
+        // Sem resultado, tenta-se a palavra sem ele.
+        val semPossessivo = Texto.semPossessivo(chave)
+        return if (semPossessivo != chave) procurarPorChave(semPossessivo, limite) else achados
+    }
+
+    private fun procurarPorChave(chave: String, limite: Int): List<Candidato> {
 
         // `GROUP BY l.id`, e não `DISTINCT`: um lema atingido por duas formas
         // de superfície que normalizam para a mesma chave (p. ex. o infinitivo
@@ -370,6 +389,7 @@ class Dicionario private constructor(private val db: SQLiteDatabase) {
                 },
             exemplos = exemplos(lemmaId),
             relacionadas = relacionadas(lemmaId),
+            lingua = lingua,
         )
     }
 

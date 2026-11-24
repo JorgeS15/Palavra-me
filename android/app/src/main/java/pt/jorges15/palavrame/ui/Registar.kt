@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
@@ -37,6 +38,8 @@ import pt.jorges15.palavrame.ui.theme.Estilo
 @Composable
 fun FolhaRegistar(
     lemma: String,
+    /** A língua com que a palavra se regista (a do dicionário onde foi encontrada). */
+    lingua: String = Lingua.PT,
     livrosAnteriores: List<Livro> = emptyList(),
     /** Não nulo = estamos a editar um registo que já existe. */
     existente: PalavraGuardada? = null,
@@ -50,6 +53,13 @@ fun FolhaRegistar(
     pedirSignificado: Boolean = false,
     aoCancelar: () -> Unit,
     aoGuardar: (PalavraGuardada) -> Unit,
+    /** O livro que se está a ler agora, se há (1.22). */
+    livroEmCurso: String? = null,
+    /**
+     * Marca o livro escolhido como o que se está a ler. Nulo esconde a opção
+     * (na Coleção, onde isso se faz no menu do livro).
+     */
+    aoMarcarEmCurso: ((String) -> Unit)? = null,
 ) {
     // Quem está a ler um livro regista dele muitas palavras seguidas. Voltar
     // a escrever o título de cada vez é a fricção mais fácil de eliminar:
@@ -59,7 +69,9 @@ fun FolhaRegistar(
     // a meio de um registo, num diálogo com cinco campos, é a fricção que mais
     // dói. A chave no lema reinicia os campos quando se abre outra palavra.
     // Ao editar, o que já lá estava; senão o último livro usado.
+    // Com um livro em curso (1.22), é esse que vem; senão o último usado.
     val livroInicial = existente?.livro
+        ?: livroEmCurso
         ?: livrosAnteriores.firstOrNull()?.titulo.orEmpty()
     var livro by rememberSaveable(lemma) { mutableStateOf(livroInicial) }
     // Ao editar, o autor é o que já lá estava. Ao registar de novo, é o que
@@ -91,6 +103,7 @@ fun FolhaRegistar(
             autorAutomatico = autor
         }
     }
+    var marcarEmCurso by rememberSaveable(lemma) { mutableStateOf(false) }
     var pagina by rememberSaveable(lemma) { mutableStateOf(existente?.page?.toString().orEmpty()) }
     // A frase pré-preenche-se com a seleção do leitor, quando vem uma; ao
     // editar, é a que já lá estava.
@@ -99,17 +112,12 @@ fun FolhaRegistar(
     }
     var nota by rememberSaveable(lemma) { mutableStateOf(existente?.note.orEmpty()) }
     var significado by rememberSaveable(lemma) { mutableStateOf(existente?.significado.orEmpty()) }
-    // O campo do significado próprio só faz sentido quando a palavra não tem
-    // uma no dicionário — ou quando já lá escreveste uma e a estás a editar.
-    //
-    // Numa palavra com definição, o campo existe na mesma, mas recolhido: o
-    // dicionário pode ter só o sentido antigo, e não aquele em que a palavra
-    // aparece no livro ("rebarbativo" só tinha o de 1913, ligado à gordura,
-    // e a leitora tinha-a lido no sentido de antipático). Abre-se com um
-    // toque, ou já aberto se houver um significado escrito antes.
-    var significadoAberto by rememberSaveable(lemma) {
-        mutableStateOf(pedirSignificado || !existente?.significado.isNullOrBlank())
-    }
+    // O campo do significado só aparece quando a palavra não tem definição.
+    // Numa palavra com definição, o teu sentido ("rebarbativo" só tinha o de
+    // 1913, ligado à gordura, e a leitora tinha-a lido no sentido de
+    // antipático) escreve-se em "Corrigir ou acrescentar", por baixo das
+    // definições (1.30; até aí era um campo recolhido aqui). Ao editar, o que
+    // já lá estava guarda-se na mesma.
     // Um livro que não está entre os chips (um novo, ou um antigo que já saiu
     // da lista) escreve-se à mão, no "+ Outro".
     val chips = livrosAnteriores.take(6)
@@ -231,6 +239,45 @@ fun FolhaRegistar(
                 }
             }
 
+            // "Estou a ler este livro": a forma de chegar ao Registar com um
+            // toque, para as palavras seguintes. Só para um livro escolhido
+            // que ainda não é o que se está a ler.
+            val tituloEscolhido = livro.trim()
+            if (aoMarcarEmCurso != null && tituloEscolhido.isNotEmpty() &&
+                tituloEscolhido != livroEmCurso
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { marcarEmCurso = !marcarEmCurso }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = marcarEmCurso,
+                        onCheckedChange = { marcarEmCurso = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = Cores.accent,
+                            uncheckedColor = Cores.ink3,
+                            checkmarkColor = Cores.bg,
+                        ),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Estou a ler este livro",
+                            style = Estilo.controlo.copy(fontSize = 15.sp),
+                            color = Cores.ink,
+                        )
+                        Text(
+                            "Vem já escolhido nas próximas palavras, mesmo que registes de outro.",
+                            style = Estilo.ajuda,
+                            color = Cores.ink2,
+                        )
+                    }
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 CampoFormulario(
                     "Autor", autor, { autor = it },
@@ -249,37 +296,6 @@ fun FolhaRegistar(
                 linhas = 3, italico = true,
             )
 
-            // O teu significado, numa palavra que o dicionário já define.
-            if (!pedirSignificado) {
-                if (significadoAberto) {
-                    Column {
-                        CampoFormulario(
-                            "O teu significado", significado, { significado = it },
-                            linhas = 2,
-                            placeholder = "O sentido em que a encontraste",
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Aparece por cima das definições do dicionário. Se lhe "
-                                + "faltar este sentido, podes propô-lo em Definições, "
-                                + "Contribuir.",
-                            style = Estilo.ajuda,
-                            color = Cores.ink2,
-                        )
-                    }
-                } else {
-                    Text(
-                        "+ Encontraste-a noutro sentido? Escreve o teu significado",
-                        style = Estilo.controloForte.copy(fontSize = 14.sp),
-                        color = Cores.accentInk,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { significadoAberto = true }
-                            .padding(vertical = 8.dp, horizontal = 2.dp),
-                    )
-                }
-            }
-
             CampoFormulario("Nota", nota, { nota = it }, placeholder = "Para ti")
 
             Row(
@@ -295,11 +311,12 @@ fun FolhaRegistar(
                 BotaoPrincipal(
                     "Guardar",
                     aoTocar = {
+                        if (marcarEmCurso && livro.isNotBlank()) aoMarcarEmCurso?.invoke(livro.trim())
                         aoGuardar(
                             // `copy` quando existe, para preservar o id, a data de
                             // registo e o progresso de revisão: editar as notas de
                             // uma palavra não é registá-la de novo.
-                            (existente ?: PalavraGuardada(lemma = lemma)).copy(
+                            (existente ?: PalavraGuardada(lemma = lemma, lingua = lingua)).copy(
                                 // TEXTO, não id: a coleção sobrevive a uma
                                 // substituição do dicionario.db.
                                 lemma = lemma,

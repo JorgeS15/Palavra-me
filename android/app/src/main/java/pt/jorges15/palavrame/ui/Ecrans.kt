@@ -58,6 +58,8 @@ fun EcraPesquisa(
     aoAbrirJogo: () -> Unit = {},
     /** Abre a coleção já no livro tocado na estante. */
     aoAbrirLivro: (String) -> Unit = { aoAbrirColecao() },
+    /** O separador Livros, na lista (o "Todos os livros" do início). */
+    aoAbrirLivros: () -> Unit = {},
     /**
      * Não nulo quando a palavra aberta veio de outro ecrã (a Coleção): o
      * "retroceder" leva de volta para lá em vez de ir para o início.
@@ -66,6 +68,8 @@ fun EcraPesquisa(
 ) {
     val estado by vm.estado.collectAsState()
     val livros by vm.livrosUsados.collectAsState(initial = emptyList())
+    val livroEmCurso by vm.livroEmCurso.collectAsState()
+    val livrosCompletos by vm.livros.collectAsState()
     val guardados by vm.lemasGuardados.collectAsState(initial = emptySet())
     // Do ViewModel, já carregada: voltar a este ecrã não pisca vazio (ver
     // `PesquisaViewModel.colecao`). Nula só antes da primeira leitura.
@@ -93,6 +97,87 @@ fun EcraPesquisa(
     var marcoAvaliacao by rememberSaveable { mutableStateOf<Int?>(null) }
     // A palavra a partilhar como imagem, com o ecrã de partilha aberto.
     var aPartilhar by remember { mutableStateOf<DadosPartilha?>(null) }
+
+    // Palavra nova: se chegou à 5.ª ou à 50.ª, pede-se uma avaliação, uma vez
+    // por marco. Marca-se logo como pedida, aceite ou não: perguntar outra vez
+    // seria insistir.
+    fun talvezPedirAvaliacao() {
+        preferencias.avaliacaoPorPedir(palavras.size + 1)?.let { marco ->
+            preferencias.marcarAvaliacaoPedida(marco)
+            marcoAvaliacao = marco
+        }
+    }
+
+    // As correções da pessoa às aceções da palavra aberta (1.30).
+    val entradaAberta = estado.entrada
+    val correcoesDaEntrada by remember(entradaAberta?.lemma, entradaAberta?.lingua) {
+        entradaAberta?.let { vm.correcoesDe(it.lemma, it.lingua) }
+            ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+
+    // Depois de guardar uma sugestão: a mensagem, com "Submeter ao dicionário" se há
+    // alguma coisa a enviar. Quem não toca, encontra-a em Definições,
+    // Contribuir, nas sugestões por enviar.
+    suspend fun oferecerEnvio(
+        mensagem: String,
+        faltas: List<PalavraEmFalta>,
+        correcoes: List<CorrecaoGuardada>,
+    ) {
+        if (faltas.isEmpty() && correcoes.isEmpty()) {
+            estadoSnackbar.showSnackbar(mensagem)
+            return
+        }
+        val r = estadoSnackbar.showSnackbar(
+            mensagem, actionLabel = "Submeter ao dicionário", duration = SnackbarDuration.Long,
+        )
+        if (r == SnackbarResult.ActionPerformed) {
+            if (enviarSugestoes(context, faltas, correcoes)) vm.marcarEnviadas(faltas, correcoes)
+            else estadoSnackbar.showSnackbar("Não encontrei uma app de email neste telemóvel.")
+        }
+    }
+
+    // O que se escreveu em "Corrigir ou acrescentar": fica sempre para a
+    // pessoa e nas sugestões por enviar. Um significado numa palavra que não
+    // está na coleção regista-a (com o livro que se está a ler): o significado
+    // é dela, e é o que o jogo usa quando o dicionário não a define.
+    fun guardarEscrito(lemma: String, lingua: String, entrada: Entrada?, escrito: Escrito) {
+        ambito.launch {
+            when (escrito) {
+                is Escrito.Correcao -> {
+                    val a = escrito.acecao
+                    val classe = (a.pos ?: entrada?.pos)
+                        ?.takeIf { it.isNotBlank() && it != "desconhecido" }?.let(::rotuloPos)
+                    val c = vm.guardarCorrecao(lemma, lingua, a, classe, escrito.texto)
+                    if (c == null) estadoSnackbar.showSnackbar("Apagaste a tua correção.")
+                    else oferecerEnvio("Correção guardada.", emptyList(), listOf(c))
+                }
+                is Escrito.Sentido -> {
+                    val existente = palavras.firstOrNull { it.lemma == lemma && it.lingua == lingua }
+                    if (existente == null && escrito.texto == null) return@launch
+                    val titulo = livroEmCurso?.titulo
+                    val palavra = existente?.copy(significado = escrito.texto)
+                        ?: PalavraGuardada(
+                            lemma = lemma,
+                            lingua = lingua,
+                            livro = titulo,
+                            autor = livros.firstOrNull { it.titulo == titulo }?.autor,
+                            significado = escrito.texto,
+                        )
+                    vm.guardarAgora(palavra)
+                    if (escrito.texto == null) {
+                        estadoSnackbar.showSnackbar("Apagaste o teu significado.")
+                        return@launch
+                    }
+                    if (existente == null) talvezPedirAvaliacao()
+                    oferecerEnvio(
+                        if (existente == null) "Registada, com o teu significado." else "Significado guardado.",
+                        listOfNotNull(vm.faltaDe(palavra)),
+                        emptyList(),
+                    )
+                }
+            }
+        }
+    }
 
     // Ao abrir uma palavra (por pesquisa, sugestão, candidato ou sinónimo)
     // fecha-se o teclado: a definição não deve ser vista com o teclado por
@@ -135,7 +220,7 @@ fun EcraPesquisa(
             when {
                 entrada != null -> VistaEntrada(
                     entrada,
-                    guardada = palavras.firstOrNull { it.lemma == entrada.lemma },
+                    guardada = palavras.firstOrNull { it.lemma == entrada.lemma && it.lingua == entrada.lingua },
                     desenvolvedor = desenvolvedor,
                     aoVoltar = voltar,
                     aoRegistar = {
@@ -145,10 +230,13 @@ fun EcraPesquisa(
                     },
                     aoPartilhar = {
                         aPartilhar = dadosPartilha(
-                            entrada, palavras.firstOrNull { it.lemma == entrada.lemma },
+                            entrada,
+                            palavras.firstOrNull { it.lemma == entrada.lemma && it.lingua == entrada.lingua },
                         )
                     },
                     aoSeguir = { vm.procurar(it) },
+                    correcoes = correcoesDaEntrada,
+                    aoGuardarEscrito = { guardarEscrito(entrada.lemma, entrada.lingua, entrada, it) },
                 )
 
                 estado.candidatos.isNotEmpty() ->
@@ -156,10 +244,16 @@ fun EcraPesquisa(
 
                 estado.procurou -> {
                     val termo = Texto.paraRegisto(estado.texto)
-                    val guardada = palavras.firstOrNull { it.lemma.equals(termo, ignoreCase = true) }
+                    val guardada = palavras.firstOrNull {
+                        it.lemma.equals(termo, ignoreCase = true) && it.lingua == estado.lingua
+                    }
                     NaoEncontrada(
                         termo = termo,
                         parecidas = estado.parecidas,
+                        lingua = estado.lingua,
+                        linguas = vm.linguas,
+                        existeNaOutra = estado.existeNaOutra,
+                        aoEscolherLingua = vm::escolherLingua,
                         aoVoltar = voltar,
                         aoEscolherParecida = { vm.procurar(it) },
                         significadoProprio = guardada?.significado,
@@ -168,6 +262,7 @@ fun EcraPesquisa(
                             lemaARegistar = termo
                             pedirSignificadoNoRegisto = true
                         },
+                        aoGuardarEscrito = { guardarEscrito(termo, estado.lingua, null, it) },
                     )
                 }
 
@@ -180,6 +275,8 @@ fun EcraPesquisa(
                     // do Modo Desenvolvedor). O limite do dia mantém a app calma.
                     porRever = porRever,
                     restantesHoje = restantesHoje,
+                    linguas = vm.linguas,
+                    aoEscolherLingua = vm::escolherLingua,
                     aoEscrever = vm::escrever,
                     aoProcurar = { termo ->
                         vm.procurar(termo)
@@ -187,8 +284,9 @@ fun EcraPesquisa(
                     },
                     aoLimpar = vm::limpar,
                     aoRever = aoAbrirJogo,
-                    aoAbrirColecao = aoAbrirColecao,
                     aoAbrirLivro = aoAbrirLivro,
+                    aoAbrirLivros = aoAbrirLivros,
+                    livros = livrosCompletos,
                 )
             }
         }
@@ -217,13 +315,19 @@ fun EcraPesquisa(
     }
 
     lemaARegistar?.let { lema ->
-        val existente = palavras.firstOrNull { it.lemma == lema }
+        // A palavra regista-se na língua da entrada aberta (ou, se não está no
+        // dicionário, na língua em que se procurou).
+        val linguaDoRegisto = estado.entrada?.lingua ?: estado.lingua
+        val existente = palavras.firstOrNull { it.lemma == lema && it.lingua == linguaDoRegisto }
         FolhaRegistar(
             lemma = lema,
+            lingua = linguaDoRegisto,
             livrosAnteriores = livros,
             existente = existente,
             fraseInicial = fraseSugerida,
             pedirSignificado = pedirSignificadoNoRegisto,
+            livroEmCurso = livroEmCurso?.titulo,
+            aoMarcarEmCurso = { vm.comecarLivro(it) },
             aoCancelar = {
                 lemaARegistar = null; pedirSignificadoNoRegisto = false; vm.limparContexto()
             },
@@ -233,23 +337,17 @@ fun EcraPesquisa(
                 val eraFalta = pedirSignificadoNoRegisto && existente == null
                 if (existente != null) vm.atualizar(palavra) else vm.registar(palavra)
                 lemaARegistar = null
-                // Palavra nova: se chegou à 5.ª ou à 50.ª, pede-se uma
-                // avaliação, uma vez por marco. Marca-se logo como pedida,
-                // aceite ou não: perguntar outra vez seria insistir.
-                if (existente == null) {
-                    preferencias.avaliacaoPorPedir(palavras.size + 1)?.let { marco ->
-                        preferencias.marcarAvaliacaoPedida(marco)
-                        marcoAvaliacao = marco
-                    }
-                }
+                if (existente == null) talvezPedirAvaliacao()
                 pedirSignificadoNoRegisto = false; vm.limparContexto()
                 if (existente == null) {
                     ambito.launch {
                         if (eraFalta) {
-                            estadoSnackbar.showSnackbar(
-                                "Palavra registada. Podes propô-la ao dicionário em "
-                                    + "Definições, Contribuir.",
-                                duration = SnackbarDuration.Long,
+                            // Uma palavra que falta ao dicionário fica nas
+                            // sugestões por enviar; pode ir já.
+                            oferecerEnvio(
+                                "Palavra registada.",
+                                listOfNotNull(vm.faltaDe(palavra)),
+                                emptyList(),
                             )
                         } else {
                             estadoSnackbar.showSnackbar("\"${palavra.lemma}\" está na tua coleção.")
@@ -362,12 +460,15 @@ private fun Inicio(
     progresso: Progresso?,
     porRever: Int,
     restantesHoje: Int,
+    linguas: List<String> = listOf(Lingua.PT),
+    aoEscolherLingua: (String) -> Unit = {},
     aoEscrever: (String) -> Unit,
     aoProcurar: (String) -> Unit,
     aoLimpar: () -> Unit,
     aoRever: () -> Unit,
-    aoAbrirColecao: () -> Unit,
     aoAbrirLivro: (String) -> Unit,
+    aoAbrirLivros: () -> Unit = {},
+    livros: Map<String, LivroCompleto> = emptyMap(),
 ) {
     val sequencia = sequenciaAtiva(progresso)
     Column(
@@ -409,6 +510,17 @@ private fun Inicio(
             aoMudar = aoEscrever,
             aoProcurar = { if (estado.texto.isNotBlank()) aoProcurar(estado.texto) },
             aoLimpar = aoLimpar,
+            // Em que dicionário se procura: é da pesquisa, não da app, por isso
+            // vive dentro do campo (1.24; antes estava no cabeçalho). Abre na
+            // língua do livro em curso. Sem o inglês instalado, não aparece.
+            fim = if (linguas.size > 1) {
+                {
+                    EscolhaLingua(
+                        estado.lingua, linguas, aoEscolherLingua,
+                        altura = 40.dp, larguraPorOpcao = 46.dp,
+                    )
+                }
+            } else null,
         )
 
         if (estado.texto.isNotBlank()) {
@@ -456,49 +568,36 @@ private fun Inicio(
                 )
             }
 
-            val estante = remember(palavras) { estanteDe(palavras) }
-            if (estante.isNotEmpty()) {
+            // O livro que se está a ler (o separador Livros tem a estante toda).
+            val aLer = remember(livros) { livrosALer(livros) }
+            aLer.firstOrNull()?.let { livro ->
                 Spacer(Modifier.height(22.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Overline("Na tua estante", Modifier.weight(1f))
+                    Overline("A ler agora", Modifier.weight(1f))
                     Text(
-                        "Ver coleção",
+                        "Todos os livros",
                         style = Estilo.controloForte.copy(fontSize = 14.sp),
                         color = Cores.accentInk,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = aoAbrirColecao)
+                            .clickable(onClick = aoAbrirLivros)
                             .padding(horizontal = 6.dp, vertical = 8.dp),
                     )
                 }
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    estante.forEach { livro ->
-                        Column(
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { aoAbrirLivro(livro.titulo) }
-                                .padding(bottom = 4.dp, top = 4.dp, end = 4.dp),
-                        ) {
-                            CapaLivro(livro.titulo, livro.autor)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                buildAnnotatedString {
-                                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Cores.ink)) {
-                                        append(livro.quantas.toString())
-                                    }
-                                    append(if (livro.quantas == 1) " palavra" else " palavras")
-                                },
-                                style = Estilo.ajuda,
-                                color = Cores.ink2,
-                            )
-                        }
-                    }
+                Spacer(Modifier.height(8.dp))
+                CartaoALer(
+                    livro,
+                    palavras.filter { it.livro?.trim() == livro.titulo },
+                    aoAbrir = { aoAbrirLivro(livro.titulo) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (aLer.size > 1) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (aLer.size == 2) "E mais 1 livro a ler." else "E mais ${aLer.size - 1} livros a ler.",
+                        style = Estilo.ajuda,
+                        color = Cores.ink3,
+                    )
                 }
             }
 
@@ -605,22 +704,6 @@ private fun CartaoSugestoes(estado: EstadoPesquisa, aoProcurar: (String) -> Unit
         }
     }
 }
-
-/** Um livro da estante: o título, o autor que lhe ficou e quantas palavras tem. */
-private data class LivroNaEstante(val titulo: String, val autor: String?, val quantas: Int)
-
-/** Os livros da coleção, o mais recente primeiro (a lista vem por data). */
-private fun estanteDe(palavras: List<PalavraGuardada>): List<LivroNaEstante> =
-    palavras.filter { !it.livro.isNullOrBlank() }
-        .groupBy { it.livro!!.trim() }
-        .map { (titulo, lista) ->
-            LivroNaEstante(
-                titulo,
-                lista.firstNotNullOfOrNull { it.autor?.takeIf(String::isNotBlank) },
-                lista.size,
-            )
-        }
-        .take(12)
 
 /**
  * A sequência que ainda conta: se o último dia jogado foi hoje ou ontem. Uma
@@ -832,8 +915,26 @@ private fun VistaEntrada(
     aoRegistar: () -> Unit,
     aoPartilhar: () -> Unit,
     aoSeguir: (String) -> Unit,
+    /** As correções da pessoa às aceções desta palavra (1.30). */
+    correcoes: List<CorrecaoGuardada>,
+    /** Guarda o que se escreveu em "Corrigir ou acrescentar". */
+    aoGuardarEscrito: (Escrito) -> Unit,
 ) {
     val significadoProprio = guardada?.significado?.takeIf { it.isNotBlank() }
+    // Aberto: o diálogo de sugerir, já na aceção dada (nula = a escolha normal).
+    var aCorrigir by remember(entrada.lemmaId) { mutableStateOf(false) }
+    var acecaoACorrigir by remember(entrada.lemmaId) { mutableStateOf<Int?>(null) }
+    if (aCorrigir) {
+        DialogoSugerir(
+            lemma = entrada.lemma,
+            acecoes = entrada.acecoes,
+            significadoProprio = significadoProprio,
+            correcoes = correcoes,
+            aoGuardar = aoGuardarEscrito,
+            aoFechar = { aCorrigir = false; acecaoACorrigir = null },
+            acecaoInicial = acecaoACorrigir,
+        )
+    }
     // Coluna + lista com peso: o texto rola, mas a barra de registar fica
     // sempre em baixo. Registar é o gesto central da app; numa entrada com
     // sete aceções, o botão não pode desaparecer ao rolar.
@@ -842,6 +943,8 @@ private fun VistaEntrada(
             aoVoltar,
             direita = {
                 // Partilhar leva o significado para fora da app, sem rede.
+                // (O "Corrigir" esteve aqui, num menu ⋮, até à 1.24: agora é
+                // um botão por baixo das definições, onde se está a ler.)
                 IconButton(onClick = aoPartilhar, modifier = Modifier.size(44.dp)) {
                     Icon(Icons.Rounded.Share, "Partilhar", tint = Cores.ink)
                 }
@@ -856,8 +959,10 @@ private fun VistaEntrada(
                 // Todas as classes da palavra, a principal primeiro
                 // ("substantivo · adjetivo"); com um dicionário anterior à
                 // 1.21, só a do lema, como antes.
-                val classe = entrada.classes.takeIf { it.isNotEmpty() }
-                    ?.joinToString(" · ") { rotuloPos(it) }
+                // Uma palavra inglesa diz que o é, à frente da classe.
+                val classe = (listOfNotNull(Lingua.nome(entrada.lingua).takeIf { entrada.lingua != Lingua.PT })
+                    + entrada.classes.map { rotuloPos(it) })
+                    .takeIf { it.isNotEmpty() }?.joinToString(" · ")
                 if (classe != null || entrada.silabas != null) {
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -894,11 +999,10 @@ private fun VistaEntrada(
             // O significado que o próprio escreveu fica sempre visível, tenha
             // a palavra definição ou não: o teu contributo não se perde quando
             // a palavra entra no dicionário numa versão seguinte.
+            // Toca-se para o mudar ou apagar, no mesmo diálogo de corrigir.
             significadoProprio?.let { meu ->
                 item {
-                    Overline("O teu significado")
-                    Spacer(Modifier.height(6.dp))
-                    Text(meu, style = Estilo.acecao, color = Cores.ink)
+                    BlocoSignificadoProprio(meu) { acecaoACorrigir = null; aCorrigir = true }
                     Spacer(Modifier.height(22.dp))
                 }
             }
@@ -987,9 +1091,28 @@ private fun VistaEntrada(
                             Spacer(Modifier.height(10.dp))
                             CaixaExemplo(it, desenvolvedor)
                         }
+                        // A correção que a pessoa fez a esta aceção (1.30).
+                        correcoes.firstOrNull { it.acecaoOrd == acecao.ord }?.let { c ->
+                            Spacer(Modifier.height(10.dp))
+                            CaixaCorrecao(c) { acecaoACorrigir = acecao.ord; aCorrigir = true }
+                        }
                     }
                 }
               }
+            }
+
+            // Corrigir ou acrescentar, à mão de quem acabou de ler (1.30): um
+            // botão a sério por baixo das definições, e não um item no menu.
+            item(key = "corrigir") {
+                BotaoContornado(
+                    if (entrada.acecoes.isEmpty() && significadoProprio == null) "Acrescentar um significado"
+                    else "Corrigir ou acrescentar",
+                    { acecaoACorrigir = null; aCorrigir = true },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 22.dp),
+                    icone = Icons.Rounded.EditNote,
+                    cor = Cores.accentInk,
+                    borda = Cores.accent,
+                )
             }
 
             val soltos = entrada.exemplosSoltos
@@ -1063,6 +1186,49 @@ private fun VistaEntrada(
                 )
             }
         }
+    }
+}
+
+/**
+ * "O teu significado": o sentido escrito pela pessoa, por cima das definições
+ * (ou sozinho, numa palavra que o dicionário não tem). Toca-se para o mudar.
+ */
+@Composable
+private fun BlocoSignificadoProprio(texto: String, aoTocar: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = aoTocar),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Overline("O teu significado", Modifier.weight(1f))
+            Icon(Icons.Rounded.EditNote, "Mudar", tint = Cores.ink3, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(texto, style = Estilo.acecao, color = Cores.ink)
+    }
+}
+
+/** A correção da pessoa a uma aceção, logo por baixo dela. Toca-se para a mudar. */
+@Composable
+private fun CaixaCorrecao(c: CorrecaoGuardada, aoTocar: () -> Unit) {
+    val forma = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .border(1.dp, Cores.accent, forma)
+            .clickable(onClick = aoTocar)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(
+            if (c.enviadaEm != null) "A tua correção · enviada" else "A tua correção",
+            style = Estilo.ajuda,
+            color = Cores.accentInk,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(c.texto, style = Estilo.texto.copy(fontSize = 15.sp), color = Cores.ink)
     }
 }
 
@@ -1156,7 +1322,7 @@ private fun CaixaExemplo(exemplo: Exemplo, desenvolvedor: Boolean) {
             Text(exemplo.frase, style = Estilo.citacao, color = Cores.ink)
             Spacer(Modifier.height(6.dp))
             // A fonte da frase fica sempre: o Tatoeba distribui em CC BY com
-            // atribuição por frase (ver docs/fontes.md). A referência interna
+            // atribuição por frase (ver notas/fontes.md). A referência interna
             // só no Modo Desenvolvedor.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (exemplo.gerado) {
@@ -1250,9 +1416,30 @@ private fun NaoEncontrada(
     significadoProprio: String?,
     jaGuardada: Boolean,
     aoRegistar: () -> Unit,
+    lingua: String = Lingua.PT,
+    linguas: List<String> = listOf(Lingua.PT),
+    /** A outra língua, se a palavra estiver lá. */
+    existeNaOutra: String? = null,
+    aoEscolherLingua: (String) -> Unit = {},
+    /** Guarda o que se escreveu em "Acrescentar um significado" (1.30). */
+    aoGuardarEscrito: (Escrito) -> Unit = {},
 ) {
+    var aSugerir by remember(termo) { mutableStateOf(false) }
+    if (aSugerir) {
+        DialogoSugerir(
+            lemma = termo,
+            acecoes = emptyList(),
+            significadoProprio = significadoProprio?.takeIf { it.isNotBlank() },
+            correcoes = emptyList(),
+            aoGuardar = aoGuardarEscrito,
+            aoFechar = { aSugerir = false },
+        )
+    }
     Column(Modifier.fillMaxSize()) {
-        BarraVoltar(aoVoltar)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { BarraVoltar(aoVoltar) }
+            EscolhaLingua(lingua, linguas, aoEscolherLingua, Modifier.padding(end = 16.dp))
+        }
         Column(
             Modifier
                 .fillMaxSize()
@@ -1272,12 +1459,24 @@ private fun NaoEncontrada(
                 )
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "Não está no dicionário. Pode ser só um erro de escrita.",
+                    if (linguas.size > 1)
+                        "Não está no dicionário de ${Lingua.nome(lingua).lowercase()}. Pode ser só um erro de escrita."
+                    else "Não está no dicionário. Pode ser só um erro de escrita.",
                     style = Estilo.corpo,
                     color = Cores.ink2,
                 )
             } else {
                 Text("Não encontrei essa palavra.", style = Estilo.corpo, color = Cores.ink2)
+            }
+
+            // Está no outro dicionário: um toque e procura-se lá.
+            existeNaOutra?.let { outra ->
+                Spacer(Modifier.height(18.dp))
+                BotaoPrincipal(
+                    "Ver no dicionário de ${Lingua.nome(outra).lowercase()}",
+                    { aoEscolherLingua(outra) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             if (parecidas.isNotEmpty()) {
@@ -1317,9 +1516,7 @@ private fun NaoEncontrada(
 
             significadoProprio?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(22.dp))
-                Overline("O teu significado")
-                Spacer(Modifier.height(6.dp))
-                Text(it, style = Estilo.acecao, color = Cores.ink)
+                BlocoSignificadoProprio(it) { aSugerir = true }
             }
 
             if (termo.isNotBlank()) {
@@ -1331,6 +1528,17 @@ private fun NaoEncontrada(
                         cor = Cores.ok,
                         icone = Icons.Rounded.Bookmark,
                     )
+                    // Na coleção mas sem significado: o mesmo botão da palavra.
+                    if (significadoProprio.isNullOrBlank()) {
+                        Spacer(Modifier.height(18.dp))
+                        BotaoContornado(
+                            "Acrescentar um significado", { aSugerir = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            icone = Icons.Rounded.EditNote,
+                            cor = Cores.accentInk,
+                            borda = Cores.accent,
+                        )
+                    }
                 } else {
                     Column(
                         Modifier
@@ -1347,7 +1555,7 @@ private fun NaoEncontrada(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "Podes guardá-la na tua coleção e escrever o que quer "
-                                + "dizer, se souberes.",
+                                + "dizer, se souberes. Depois podes submetê-la ao dicionário.",
                             style = Estilo.texto.copy(fontSize = 14.sp, lineHeight = 1.45.em),
                             color = Cores.ink2,
                         )

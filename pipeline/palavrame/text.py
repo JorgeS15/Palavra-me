@@ -15,6 +15,10 @@ import unicodedata
 # resto que não seja letra ou dígito vira espaço e depois desaparece.
 _LIMPEZA = re.compile(r"[^\w\-']+", re.UNICODE)
 _ESPACOS = re.compile(r"\s+")
+# Apóstrofos tipográficos -> o simples. Os ebooks escrevem `wouldn’t` e
+# `d’água` com o ’ (U+2019), e sem isto o ’ virava espaço: `wouldn t` não
+# encontrava nada. A app (`Texto.kt`) faz exatamente o mesmo.
+_APOSTROFOS = str.maketrans({"’": "'", "‘": "'", "ʼ": "'", "′": "'"})
 # `_palavra_` — itálico do Dicionário Aberto.
 _ITALICO = re.compile(r"_([^_]+)_")
 
@@ -68,7 +72,7 @@ def normalize(s: str) -> str:
 
     É o que vai para as colunas `normalized` de `lemmas` e `forms`.
     """
-    s = strip_accents(s.strip().lower())
+    s = strip_accents(s.strip().lower().translate(_APOSTROFOS))
     s = _LIMPEZA.sub(" ", s)
     return _ESPACOS.sub(" ", s).strip()
 
@@ -131,6 +135,32 @@ def sem_trema(s: str) -> str:
     -> `lânguido`). Ao contrário do acento, o trema não distingue palavras: é
     sempre grafia velha da mesma palavra."""
     return s.translate(_TREMA)
+
+
+_GRAVES = str.maketrans("àèìòùÀÈÌÒÙ", "aeiouAEIOU")
+_PALAVRA = re.compile(r"[^\W\d_]+(?:-[^\W\d_]+)*")
+# O acento grave que ficou: a contração ("à", "às", "àquele", "àquilo"...).
+_CONTRACAO = re.compile(r"^(?:às?|àquel\w*|àquil\w*)$", re.IGNORECASE)
+
+
+def sem_graves(s: str) -> str:
+    """Tira o acento grave da ortografia de 1911, que o de 1945 aboliu.
+
+    O Dicionário Aberto (1913) marca com grave as vogais abertas átonas das
+    derivadas: `crèdor`, `sòzinho`, `chàzeiro`, `prègar`. Hoje escreve-se
+    `credor`, `sozinho`, `chazeiro`, `pregar`. Sem isto, `crèdor` era uma
+    entrada à parte ao lado de `credor` (do Wikcionário), e a pesquisa por
+    "credor" dava as duas.
+
+    Fica o grave das contrações, que continua a existir: "à", "às",
+    "àquele", "àquilo" ("barco à vela" não muda).
+    """
+    if not any(ch in s for ch in "àèìòùÀÈÌÒÙ"):
+        return s
+    def trocar(m: "re.Match[str]") -> str:
+        palavra = m.group(0)
+        return palavra if _CONTRACAO.match(palavra) else palavra.translate(_GRAVES)
+    return _PALAVRA.sub(trocar, s)
 
 
 def tokens(s: str) -> list[str]:

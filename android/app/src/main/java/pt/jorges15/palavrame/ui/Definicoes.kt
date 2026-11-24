@@ -42,12 +42,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import pt.jorges15.palavrame.BuildConfig
 import pt.jorges15.palavrame.PalavrameApp
 import pt.jorges15.palavrame.ResultadoImportacao
 import pt.jorges15.palavrame.data.Backup
+import pt.jorges15.palavrame.data.CorrecaoGuardada
+import pt.jorges15.palavrame.data.Lingua
+import pt.jorges15.palavrame.data.livrosCompletos
 import pt.jorges15.palavrame.data.Preferencias
+import pt.jorges15.palavrame.data.Progresso
 import pt.jorges15.palavrame.data.LetraId
 import pt.jorges15.palavrame.data.PaletaId
 import pt.jorges15.palavrame.data.Tema
@@ -86,9 +92,13 @@ fun EcraDefinicoes(
         ambito.launch {
             val palavras = app.utilizador.palavras().todasAgora()
             val progresso = app.utilizador.progresso().atual()
+            val livros = livrosCompletos(
+                app.utilizador.livros().fichasAgora(), app.utilizador.livros().leiturasAgora(),
+            ).values.toList()
             mensagemBackup = when (
                 val r = Backup.exportar(
-                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME
+                    context, destino, palavras, progresso, BuildConfig.VERSION_NAME, livros,
+                    app.utilizador.correcoes().todas(),
                 )
             ) {
                 is Backup.Resultado.Feito -> "Exportadas ${r.novas} palavras."
@@ -97,13 +107,26 @@ fun EcraDefinicoes(
         }
     }
 
+    // A pergunta da importação: o progresso daqui, o da cópia e a resposta.
+    var escolhaProgresso by remember {
+        mutableStateOf<Triple<Progresso, Progresso, CompletableDeferred<Boolean>>?>(null)
+    }
+    escolhaProgresso?.let { (local, daCopia, resposta) ->
+        DialogoProgresso(local, daCopia, aoEscolher = { resposta.complete(it) })
+    }
+
     val importador = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { origem ->
         if (origem == null) return@rememberLauncherForActivityResult
         ambito.launch {
             mensagemBackup = when (
-                val r = Backup.importar(context, origem, app.utilizador)
+                val r = Backup.importar(context, origem, app.utilizador) { local, daCopia ->
+                    // Os dois progressos em uso: pergunta-se qual fica.
+                    val resposta = CompletableDeferred<Boolean>()
+                    escolhaProgresso = Triple(local, daCopia, resposta)
+                    resposta.await().also { escolhaProgresso = null }
+                }
             ) {
                 is Backup.Resultado.Feito -> buildString {
                     append("Importadas ${r.novas} palavras")
@@ -118,10 +141,21 @@ fun EcraDefinicoes(
     }
     var mensagem by remember { mutableStateOf<String?>(null) }
 
+    var verTutorial by remember { mutableStateOf(false) }
+    if (verTutorial) Tutorial(aoFechar = { verTutorial = false })
+
     // Submissão de palavras em falta, sem rede: a app entrega a lista ao
     // email (é o email que envia; a app continua sem permissão de Internet).
     var mensagemFalta by remember { mutableStateOf<String?>(null) }
     var mostrarSubmissao by remember { mutableStateOf(false) }
+    // Quantas sugestões há por enviar (1.30); recontam-se ao fechar a lista.
+    var porEnviar by remember { mutableStateOf(0) }
+    LaunchedEffect(mostrarSubmissao) {
+        if (!mostrarSubmissao) {
+            porEnviar = palavrasEmFalta(app::dicionario, app.utilizador).size +
+                app.utilizador.correcoes().porEnviar().size
+        }
+    }
 
     Scaffold(containerColor = Cores.bg) { padding ->
         Column(
@@ -138,6 +172,8 @@ fun EcraDefinicoes(
 
             Seccao("Rever")
             GrupoCartao { SeccaoJogo(preferencias) }
+            Spacer(Modifier.height(12.dp))
+            GrupoCartao { LinhaEscrever(preferencias) }
 
             Seccao("As minhas palavras")
             GrupoCartao {
@@ -177,11 +213,25 @@ fun EcraDefinicoes(
 
             Seccao("Contribuir")
             GrupoCartao {
+                // Tudo o que se guardou em "Corrigir ou acrescentar", e as
+                // palavras registadas que o dicionário não tem, à espera de ir
+                // por email (1.30; antes, "Submeter por mail", só as palavras).
                 LinhaGrupo(
-                    "Submeter por mail",
-                    subtitulo = "Contribui com novas palavras para o dicionário.",
+                    "Submeter ao dicionário",
+                    subtitulo = if (porEnviar == 0)
+                        "Palavras novas, sentidos e correções que guardares ficam aqui."
+                    else if (porEnviar == 1) "1 sugestão por submeter."
+                    else "$porEnviar sugestões por submeter.",
                     aoTocar = { mostrarSubmissao = true },
-                    direita = { Chevron() },
+                    direita = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (porEnviar > 0) {
+                                Pilula("$porEnviar", fundo = Cores.accentSoft, cor = Cores.accentInk)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Chevron()
+                        }
+                    },
                 )
                 mensagemFalta?.let {
                     Text(
@@ -193,11 +243,12 @@ fun EcraDefinicoes(
 
             Seccao("Sobre")
             GrupoCartao {
+                // O tutorial da primeira abertura, para rever quando se quiser.
                 LinhaGrupo(
-                    "Versão da app",
-                    direita = {
-                        Text(BuildConfig.VERSION_NAME, style = Estilo.texto, color = Cores.ink2)
-                    },
+                    "Como funciona",
+                    subtitulo = "Procurar, guardar, corrigir, os livros e a revisão, em cinco ecrãs.",
+                    aoTocar = { verTutorial = true },
+                    direita = { Chevron() },
                 )
                 DivisoriaGrupo()
                 // Abre a página da app na Play Store (como o pedido à 5.ª
@@ -248,6 +299,14 @@ fun EcraDefinicoes(
                         modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
                     )
                 }
+                // A versão no fim: é informação, não uma ação.
+                DivisoriaGrupo()
+                LinhaGrupo(
+                    "Versão da app",
+                    direita = {
+                        Text(BuildConfig.VERSION_NAME, style = Estilo.texto, color = Cores.ink2)
+                    },
+                )
             }
 
             Seccao("Avançado")
@@ -256,22 +315,18 @@ fun EcraDefinicoes(
     }
 
     if (mostrarSubmissao) {
-        DialogoSubmeterFaltas(
+        DialogoSugestoes(
             app = app,
             aoFechar = { mostrarSubmissao = false },
-            aoEnviar = { escolhidas ->
-                val intent = intentEmail(
-                    para = EMAIL_SUBMISSAO,
-                    assunto = assuntoSubmissao(escolhidas.size),
-                    corpo = corpoDeFalta(
-                        escolhidas, BuildConfig.VERSION_NAME,
-                        app.dicionario?.construidoEm,
-                    ),
-                )
-                try {
-                    context.startActivity(intent)
+            aoEnviar = { faltas, correcoes ->
+                if (enviarSugestoes(context, faltas, correcoes)) {
                     mensagemFalta = null
-                } catch (e: Exception) {
+                    ambito.launch {
+                        marcarSugestoesEnviadas(app.utilizador, faltas, correcoes)
+                        porEnviar = palavrasEmFalta(app::dicionario, app.utilizador).size +
+                            app.utilizador.correcoes().porEnviar().size
+                    }
+                } else {
                     mensagemFalta = "Não encontrei uma app de email neste telemóvel."
                 }
             },
@@ -527,13 +582,33 @@ private fun LinhaLetra(id: LetraId, ativa: Boolean, aoTocar: () -> Unit) {
  * atribuição obrigatória, e este ecrã é o que cumpre essa obrigação (plano, F5).
  */
 @Composable
-fun EcraLicencas(aoVoltar: () -> Unit) {
+fun EcraLicencas(preferencias: Preferencias, aoVoltar: () -> Unit) {
     val context = LocalContext.current
+    val desenvolvedor by preferencias.modoDesenvolvedor.collectAsState()
     val app = context.applicationContext as PalavrameApp
     val ambito = rememberCoroutineScope()
     var aInstalar by remember { mutableStateOf(false) }
     var mensagem by remember { mutableStateOf<String?>(null) }
-    var haNovoNoApk by remember { mutableStateOf(app.temDicionarioEmpacotado()) }
+    var porInstalar by remember { mutableStateOf(app.linguasPorInstalar()) }
+    var instaladas by remember { mutableStateOf(app.linguasInstaladas()) }
+
+    // Um dicionário escolhido à mão (a língua sai do próprio ficheiro). Só no
+    // Modo Desenvolvedor (1.30): os dois dicionários vêm dentro da app, e isto
+    // serve para experimentar uma base nova sem compilar.
+    val seletor = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        aInstalar = true
+        ambito.launch {
+            mensagem = when (val r = app.importarDicionario(uri)) {
+                is ResultadoImportacao.Feito ->
+                    "Instalado o dicionário de ${Lingua.nome(r.lingua).lowercase()}."
+                is ResultadoImportacao.Erro -> "Falhou: ${r.motivo}"
+            }
+            aInstalar = false
+            instaladas = app.linguasInstaladas()
+            porInstalar = app.linguasPorInstalar()
+        }
+    }
 
     Scaffold(containerColor = Cores.bg) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -546,37 +621,49 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
             ) {
                 Text("Dicionário e licenças", style = Estilo.tituloEcra, color = Cores.ink)
 
-                Seccao("Dicionário")
-                val d = app.dicionario
-                GrupoCartao {
-                    Linha("Construído em", d?.construidoEm?.take(10) ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Lemas", d?.totalLemas?.let { "%,d".format(it) } ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Aceções", d?.totalAcecoes?.let { "%,d".format(it) } ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Formas flexionadas", d?.totalFormas?.let { "%,d".format(it) } ?: "-")
-                    DivisoriaGrupo()
-                    Linha("Exemplos", d?.totalExemplos?.let { "%,d".format(it) } ?: "-")
+                // Um bloco por língua instalada; o português sempre, mesmo vazio.
+                for (lingua in (listOf(Lingua.PT) + instaladas).distinct()) {
+                    Seccao(if (lingua == Lingua.PT) "Dicionário" else "Dicionário de ${Lingua.nome(lingua).lowercase()}")
+                    val d = app.dicionario(lingua)
+                    GrupoCartao {
+                        Linha("Construído em", d?.construidoEm?.take(10) ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Lemas", d?.totalLemas?.let { "%,d".format(it) } ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Aceções", d?.totalAcecoes?.let { "%,d".format(it) } ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Formas flexionadas", d?.totalFormas?.let { "%,d".format(it) } ?: "-")
+                        DivisoriaGrupo()
+                        Linha("Exemplos", d?.totalExemplos?.let { "%,d".format(it) } ?: "-")
+                    }
                 }
 
-                if (haNovoNoApk) {
+                if (porInstalar.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     BotaoPrincipal(
                         if (aInstalar) "A instalar…" else "Instalar o dicionário da app",
                         {
                             aInstalar = true
                             ambito.launch {
-                                mensagem = when (val r = app.instalarDicionarioEmpacotado()) {
-                                    is ResultadoImportacao.Feito ->
-                                        "Instalado. Fecha e volta a abrir a app."
-                                    is ResultadoImportacao.Erro -> "Falhou: ${r.motivo}"
+                                val falhas = porInstalar.mapNotNull { l ->
+                                    (app.instalarDicionarioEmpacotado(l) as? ResultadoImportacao.Erro)?.motivo
                                 }
+                                mensagem = if (falhas.isEmpty()) "Instalado. Fecha e volta a abrir a app."
+                                    else "Falhou: ${falhas.first()}"
                                 aInstalar = false
-                                haNovoNoApk = app.temDicionarioEmpacotado()
+                                porInstalar = app.linguasPorInstalar()
+                                instaladas = app.linguasInstaladas()
                             }
                         },
                         ativo = !aInstalar,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (desenvolvedor) {
+                    Spacer(Modifier.height(12.dp))
+                    BotaoContornado(
+                        "Instalar um ficheiro de dicionário",
+                        { if (!aInstalar) seletor.launch(arrayOf("*/*")) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -585,9 +672,15 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
                     Text(it, style = Estilo.ajuda, color = Cores.ink)
                 }
 
-                Seccao("Fontes")
-                val fontes = app.dicionario?.fontes().orEmpty()
-                if (fontes.isNotEmpty()) {
+                // As fontes de cada dicionário instalado, cada um no seu grupo
+                // (1.30: o inglês tem as dele, o Wiktionary e o Leipzig ingleses).
+                for (lingua in instaladas) {
+                    val fontes = app.dicionario(lingua)?.fontes().orEmpty()
+                    if (fontes.isEmpty()) continue
+                    Seccao(
+                        if (instaladas.size == 1) "Fontes"
+                        else "Fontes: ${Lingua.nome(lingua).lowercase()}"
+                    )
                     GrupoCartao {
                         fontes.forEachIndexed { i, fonte ->
                             if (i > 0) DivisoriaGrupo()
@@ -597,7 +690,7 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "A base de dados deriva destas fontes e é distribuída sob "
+                    "Cada dicionário deriva das suas fontes e é distribuído sob "
                         + "CC BY-SA, como elas exigem.",
                     style = Estilo.ajuda,
                     color = Cores.ink2,
@@ -622,6 +715,22 @@ fun EcraLicencas(aoVoltar: () -> Unit) {
 }
 
 /**
+ * "Escrever a palavra" (1.22): nas palavras que já se acertam, metade das
+ * perguntas pede para escrever a palavra a partir da definição. Vale para a
+ * revisão toda, com ou sem lembretes.
+ */
+@Composable
+private fun LinhaEscrever(preferencias: Preferencias) {
+    val ligado by preferencias.escreverAPalavra.collectAsState()
+    LinhaGrupo(
+        "Escrever a palavra",
+        subtitulo = "Nas palavras que já acertas, às vezes mostra-se a definição "
+            + "e escreves tu a palavra. É mais difícil, e ajuda a fixá-la.",
+        direita = { SwitchPalavra(ligado) { preferencias.definirEscreverAPalavra(it) } },
+    )
+}
+
+/**
  * Os lembretes: ligar, quantos por dia, e entre que horas.
  *
  * A permissão de notificações é pedida **aqui**, no momento em que se liga o
@@ -636,6 +745,7 @@ private fun SeccaoJogo(preferencias: Preferencias) {
     val quantos by preferencias.quantosPorDia.collectAsState()
     val inicio by preferencias.inicioDaJanela.collectAsState()
     val fim by preferencias.fimDaJanela.collectAsState()
+    val comPalavra by preferencias.palavraNasNotificacoes.collectAsState()
     var aEscolher by remember { mutableStateOf<Extremo?>(null) }
 
     fun reagendar() = Lembrete.agendar(context, quantos, inicio, fim)
@@ -755,6 +865,16 @@ private fun SeccaoJogo(preferencias: Preferencias) {
             color = Cores.ink2,
         )
     }
+    DivisoriaGrupo()
+    LinhaGrupo(
+        "Mostrar a palavra",
+        subtitulo = if (comPalavra) {
+            "\"Ainda te lembras de ...?\" No ecrã bloqueado, a palavra fica sempre escondida."
+        } else {
+            "\"${Lembrete.TITULO_SEM_PALAVRA}\". A palavra só aparece ao abrir."
+        },
+        direita = { SwitchPalavra(comPalavra) { preferencias.definirPalavraNasNotificacoes(it) } },
+    )
     DivisoriaGrupo()
     // Empurrão à bateria. Em muitos telemóveis (Xiaomi, Samsung, Huawei...) o
     // sistema mata o trabalho em segundo plano e os lembretes não chegam. Não
@@ -917,75 +1037,110 @@ private fun Linha(etiqueta: String, valor: String) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DialogoSubmeterFaltas(
+private fun DialogoSugestoes(
     app: PalavrameApp,
     aoFechar: () -> Unit,
-    aoEnviar: (List<PalavraEmFalta>) -> Unit,
+    aoEnviar: (List<PalavraEmFalta>, List<CorrecaoGuardada>) -> Unit,
 ) {
-    // null = ainda a procurar; lista vazia = não há nada em falta.
+    // null = ainda a procurar; listas vazias = não há nada por enviar.
     var faltas by remember { mutableStateOf<List<PalavraEmFalta>?>(null) }
+    var correcoes by remember { mutableStateOf<List<CorrecaoGuardada>>(emptyList()) }
     val marcadas = remember { mutableStateMapOf<String, Boolean>() }
     LaunchedEffect(Unit) {
-        val lista = palavrasEmFalta(app.dicionario, app.utilizador)
-        lista.forEach { marcadas[it.lemma] = true }
+        val lista = palavrasEmFalta(app::dicionario, app.utilizador)
+        val corr = app.utilizador.correcoes().porEnviar()
+        lista.forEach { marcadas["f:" + it.lingua + ":" + it.lemma] = true }
+        corr.forEach { marcadas["c:" + it.id] = true }
+        correcoes = corr
         faltas = lista
     }
-    val escolhidas = faltas.orEmpty().filter { marcadas[it.lemma] == true }
+    val faltasEscolhidas = faltas.orEmpty().filter { marcadas["f:" + it.lingua + ":" + it.lemma] == true }
+    val correcoesEscolhidas = correcoes.filter { marcadas["c:" + it.id] == true }
+    val vazio = faltas != null && faltas.orEmpty().isEmpty() && correcoes.isEmpty()
 
     AlertDialog(
         onDismissRequest = aoFechar,
         containerColor = Cores.card,
-        title = { Text("Submeter palavras em falta", style = Estilo.grupoTitulo, color = Cores.ink) },
+        title = { Text("Submeter ao dicionário", style = Estilo.grupoTitulo, color = Cores.ink) },
         text = {
             val lista = faltas
             when {
                 lista == null -> Text("A procurar…")
-                lista.isEmpty() ->
-                    Text("Não tens palavras em falta. Está tudo no dicionário.")
+                vazio -> Text(
+                    "Não tens nada por submeter. As palavras que o dicionário não tem, "
+                        + "e o que guardares em \"Corrigir ou acrescentar\", aparecem aqui."
+                )
                 else -> Column(
-                    Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())
+                    Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())
                 ) {
                     lista.forEach { f ->
-                        val marcada = marcadas[f.lemma] ?: true
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable { marcadas[f.lemma] = !marcada }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(
-                                checked = marcada,
-                                onCheckedChange = { marcadas[f.lemma] = it },
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(f.lemma, style = Estilo.linhaLema.copy(fontSize = 17.sp), color = Cores.ink)
-                                Text(
-                                    rotuloFalta(f.tipo),
-                                    style = Estilo.meta,
-                                    color = Cores.ink3,
-                                )
-                            }
-                        }
+                        LinhaSugestao(
+                            chave = "f:" + f.lingua + ":" + f.lemma,
+                            marcadas = marcadas,
+                            titulo = if (f.lingua == Lingua.PT) f.lemma
+                                else f.lemma + " · " + Lingua.sigla(f.lingua),
+                            detalhe = rotuloFalta(f.tipo) +
+                                (f.significadoProprio?.let { ": $it" } ?: ""),
+                        )
+                    }
+                    correcoes.forEach { c ->
+                        LinhaSugestao(
+                            chave = "c:" + c.id,
+                            marcadas = marcadas,
+                            titulo = c.lemma,
+                            detalhe = "corrige o significado ${c.acecaoOrd}: ${c.texto}",
+                        )
                     }
                 }
             }
         },
         confirmButton = {
-            if (!faltas.isNullOrEmpty()) {
+            if (haSugestoes(faltas, correcoes)) {
                 TextButton(
-                    enabled = escolhidas.isNotEmpty(),
-                    onClick = { aoEnviar(escolhidas); aoFechar() },
-                ) { Text("Enviar por email") }
+                    enabled = faltasEscolhidas.isNotEmpty() || correcoesEscolhidas.isNotEmpty(),
+                    onClick = { aoEnviar(faltasEscolhidas, correcoesEscolhidas); aoFechar() },
+                ) { Text("Submeter por email") }
             }
         },
         dismissButton = { TextButton(onClick = aoFechar) { Text("Fechar") } },
     )
 }
 
+private fun haSugestoes(faltas: List<PalavraEmFalta>?, correcoes: List<CorrecaoGuardada>) =
+    !faltas.isNullOrEmpty() || correcoes.isNotEmpty()
+
+@Composable
+private fun LinhaSugestao(
+    chave: String,
+    marcadas: MutableMap<String, Boolean>,
+    titulo: String,
+    detalhe: String,
+) {
+    val marcada = marcadas[chave] ?: true
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable { marcadas[chave] = !marcada }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = marcada, onCheckedChange = { marcadas[chave] = it })
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(titulo, style = Estilo.linhaLema.copy(fontSize = 17.sp), color = Cores.ink)
+            Text(
+                detalhe,
+                style = Estilo.meta,
+                color = Cores.ink3,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
 // Para onde vão as submissões e como as identificar na caixa de entrada. É o
 // email do Jorge, não o de contacto público da app: chega-lhe direto.
-private const val EMAIL_SUBMISSAO = "jorgea15santos@gmail.com"
+internal const val EMAIL_SUBMISSAO = "jorgea15santos@gmail.com"
 
 // Contacto geral (sugestões, problemas, ajuda). O mesmo email das submissões.
 private const val CONTACTO_EMAIL = "jorgea15santos@gmail.com"
@@ -1001,7 +1156,7 @@ private const val CONTACTO_EMAIL = "jorgea15santos@gmail.com"
  * maioria prefere). Algumas apps ignoram os extras e abriam o email vazio;
  * outras ignoram o endereço. Com os dois, todas recebem tudo.
  */
-private fun intentEmail(para: String, assunto: String, corpo: String): Intent {
+internal fun intentEmail(para: String, assunto: String, corpo: String): Intent {
     val endereco = "mailto:" + Uri.encode(para, "@") +
         "?subject=" + Uri.encode(assunto) +
         "&body=" + Uri.encode(corpo)
@@ -1012,3 +1167,62 @@ private fun intentEmail(para: String, assunto: String, corpo: String): Intent {
     }
 }
 
+/**
+ * Ao importar uma cópia com outro progresso: qual fica? As palavras juntam-se
+ * sempre; o progresso (pontos, sequência, respostas) é um ou outro.
+ */
+@Composable
+private fun DialogoProgresso(local: Progresso, daCopia: Progresso, aoEscolher: (Boolean) -> Unit) {
+    AlertDialog(
+        onDismissRequest = { aoEscolher(false) },
+        containerColor = Cores.card,
+        title = { Text("Que progresso fica?", style = Estilo.grupoTitulo.copy(fontSize = 22.sp), color = Cores.ink) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "As palavras da cópia juntam-se às tuas. O progresso das revisões "
+                        + "é um ou outro: escolhe qual fica.",
+                    style = Estilo.texto,
+                    color = Cores.ink2,
+                )
+                LinhaProgresso("Neste telemóvel", local)
+                LinhaProgresso("Na cópia", daCopia)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { aoEscolher(true) },
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.accentInk),
+            ) { Text("Usar o da cópia", style = Estilo.controloForte) }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { aoEscolher(false) },
+                colors = ButtonDefaults.textButtonColors(contentColor = Cores.ink2),
+            ) { Text("Manter o deste", style = Estilo.controlo) }
+        },
+    )
+}
+
+@Composable
+private fun LinhaProgresso(rotulo: String, p: Progresso) {
+    Column {
+        Text(rotulo, style = Estilo.rotulo.copy(fontSize = 13.sp), color = Cores.ink2)
+        Text(resumoProgresso(p), style = Estilo.texto, color = Cores.ink)
+    }
+}
+
+/** "2704 pontos · 266 respostas · sequência de 34 dias, até 1 de novembro". */
+internal fun resumoProgresso(p: Progresso): String = buildList {
+    add("${p.pontos} pontos")
+    val respostas = p.acertos + p.erros
+    add(if (respostas == 1) "1 resposta" else "$respostas respostas")
+    if (p.sequencia > 0) {
+        val ate = p.ultimoDia?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            ?.format(java.time.format.DateTimeFormatter.ofPattern("d 'de' MMMM", java.util.Locale.forLanguageTag("pt-PT")))
+        add(
+            (if (p.sequencia == 1) "sequência de 1 dia" else "sequência de ${p.sequencia} dias")
+                + (ate?.let { ", até $it" } ?: "")
+        )
+    }
+}.joinToString(" · ")

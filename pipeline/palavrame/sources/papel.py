@@ -61,7 +61,7 @@ INFO = SourceInfo(
             "obteve confirmação por email a 2026-08-06 de que a "
             "redistribuição está coberta. É a ÚNICA fonte da base sem "
             "licença escrita: o email é o que sustenta a decisão e deve ser "
-            "guardado — ver docs/fontes.md."
+            "guardado — ver notas/fontes.md."
         ),
     ),
     provides=("relations",),

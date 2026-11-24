@@ -91,13 +91,80 @@ internal fun corpoDeFalta(
     append("\n\n")
 
     faltas.forEach { f ->
-        append("• ").append(f.lemma)
+        append("• ").append(f.lemma).append(etiquetaLingua(f.lingua))
         append(" (").append(rotuloFalta(f.tipo)).append(")")
         f.significadoProprio?.let { append(". Significado: ").append(numaLinha(it)) }
         append('\n')
     }
 
-    append("\n--- para colar no seeds/curadoria.csv ---\n")
-    append(csvDeFalta(faltas, incluirCabecalho = false))
+    if (faltas.any { it.lingua == pt.jorges15.palavrame.data.Lingua.PT }) append("\n--- para colar no seeds/curadoria.csv ---\n")
+    append(csvDeFalta(faltas.filter { it.lingua == pt.jorges15.palavrame.data.Lingua.PT }, incluirCabecalho = false))
     append("\n\nPalavra-me")
 }
+
+/**
+ * O assunto de um envio de sugestões (1.30): só palavras em falta, como antes;
+ * uma correção só, como o "corrigir" de antes; uma mistura, pela contagem.
+ */
+internal fun assuntoSugestoes(
+    faltas: List<PalavraEmFalta>,
+    correcoes: List<pt.jorges15.palavrame.data.CorrecaoGuardada>,
+): String = when {
+    correcoes.isEmpty() -> assuntoSubmissao(faltas.size)
+    faltas.isEmpty() && correcoes.size == 1 -> assuntoCorrecao(correcoes.single().lemma)
+    else -> {
+        val n = faltas.size + correcoes.size
+        "Palavra-me: $n sugestões"
+    }
+}
+
+/**
+ * O corpo de um envio de sugestões: as palavras em falta como sempre (com o
+ * CSV no fim) e, a seguir, as correções, cada uma com a aceção como estava,
+ * a fonte e o que a pessoa escreveu. Sem correções, é igual ao de antes.
+ */
+internal fun corpoSugestoes(
+    faltas: List<PalavraEmFalta>,
+    correcoes: List<pt.jorges15.palavrame.data.CorrecaoGuardada>,
+    versaoApp: String,
+    construidoEm: String?,
+): String {
+    if (correcoes.isEmpty()) return corpoDeFalta(faltas, versaoApp, construidoEm)
+    return buildString {
+        append("Sugestões para o dicionário do Palavra-me.\n\n")
+        append(linhaVersao(versaoApp, construidoEm))
+        append("\n")
+
+        if (faltas.isNotEmpty()) {
+            append("\nEm falta:\n")
+            faltas.forEach { f ->
+                append("• ").append(f.lemma).append(etiquetaLingua(f.lingua))
+                append(" (").append(rotuloFalta(f.tipo)).append(")")
+                f.significadoProprio?.let { append(". Significado: ").append(numaLinha(it)) }
+                append('\n')
+            }
+        }
+
+        append("\nCorreções:\n")
+        correcoes.forEach { c ->
+            append("• ").append(c.lemma)
+            c.classe?.takeIf { it.isNotBlank() }?.let { append(" (").append(it).append(")") }
+            if (c.lingua != pt.jorges15.palavrame.data.Lingua.PT) {
+                append(" [").append(c.lingua.uppercase()).append("]")
+            }
+            append(", significado ").append(c.acecaoOrd).append(": ").append(c.acecaoTexto).append('\n')
+            c.acecaoFonte?.let { append("  Fonte: ").append(it).append('\n') }
+            append("  O que está mal, ou como devia ser: ").append(numaLinha(c.texto)).append('\n')
+        }
+
+        if (faltas.any { it.lingua == pt.jorges15.palavrame.data.Lingua.PT }) {
+            append("\n--- para colar no seeds/curadoria.csv ---\n")
+            append(csvDeFalta(faltas.filter { it.lingua == pt.jorges15.palavrame.data.Lingua.PT }, incluirCabecalho = false))
+        }
+        append("\n\nPalavra-me")
+    }
+}
+
+/** " [EN]" a seguir a uma palavra inglesa no email; nada no português. */
+private fun etiquetaLingua(lingua: String): String =
+    if (lingua == pt.jorges15.palavrame.data.Lingua.PT) "" else " [" + lingua.uppercase() + "]"

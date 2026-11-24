@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import pt.jorges15.palavrame.data.Lingua
 import pt.jorges15.palavrame.data.Texto
 import pt.jorges15.palavrame.ui.theme.Cores
 import pt.jorges15.palavrame.ui.theme.Estilo
@@ -261,6 +262,30 @@ fun Segmentado(
     }
 }
 
+/**
+ * PT / EN: em que dicionário se procura, ou em que língua se lê um livro.
+ * Nada se desenha com uma só língua (sem o dicionário de inglês instalado, a
+ * app fica exatamente como era).
+ */
+@Composable
+fun EscolhaLingua(
+    atual: String,
+    linguas: List<String>,
+    aoEscolher: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    altura: Dp = 36.dp,
+    larguraPorOpcao: Dp = 56.dp,
+) {
+    if (linguas.size < 2) return
+    Segmentado(
+        opcoes = linguas.map(Lingua::sigla),
+        selecionado = linguas.indexOf(atual).coerceAtLeast(0),
+        aoEscolher = { aoEscolher(linguas[it]) },
+        modifier = modifier.width(larguraPorOpcao * linguas.size),
+        altura = altura,
+    )
+}
+
 /** O campo de pesquisa grande da entrada (e, mais baixo, o filtro da coleção). */
 @Composable
 fun CampoPesquisa(
@@ -274,6 +299,8 @@ fun CampoPesquisa(
     raio: Dp = 18.dp,
     estilo: TextStyle = Estilo.pesquisa,
     tamanhoIcone: Dp = 24.dp,
+    /** Algo no fim do campo, à direita (o PT/EN da pesquisa, desde a 1.24). */
+    fim: (@Composable () -> Unit)? = null,
 ) {
     val forma = RoundedCornerShape(raio)
     BasicTextField(
@@ -314,7 +341,11 @@ fun CampoPesquisa(
                         Icon(Icons.Rounded.Close, "Limpar", tint = Cores.ink2)
                     }
                 } else {
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(if (fim != null) 6.dp else 14.dp))
+                }
+                if (fim != null) {
+                    fim()
+                    Spacer(Modifier.width(5.dp))
                 }
             }
         },
@@ -334,6 +365,10 @@ fun CampoFormulario(
     numerico: Boolean = false,
     capitalizacao: KeyboardCapitalization = KeyboardCapitalization.Sentences,
     borda: Color = Cores.line,
+    /** Sem a correção automática do teclado (para escrever uma palavra no jogo). */
+    semCorrecao: Boolean = false,
+    /** A tecla de "concluído" do teclado; nulo deixa a tecla normal. */
+    aoConcluir: (() -> Unit)? = null,
 ) {
     Column(modifier) {
         if (rotulo != null) {
@@ -354,7 +389,12 @@ fun CampoFormulario(
             minLines = linhas,
             maxLines = if (linhas == 1) 1 else linhas + 3,
             keyboardOptions = if (numerico) KeyboardOptions(keyboardType = KeyboardType.Number)
-            else KeyboardOptions(capitalization = capitalizacao),
+            else KeyboardOptions(
+                capitalization = capitalizacao,
+                autoCorrectEnabled = !semCorrecao,
+                imeAction = if (aoConcluir != null) ImeAction.Done else ImeAction.Default,
+            ),
+            keyboardActions = KeyboardActions(onDone = { aoConcluir?.invoke() }),
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { campo ->
                 Box(

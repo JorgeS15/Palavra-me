@@ -15,7 +15,9 @@ from .ontopt import OntoPt
 from .papel import Papel
 from .tatoeba import Tatoeba
 from .voc_cplp import VocCplp
+from .leipzig_en import LeipzigEn
 from .wikcionario import Wikcionario
+from .wiktionary_en import WiktionaryEn
 from .wordnet_pt import WordnetPt
 
 # Ordem = ordem de execução do pipeline. O VOC vem primeiro porque define
@@ -35,20 +37,41 @@ SOURCE_CLASSES: tuple[type[Source], ...] = (
 
 REGISTRY: dict[str, type[Source]] = {cls.info.slug: cls for cls in SOURCE_CLASSES}
 
+# O dicionário de inglês é outra base, com fontes próprias. Ficam num registo à
+# parte para a build portuguesa (que percorre `REGISTRY`) nunca as ver.
+SOURCE_CLASSES_EN: tuple[type[Source], ...] = (
+    WiktionaryEn,
+    LeipzigEn,
+)
 
-def all_infos() -> list[SourceInfo]:
-    return [cls.info for cls in SOURCE_CLASSES]
+REGISTRY_EN: dict[str, type[Source]] = {cls.info.slug: cls for cls in SOURCE_CLASSES_EN}
+
+REGISTOS = {"pt": REGISTRY, "en": REGISTRY_EN}
+LINGUAS = tuple(REGISTOS)
+
+
+def registo(lingua: str = "pt") -> dict[str, type[Source]]:
+    if lingua not in REGISTOS:
+        raise KeyError(f"Língua desconhecida: {lingua}. Conhecidas: {', '.join(LINGUAS)}")
+    return REGISTOS[lingua]
+
+
+def all_infos(lingua: str = "pt") -> list[SourceInfo]:
+    return [cls.info for cls in registo(lingua).values()]
 
 
 def build(slug: str, cache: Cache) -> Source:
-    if slug not in REGISTRY:
-        known = ", ".join(REGISTRY)
+    todas = {**REGISTRY, **REGISTRY_EN}
+    if slug not in todas:
+        known = ", ".join(todas)
         raise KeyError(f"Fonte desconhecida: {slug}. Conhecidas: {known}")
-    return REGISTRY[slug](cache)
+    return todas[slug](cache)
 
 
 __all__ = [
+    "LINGUAS",
     "REGISTRY",
+    "REGISTRY_EN",
     "SOURCE_CLASSES",
     "License",
     "Source",
@@ -56,4 +79,5 @@ __all__ = [
     "SourceUnavailable",
     "all_infos",
     "build",
+    "registo",
 ]

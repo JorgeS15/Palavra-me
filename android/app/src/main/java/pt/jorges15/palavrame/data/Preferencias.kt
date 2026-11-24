@@ -101,6 +101,33 @@ class Preferencias(context: Context) {
         _quantosPorDia.value = valido
     }
 
+    /**
+     * Mostrar a palavra no lembrete. Desligado, diz só "Tens uma palavra para
+     * rever" (pedido de quem não quer a palavra à vista de quem passa). O
+     * ecrã bloqueado esconde-a sempre (ver `Lembrete.mostrar`).
+     */
+    private val _palavraNasNotificacoes =
+        MutableStateFlow(prefs.getBoolean(CHAVE_PALAVRA_NOTIFICACAO, true))
+    val palavraNasNotificacoes: StateFlow<Boolean> = _palavraNasNotificacoes.asStateFlow()
+
+    /**
+     * "Escrever a palavra": nas palavras que já se acertam, metade das
+     * perguntas pede para escrever a palavra a partir da definição. Desligado
+     * por omissão: é mais difícil, e só para quem o quiser.
+     */
+    private val _escreverAPalavra = MutableStateFlow(prefs.getBoolean(CHAVE_ESCREVER, false))
+    val escreverAPalavra: StateFlow<Boolean> = _escreverAPalavra.asStateFlow()
+
+    fun definirEscreverAPalavra(ligado: Boolean) {
+        prefs.edit().putBoolean(CHAVE_ESCREVER, ligado).apply()
+        _escreverAPalavra.value = ligado
+    }
+
+    fun definirPalavraNasNotificacoes(mostrar: Boolean) {
+        prefs.edit().putBoolean(CHAVE_PALAVRA_NOTIFICACAO, mostrar).apply()
+        _palavraNasNotificacoes.value = mostrar
+    }
+
     /** A janela guarda-se ordenada: não há aqui janelas que atravessam a meia-noite. */
     fun definirJanela(inicio: Int, fim: Int) {
         val a = minOf(inicio, fim).coerceIn(0, 23)
@@ -185,8 +212,18 @@ class Preferencias(context: Context) {
         prefs.edit().putInt(CHAVE_VERSAO_VISTA, codigo).apply()
     }
 
+    // --- "Como funciona" (1.22) ----------------------------------------------
+
+    /** O tutorial já se mostrou (ou saltou-se): não volta a abrir sozinho. */
+    fun tutorialVisto(): Boolean = prefs.getBoolean(CHAVE_TUTORIAL, false)
+
+    fun marcarTutorialVisto() {
+        prefs.edit().putBoolean(CHAVE_TUTORIAL, true).apply()
+    }
+
     companion object {
         private const val CHAVE_VERSAO_VISTA = "novidades_vistas_ate"
+        private const val CHAVE_TUTORIAL = "tutorial_visto"
         private const val CHAVE_COTA_DIA = "revisao_manual_dia"
         private const val CHAVE_COTA_USADAS = "revisao_manual_usadas"
         private const val CHAVE_TEMA = "tema"
@@ -195,6 +232,13 @@ class Preferencias(context: Context) {
         private const val CHAVE_AVALIACAO = "avaliacao_pedida_ate"
         private const val CHAVE_AVALIACAO_FIM = "avaliacao_terminada"
         private const val CHAVE_JOGO = "jogo_ligado"
+        private const val CHAVE_PALAVRA_NOTIFICACAO = "notificacao_com_palavra"
+        private const val CHAVE_ESCREVER = "jogo_escrever"
+
+        /** Para o lembrete, que corre sem ecrã e sem esta classe à mão. */
+        fun palavraNasNotificacoes(context: Context): Boolean =
+            context.getSharedPreferences("palavrame", Context.MODE_PRIVATE)
+                .getBoolean(CHAVE_PALAVRA_NOTIFICACAO, true)
         private const val CHAVE_QUANTOS = "jogo_quantos"
         private const val CHAVE_INICIO = "jogo_inicio"
         private const val CHAVE_FIM = "jogo_fim"

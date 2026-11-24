@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import pt.jorges15.palavrame.data.Dicionario
 import pt.jorges15.palavrame.data.Entrada
 import pt.jorges15.palavrame.data.PalavraGuardada
 import pt.jorges15.palavrame.data.Progresso
@@ -38,6 +37,9 @@ sealed interface EstadoJogo {
 
     /** Já se reviram à mão as do dia (`LIMITE_MANUAL_POR_DIA`). */
     data class LimiteDoDia(val limite: Int) : EstadoJogo
+
+    /** A rever um livro: já passaram todas as palavras dele (ou nenhuma dá pergunta). */
+    data class LivroRevisto(val titulo: String, val revistas: Int) : EstadoJogo
 
     data class AJogar(
         val pergunta: Pergunta,
@@ -72,6 +74,14 @@ sealed interface EstadoJogo {
         val feitoEmDestaque: Boolean = false,
         /** Quantas ainda se podem rever à mão hoje, para uma linha discreta; nulo sem limite. */
         val restamHoje: Int? = null,
+        /**
+         * Escrever a palavra a partir da definição, em vez de escolher entre
+         * três (1.22, opção nas Definições). Respondida: `respondida` é o
+         * índice certo se acertou, -1 se não.
+         */
+        val escrever: Boolean = false,
+        /** O que se escreveu (vazio em "Não sei"). */
+        val escrito: String? = null,
     ) : EstadoJogo {
         val acertou: Boolean? get() = respondida?.let { it == pergunta.indiceCerto }
     }
@@ -89,7 +99,7 @@ class JogoViewModel(
      * do arranque: instalar uma base nova fecha a antiga, e uma referência
      * guardada rebentava na consulta seguinte ("already-closed object").
      */
-    private val obterDicionario: () -> Dicionario?,
+    private val obterDicionario: Dicionarios,
     private val utilizador: UtilizadorDb,
     /**
      * O Modo Desenvolvedor está ligado.
@@ -102,7 +112,7 @@ class JogoViewModel(
      */
     private val treinoLivre: Boolean = false,
     /**
-     * A palavra que a notificação anunciou.
+     * A palavra que a notificação anunciou, pela chave (`chaveDe`).
      *
      * Quando existe, é essa que se pergunta — desde que continue vencida e
      * jogável. Sem isto, a app reescolhia ao abrir e podia calhar-lhe outra:
@@ -120,13 +130,22 @@ class JogoViewModel(
     private val cotaRestante: () -> Int = { Int.MAX_VALUE },
     /** Conta uma revisão à mão (uma resposta). */
     private val gastarCota: () -> Unit = {},
-    /** Uma palavra acabou de ser respondida (para tirar a notificação que a anunciava). */
-    private val aoResponder: (lemma: String) -> Unit = {},
+    /** Uma palavra acabou de ser respondida, pela chave (para tirar a notificação que a anunciava). */
+    private val aoResponder: (chave: String) -> Unit = {},
+    /** A opção "Escrever a palavra", nas Definições. */
+    private val escreverAPalavra: () -> Boolean = { false },
+    /**
+     * Rever só as palavras deste livro (1.22, a partir da Coleção). Primeiro
+     * as que estão por rever; depois as outras, para retomar a leitura com
+     * elas frescas. Nessas o calendário não mexe (como no treino livre), mas
+     * contam para o limite do dia: é uma revisão à mão como as outras.
+     */
+    val livro: String? = null,
     private val aleatorio: Random = Random.Default,
     private val agora: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
-    private val dicionario: Dicionario? get() = obterDicionario()
+    private val dicionarios: Dicionarios = { obterDicionario(it) }
 
     private val _estado = MutableStateFlow<EstadoJogo>(EstadoJogo.ACarregar)
     val estado: StateFlow<EstadoJogo> = _estado.asStateFlow()
@@ -134,6 +153,8 @@ class JogoViewModel(
     val progresso = utilizador.progresso().observar()
 
     private var todas: Map<String, Candidata> = emptyMap()
+    /** As que se podem perguntar: de uma língua com o mínimo (ver `alvosPossiveis`). */
+    private var alvos: Map<String, Candidata> = emptyMap()
     private var semCalendario = false
 
     /**
@@ -145,6 +166,9 @@ class JogoViewModel(
 
     /** A palavra do lembrete só vale para a primeira pergunta. */
     private var preferido = lemaPreferido
+
+    /** A rever um livro: as que já se perguntaram nesta sessão, para não repetir. */
+    private val perguntadas = mutableSetOf<String>()
 
     init { comecar() }
 
@@ -177,14 +201,17 @@ class JogoViewModel(
         val guardadas = utilizador.palavras().todasAgora()
         // As mesmas funções que o lembrete usa (ver `Escolha.kt`): a palavra
         // anunciada na notificação é sempre uma que o jogo consegue perguntar.
-        todas = candidatas(dicionario, guardadas)
+        todas = candidatas(dicionarios, guardadas)
+        alvos = alvosPossiveis(todas)
 
-        if (todas.size < MINIMO_PARA_JOGAR) {
-            return EstadoJogo.PoucasPalavras(todas.size)
+        if (alvos.isEmpty()) {
+            return EstadoJogo.PoucasPalavras(maisNumaLingua(todas))
         }
 
+        if (livro != null) return montarLivro(livro, guardadas)
+
         val vencidas = utilizador.palavras().vencidas(agora())
-            .filter { it.lemma in todas }
+            .filter { it.chave in alvos }
         semCalendario = vencidas.isEmpty()
 
         val bruta = when {
@@ -193,26 +220,57 @@ class JogoViewModel(
             !treinoLivre -> return EstadoJogo.NadaARever
             // Com treino livre: a menos recentemente revista, e o
             // calendário não mexe (ver `aplicarResposta`).
-            else -> guardadas.filter { it.lemma in todas }
+            else -> guardadas.filter { it.chave in alvos }
                 .sortedBy { it.revistaEm ?: 0L }
         }
         // A palavra anunciada pela notificação passa à frente. Se já não
         // estiver na fila — porque foi respondida entretanto, ou esquecida —
         // segue-se a ordem normal, sem drama.
-        val fila = bruta.sortedByDescending { it.lemma == preferido }
+        val fila = bruta.sortedByDescending { it.chave == preferido }
         preferido = null
 
         // Percorre-se a fila até uma palavra dar pergunta. Uma que não dê
         // não é falha nenhuma: quer dizer que não havia distrações à altura.
         for (palavra in fila) {
-            val alvo = todas[palavra.lemma] ?: continue
-            val pergunta = perguntaPara(dicionario, alvo, todas, aleatorio) ?: continue
+            val alvo = alvos[palavra.chave] ?: continue
+            val pergunta = perguntaPara(dicionarios, alvo, todas, aleatorio) ?: continue
             return EstadoJogo.AJogar(
                 pergunta = pergunta,
                 treinoLivre = semCalendario,
+                escrever = Perguntas.pedeEscrita(
+                    escreverAPalavra(), palavra.mastery, palavra.lemma, aleatorio,
+                ),
             )
         }
         return EstadoJogo.SemPerguntaPossivel
+    }
+
+    /** As palavras do livro ainda por perguntar nesta sessão, as vencidas primeiro. */
+    private suspend fun filaDoLivro(titulo: String, guardadas: List<PalavraGuardada>): List<PalavraGuardada> {
+        val doLivro = guardadas.filter {
+            it.livro?.trim() == titulo && it.chave in alvos && it.chave !in perguntadas
+        }
+        val vencidas = utilizador.palavras().vencidas(agora()).map { it.chave }.toSet()
+        return doLivro.sortedWith(
+            compareByDescending<PalavraGuardada> { it.chave in vencidas }
+                .thenBy { it.revistaEm ?: 0L }
+        )
+    }
+
+    private suspend fun montarLivro(titulo: String, guardadas: List<PalavraGuardada>): EstadoJogo {
+        val vencidas = utilizador.palavras().vencidas(agora()).map { it.chave }.toSet()
+        for (palavra in filaDoLivro(titulo, guardadas)) {
+            val alvo = alvos[palavra.chave] ?: continue
+            val pergunta = perguntaPara(dicionarios, alvo, todas, aleatorio) ?: continue
+            semCalendario = palavra.chave !in vencidas
+            return EstadoJogo.AJogar(
+                pergunta = pergunta,
+                escrever = Perguntas.pedeEscrita(
+                    escreverAPalavra(), palavra.mastery, palavra.lemma, aleatorio,
+                ),
+            )
+        }
+        return EstadoJogo.LivroRevisto(titulo, perguntadas.size)
     }
 
     /**
@@ -225,16 +283,39 @@ class JogoViewModel(
 
     fun responder(opcao: Int) {
         val atual = _estado.value as? EstadoJogo.AJogar ?: return
+        if (atual.escrever) return
+        processar(atual, opcao == atual.pergunta.indiceCerto) { it.copy(respondida = opcao) }
+    }
+
+    /** A resposta escrita; vazia é "Não sei". */
+    fun responderEscrita(texto: String) {
+        val atual = _estado.value as? EstadoJogo.AJogar ?: return
+        if (!atual.escrever) return
+        val acertou = Perguntas.escritaCerta(texto, atual.pergunta.lemma)
+        processar(atual, acertou) {
+            it.copy(
+                respondida = if (acertou) atual.pergunta.indiceCerto else -1,
+                escrito = texto.trim(),
+            )
+        }
+    }
+
+    private fun processar(
+        atual: EstadoJogo.AJogar,
+        acertou: Boolean,
+        marcar: (EstadoJogo.AJogar) -> EstadoJogo.AJogar,
+    ) {
         if (atual.respondida != null || aResponder) return  // já respondeu a esta
         aResponder = true
 
         viewModelScope.launch {
           try {
-            val acertou = opcao == atual.pergunta.indiceCerto
             val lemma = atual.pergunta.lemma
+            val lingua = atual.pergunta.lingua
+            val chave = atual.pergunta.chave
 
             val resultado = withContext(Dispatchers.IO) {
-                val guardada = utilizador.palavras().porLema(lemma)
+                val guardada = utilizador.palavras().porLema(lemma, lingua)
                 val anterior = pontuacaoAtual()
                 val avanco = aplicarResposta(
                     caixaAtual = guardada?.mastery ?: 0,
@@ -244,13 +325,25 @@ class JogoViewModel(
                     contaParaOCalendario = !semCalendario,
                 )
                 gravar(guardada, avanco)
-                if (manual && !semCalendario) gastarCota()
-                aoResponder(lemma)
-                // Há mais para rever? (Esta já não está vencida.)
-                val maisVencidas = utilizador.palavras().vencidas(agora())
-                    .count { it.lemma in todas && it.lemma != lemma }
+                // A rever um livro, todas as respostas contam para o limite.
+                if (manual && (!semCalendario || livro != null)) gastarCota()
+                aoResponder(chave)
+                // Há mais para rever? (Esta já não está vencida.) A rever um
+                // livro: as dele que ainda não se perguntaram.
+                perguntadas += chave
+                val maisVencidas = if (livro != null) {
+                    // Só conta se alguma ainda dá pergunta: senão "Palavra
+                    // seguinte" levava direto a "Livro revisto".
+                    val haMais = filaDoLivro(livro, utilizador.palavras().todasAgora()).any { p ->
+                        alvos[p.chave]?.let { perguntaPara(dicionarios, it, todas, aleatorio) } != null
+                    }
+                    if (haMais) 1 else 0
+                } else {
+                    utilizador.palavras().vencidas(agora())
+                        .count { it.chave in alvos && it.chave != chave }
+                }
                 Resultado(
-                    dicionario?.entradaPorLema(lemma), avanco, avanco.ganho(anterior),
+                    dicionarios(lingua)?.entradaPorLema(lemma), avanco, avanco.ganho(anterior),
                     Niveis.subiu(anterior.acertos, avanco.pontuacao.acertos),
                     maisVencidas,
                 )
@@ -258,13 +351,12 @@ class JogoViewModel(
             val restantes = cotaRestante()
             val podeSeguir = treinoLivre || (resultado.maisVencidas > 0 && restantes > 0)
 
-            _estado.value = atual.copy(
-                respondida = opcao,
+            _estado.value = marcar(atual).copy(
                 entrada = resultado.entrada,
-                livro = todas[lemma]?.livro,
-                frase = todas[lemma]?.frase,
-                autor = todas[lemma]?.autor,
-                pagina = todas[lemma]?.page,
+                livro = todas[chave]?.livro,
+                frase = todas[chave]?.frase,
+                autor = todas[chave]?.autor,
+                pagina = todas[chave]?.page,
                 ganho = resultado.ganho,
                 bonus = resultado.avanco.bonus,
                 total = resultado.avanco.pontuacao.pontos,

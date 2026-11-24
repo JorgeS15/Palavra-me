@@ -110,4 +110,53 @@ class SubmissaoTest {
         }
         return linhas
     }
+
+    private val correcao = pt.jorges15.palavrame.data.CorrecaoGuardada(
+        id = 5, lemma = "crèdor", acecaoOrd = 2, acecaoTexto = "Que tem crédito.",
+        acecaoFonte = "Wikcionário", classe = "substantivo",
+        texto = "É a grafia antiga de credor.",
+    )
+
+    @Test
+    fun `so palavras em falta da o email de sempre`() {
+        assertEquals(assuntoSubmissao(1), assuntoSugestoes(listOf(semSentido), emptyList()))
+        assertEquals(
+            corpoDeFalta(listOf(semSentido), "1.30.0", null),
+            corpoSugestoes(listOf(semSentido), emptyList(), "1.30.0", null),
+        )
+    }
+
+    @Test
+    fun `uma correcao so tem o assunto de corrigir`() {
+        assertEquals("Palavra-me: corrigir \"crèdor\"", assuntoSugestoes(emptyList(), listOf(correcao)))
+        val corpo = corpoSugestoes(emptyList(), listOf(correcao), "1.30.0", null)
+        assertTrue(corpo.contains("• crèdor (substantivo), significado 2: Que tem crédito."))
+        assertTrue(corpo.contains("Fonte: Wikcionário"))
+        assertTrue(corpo.contains("como devia ser: É a grafia antiga de credor."))
+        // Sem palavras em falta, não há CSV para colar.
+        assertTrue(!corpo.contains("curadoria.csv"))
+    }
+
+    @Test
+    fun `uma mistura conta tudo e leva o csv das que faltam`() {
+        assertEquals(
+            "Palavra-me: 2 sugestões",
+            assuntoSugestoes(listOf(semSentido), listOf(correcao)),
+        )
+        val corpo = corpoSugestoes(listOf(semSentido), listOf(correcao), "1.30.0", null)
+        assertTrue(corpo.contains("• escangalhante (não está no dicionário)"))
+        assertTrue(corpo.contains("Correções:"))
+        assertTrue(corpo.contains("escangalhante,,,não encontrada\n"))
+    }
+
+    @Test
+    fun `uma palavra inglesa vai marcada e fica fora do csv da curadoria`() {
+        val ingles = PalavraEmFalta("papar", "To eat.", TipoFalta.NAO_ENCONTRADA, lingua = "en")
+        val corpo = corpoDeFalta(listOf(ingles, semSentido), "1.30.0", null)
+        assertTrue(corpo.contains("• papar [EN] (não está no dicionário). Significado: To eat."))
+        assertTrue(corpo.contains("escangalhante,,,não encontrada"))
+        assertTrue(!corpo.contains("papar,,"))
+        // Só inglesas: não há CSV para colar.
+        assertTrue(!corpoDeFalta(listOf(ingles), "1.30.0", null).contains("curadoria.csv"))
+    }
 }

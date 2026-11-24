@@ -44,6 +44,10 @@ object Backup {
     internal data class Conteudo(
         val palavras: List<PalavraGuardada>,
         val progresso: Progresso?,
+        /** As fichas dos livros, com as leituras (1.22). Vazio numa cópia anterior. */
+        val livros: List<LivroCompleto> = emptyList(),
+        /** As correções às definições (1.30). Vazio numa cópia anterior. */
+        val correcoes: List<CorrecaoGuardada> = emptyList(),
     )
 
     // --- serialização pura (testável sem Android) -------------------------
@@ -52,6 +56,8 @@ object Backup {
         palavras: List<PalavraGuardada>,
         progresso: Progresso?,
         versaoDaApp: String,
+        livros: List<LivroCompleto> = emptyList(),
+        correcoes: List<CorrecaoGuardada> = emptyList(),
     ): String {
         val raiz = JSONObject().apply {
             put("formato", FORMATO)
@@ -60,6 +66,12 @@ object Backup {
             put("total", palavras.size)
             put("palavras", JSONArray().apply { palavras.forEach { put(paraJson(it)) } })
             progresso?.let { put("progresso", progressoParaJson(it)) }
+            if (livros.isNotEmpty()) {
+                put("livros", JSONArray().apply { livros.forEach { put(livroParaJson(it)) } })
+            }
+            if (correcoes.isNotEmpty()) {
+                put("correcoes", JSONArray().apply { correcoes.forEach { put(correcaoParaJson(it)) } })
+            }
         }
         return raiz.toString(2)
     }
@@ -74,7 +86,13 @@ object Backup {
         val lista = raiz.optJSONArray("palavras") ?: return null
         val palavras = (0 until lista.length()).mapNotNull { deJson(lista.getJSONObject(it)) }
         val progresso = raiz.optJSONObject("progresso")?.let { progressoDeJson(it) }
-        return Conteudo(palavras, progresso)
+        val livros = raiz.optJSONArray("livros")?.let { l ->
+            (0 until l.length()).mapNotNull { livroDeJson(l.getJSONObject(it)) }
+        }.orEmpty()
+        val correcoes = raiz.optJSONArray("correcoes")?.let { l ->
+            (0 until l.length()).mapNotNull { correcaoDeJson(l.getJSONObject(it)) }
+        }.orEmpty()
+        return Conteudo(palavras, progresso, livros, correcoes)
     }
 
     // --- IO ---------------------------------------------------------------
@@ -85,9 +103,11 @@ object Backup {
         palavras: List<PalavraGuardada>,
         progresso: Progresso?,
         versaoDaApp: String,
+        livros: List<LivroCompleto> = emptyList(),
+        correcoes: List<CorrecaoGuardada> = emptyList(),
     ): Resultado = withContext(Dispatchers.IO) {
         try {
-            val json = serializar(palavras, progresso, versaoDaApp)
+            val json = serializar(palavras, progresso, versaoDaApp, livros, correcoes)
             // "wt": truncar. Sem o modo, escrever por cima de uma cópia mais
             // comprida deixava o resto da antiga no fim, e o JSON ficava
             // inválido sem ninguém dar por isso até precisar dele.
@@ -106,10 +126,10 @@ object Backup {
      * **Nunca substitui nem apaga.** As palavras que já estão na coleção ficam
      * como estão, e só entram as que faltam — importar é juntar, não trocar.
      *
-     * O progresso do jogo só é adotado da cópia se o local ainda estiver vazio:
-     * restaura numa mudança de telemóvel, mas nunca esmaga um progresso já em
-     * uso (por isso importar uma cópia velha por cima de uma coleção viva não
-     * faz recuar a sequência).
+     * O progresso do jogo (pontos, sequência, respostas) é um ou outro: com o
+     * deste telemóvel vazio, entra o da cópia; com os dois em uso e diferentes,
+     * pergunta-se (`escolherProgresso`, verdadeiro = o da cópia). Antes ficava
+     * sempre o daqui, e quem restaurava uma cópia perdia a sequência sem saber.
      *
      * Numa transação só: ou entra a cópia inteira, ou nada. Antes, uma falha a
      * meio deixava uma importação parcial, e repetir dava "N já existiam" sem
@@ -119,6 +139,7 @@ object Backup {
         context: Context,
         origem: Uri,
         db: UtilizadorDb,
+        escolherProgresso: suspend (local: Progresso, daCopia: Progresso) -> Boolean = { _, _ -> false },
     ): Resultado = withContext(Dispatchers.IO) {
         try {
             val texto = context.contentResolver.openInputStream(origem)
@@ -132,11 +153,21 @@ object Backup {
 
             val palavrasDao = db.palavras()
             val progressoDao = db.progresso()
+            // A pergunta, se for preciso, antes da transação: espera pela pessoa.
+            val local = progressoDao.atual()
+            val progressoDaCopia = conteudo.progresso?.takeIf { copia ->
+                when {
+                    copia.estaVazio() -> false
+                    local == null || local.estaVazio() -> true
+                    local.copy(id = 1) == copia.copy(id = 1) -> false
+                    else -> escolherProgresso(local, copia)
+                }
+            }
             var novas = 0
             var jaExistiam = 0
             db.withTransaction {
             for (palavra in conteudo.palavras) {
-                if (palavrasDao.porLema(palavra.lemma) != null) {
+                if (palavrasDao.porLema(palavra.lemma, palavra.lingua) != null) {
                     jaExistiam++
                 } else {
                     // id = 0 para o Room atribuir um novo: os ids da cópia
@@ -146,12 +177,25 @@ object Backup {
                 }
             }
 
-            conteudo.progresso?.let { importado ->
-                val atual = progressoDao.atual()
-                if (atual == null || atual.estaVazio()) {
-                    progressoDao.guardar(importado.copy(id = 1))
-                }
+            progressoDaCopia?.let { progressoDao.guardar(it.copy(id = 1)) }
+
+            // As fichas da cópia só entram para os livros que ainda não existem
+            // aqui (com as suas leituras); o livro em curso fica o desta
+            // instalação. Os livros das palavras sem ficha na cópia (uma cópia
+            // anterior à 1.22) ganham-na a partir delas.
+            val livrosDao = db.livros()
+            for (livro in conteudo.livros) {
+                if (livrosDao.porTitulo(livro.titulo) != null) continue
+                val id = livrosDao.inserir(livro.ficha.copy(id = 0, emCurso = false))
+                if (id <= 0) continue
+                livro.leituras.forEach { livrosDao.inserirLeitura(it.copy(id = 0, livroId = id)) }
             }
+            livrosDao.preencherEmFalta()
+            livrosDao.preencherAutores()
+
+            // As correções juntam-se como as palavras: a que já existe aqui
+            // (a mesma aceção da mesma palavra) fica como está.
+            conteudo.correcoes.forEach { db.correcoes().inserirSeNova(it.copy(id = 0)) }
             }
 
             Resultado.Feito(novas, jaExistiam)
@@ -176,6 +220,11 @@ object Backup {
         // A próxima revisão TEM de ir: sem ela, a palavra importada fica
         // vencida desde sempre e a coleção inteira volta à fila (bug 1.1).
         p.proximaRevisao?.let { put("proxima_revisao", it) }
+        // Só o inglês se escreve: uma palavra sem "lingua" é português, que é
+        // como as cópias de antes da 1.23 se continuam a ler.
+        if (p.lingua != Lingua.PT) put("lingua", p.lingua)
+        // O que já se enviou à curadoria não volta a propor-se depois de restaurar.
+        p.enviado?.let { put("enviado", it) }
     }
 
     private fun deJson(o: JSONObject): PalavraGuardada? {
@@ -183,7 +232,9 @@ object Backup {
         return PalavraGuardada(
             lemma = lema,
             guardadaEm = o.optLong("guardada_em", System.currentTimeMillis()),
-            livro = o.optString("livro").takeIf { it.isNotBlank() },
+            // Sem espaços à volta: os livros ligam-se às palavras pelo título exato
+            // (ver `data/Livros.kt`), e uma cópia de antes da 1.17.1 pode tê-los.
+            livro = o.optString("livro").trim().takeIf { it.isNotEmpty() },
             autor = o.optString("autor").takeIf { it.isNotBlank() },
             page = if (o.has("pagina")) o.optInt("pagina") else null,
             frase = o.optString("frase").takeIf { it.isNotBlank() },
@@ -194,6 +245,37 @@ object Backup {
             mastery = o.optInt("dominio", 0).coerceIn(0, 5),
             revistaEm = if (o.has("revista_em")) o.optLong("revista_em") else null,
             proximaRevisao = if (o.has("proxima_revisao")) o.optLong("proxima_revisao") else null,
+            lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
+            enviado = if (o.has("enviado")) o.optString("enviado") else null,
+        )
+    }
+
+    private fun correcaoParaJson(c: CorrecaoGuardada) = JSONObject().apply {
+        put("lema", c.lemma)
+        if (c.lingua != Lingua.PT) put("lingua", c.lingua)
+        put("acecao", c.acecaoOrd)
+        put("acecao_texto", c.acecaoTexto)
+        c.acecaoFonte?.let { put("acecao_fonte", it) }
+        c.classe?.let { put("classe", it) }
+        put("texto", c.texto)
+        put("criada_em", c.criadaEm)
+        c.enviadaEm?.let { put("enviada_em", it) }
+    }
+
+    private fun correcaoDeJson(o: JSONObject): CorrecaoGuardada? {
+        val lema = o.optString("lema").takeIf { it.isNotBlank() } ?: return null
+        val texto = o.optString("texto").takeIf { it.isNotBlank() } ?: return null
+        if (!o.has("acecao")) return null
+        return CorrecaoGuardada(
+            lemma = lema,
+            lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
+            acecaoOrd = o.optInt("acecao"),
+            acecaoTexto = o.optString("acecao_texto"),
+            acecaoFonte = o.optString("acecao_fonte").takeIf { it.isNotBlank() },
+            classe = o.optString("classe").takeIf { it.isNotBlank() },
+            texto = texto,
+            criadaEm = o.optLong("criada_em", System.currentTimeMillis()),
+            enviadaEm = if (o.has("enviada_em")) o.optLong("enviada_em") else null,
         )
     }
 
@@ -213,6 +295,67 @@ object Backup {
         acertos = o.optInt("acertos", 0),
         erros = o.optInt("erros", 0),
     )
+
+    private fun livroParaJson(l: LivroCompleto) = JSONObject().apply {
+        val f = l.ficha
+        put("titulo", f.titulo)
+        f.autor?.let { put("autor", it) }
+        f.paginas?.let { put("paginas", it) }
+        f.nota?.let { put("nota", it) }
+        put("criado_em", f.criadoEm)
+        if (f.emCurso) put("em_curso", true)
+        if (f.lingua != Lingua.PT) put("lingua", f.lingua)
+        put("leituras", JSONArray().apply {
+            l.leituras.forEach { r ->
+                put(JSONObject().apply {
+                    r.iniciadaEm?.let { put("iniciada_em", it) }
+                    r.terminadaEm?.let { put("terminada_em", it) }
+                    if (r.parada) put("parada", true)
+                    r.pagina?.let { put("pagina", it) }
+                    r.paginaEm?.let { put("pagina_em", it) }
+                })
+            }
+        })
+    }
+
+    private fun JSONObject.longOuNulo(chave: String): Long? = if (has(chave)) optLong(chave) else null
+
+    private fun livroDeJson(o: JSONObject): LivroCompleto? {
+        val titulo = o.optString("titulo").trim().takeIf { it.isNotEmpty() } ?: return null
+        val emCurso = o.optBoolean("em_curso", false)
+        val ficha = FichaLivro(
+            titulo = titulo,
+            autor = o.optString("autor").trim().takeIf { it.isNotEmpty() },
+            paginas = if (o.has("paginas")) o.optInt("paginas").takeIf { it > 0 } else null,
+            nota = o.optString("nota").takeIf { it.isNotBlank() },
+            criadoEm = o.longOuNulo("criado_em") ?: o.longOuNulo("iniciado_em") ?: 0L,
+            emCurso = emCurso,
+            lingua = Lingua.deCodigo(o.optString("lingua").takeIf { it.isNotBlank() }),
+        )
+        val leituras = o.optJSONArray("leituras")?.let { a ->
+            (0 until a.length()).map { i ->
+                val r = a.getJSONObject(i)
+                Leitura(
+                    livroId = 0,
+                    iniciadaEm = r.longOuNulo("iniciada_em"),
+                    terminadaEm = r.longOuNulo("terminada_em"),
+                    parada = r.optBoolean("parada", false),
+                    pagina = if (r.has("pagina")) r.optInt("pagina").takeIf { it > 0 } else null,
+                    paginaEm = r.longOuNulo("pagina_em"),
+                )
+            }
+        } ?: run {
+            // O formato das versões de teste da 1.22 (uma data de início e uma
+            // de fim por livro): só vira leitura se estava a ser lido ou lido.
+            val fim = o.longOuNulo("terminado_em")
+            if (emCurso || fim != null) {
+                listOf(Leitura(livroId = 0, iniciadaEm = o.longOuNulo("iniciado_em"), terminadaEm = fim))
+            } else {
+                emptyList()
+            }
+        }
+        return LivroCompleto(ficha, leituras)
+    }
 
     private fun Progresso.estaVazio(): Boolean =
         pontos == 0 && sequencia == 0 && acertos == 0 && erros == 0 && ultimoDia == null

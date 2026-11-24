@@ -13,10 +13,10 @@ import java.util.Calendar
  * demais, uns pontos que descem abaixo de zero — e a única forma de as ver é
  * escrevê-las onde se possam correr num teste.
  *
- * O desenho está em `docs/jogo.md`.
+ * O desenho está em `notas/jogo.md`.
  */
 
-/** Sistema de caixas (Leitner). Não é SM-2, e a razão está no `docs/jogo.md`. */
+/** Sistema de caixas (Leitner). Não é SM-2, e a razão está no `notas/jogo.md`. */
 object Leitner {
 
     /**
