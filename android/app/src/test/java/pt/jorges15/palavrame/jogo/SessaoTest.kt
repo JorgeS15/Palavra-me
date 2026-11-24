@@ -81,7 +81,7 @@ class SessaoTest {
 
     @Test
     fun `o avanco expoe o bonus para o ecra o separar`() {
-        // O bug do "+18": o ecrã mostrava o ganho todo junto e parecia que
+        // O bug do "+18": o ecrã mostrava o ganho inteiro junto e parecia que
         // acertar dava 18. O `Avanco` passa a trazer o bónus à parte.
         // Dois dias: bónus 2 x 2 = 4, ainda abaixo do teto (5), para a
         // multiplicação ficar visível no teste.

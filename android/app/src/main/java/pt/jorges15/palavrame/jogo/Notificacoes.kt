@@ -161,7 +161,7 @@ object Lembrete {
     private const val CHAVE_AGENDADO = "lembretes_agendados"
 
     fun criarCanal(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        // Sem verificar a versão: o minSdk é 26, e os canais existem desde aí.
         val canal = NotificationChannel(
             CANAL, "Revisão diária", NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
@@ -234,7 +234,14 @@ object Lembrete {
             semPalavra
         }
 
-        NotificationManagerCompat.from(context).notify(ID_NOTIFICACAO, notificacao)
+        // A autorização confirmou-se no início (`temPermissao`), mas pode ser
+        // retirada nas definições do sistema entretanto: sem ela, não se
+        // notifica e não se marca nada como anunciado.
+        try {
+            NotificationManagerCompat.from(context).notify(ID_NOTIFICACAO, notificacao)
+        } catch (e: SecurityException) {
+            return
+        }
         preferenciasInternas(context).edit().putString(CHAVE_ANUNCIADA, chave).apply()
     }
 

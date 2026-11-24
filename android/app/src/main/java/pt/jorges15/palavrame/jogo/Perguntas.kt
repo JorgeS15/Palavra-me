@@ -45,7 +45,7 @@ data class Pergunta(
 /**
  * Constrói perguntas de escolha múltipla a partir da coleção do utilizador.
  *
- * Sem Android nenhum, de propósito: é a peça onde está o risco todo do modo
+ * Sem Android nenhum, de propósito: é a peça onde está o maior risco do modo
  * jogo, e é a única que se pode verificar sem instalar nada.
  *
  * A regra que atravessa tudo: **mais vale não fazer a pergunta do que fazer

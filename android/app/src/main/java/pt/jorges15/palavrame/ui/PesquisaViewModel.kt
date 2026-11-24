@@ -557,7 +557,7 @@ data class PalavraEmFalta(
 
 /**
  * Se a palavra falta ao dicionário da língua dela, e como: não existe lá de
- * todo, existe sem significado, ou tem definição mas a pessoa juntou a sua
+ * modo nenhum, existe sem significado, ou tem definição mas a pessoa juntou a sua
  * (um sentido em falta). Nula se não há nada a propor.
  *
  * Primeiro a grafia exata; se falhar, pelas formas (como a pesquisa). Assim

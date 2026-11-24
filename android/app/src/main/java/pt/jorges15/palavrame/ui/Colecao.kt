@@ -378,8 +378,8 @@ private fun LinhaPalavra(
     aoPartilhar: () -> Unit,
 ) {
     val esteAno = remember { Calendar.getInstance().get(Calendar.YEAR) }
-    val curto = remember { SimpleDateFormat("d MMM", Locale("pt", "PT")) }
-    val longo = remember { SimpleDateFormat("d MMM yyyy", Locale("pt", "PT")) }
+    val curto = remember { SimpleDateFormat("d MMM", Locale.forLanguageTag("pt-PT")) }
+    val longo = remember { SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("pt-PT")) }
     val data = remember(palavra.guardadaEm) {
         val c = Calendar.getInstance().apply { timeInMillis = palavra.guardadaEm }
         val f = if (c.get(Calendar.YEAR) == esteAno) curto else longo

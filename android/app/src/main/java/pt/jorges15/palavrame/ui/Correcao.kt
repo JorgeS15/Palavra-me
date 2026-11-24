@@ -78,9 +78,9 @@ internal sealed class Escrito {
  *
  * Antes (1.22 a 1.24) havia que escolher entre guardar e enviar, e as palavras
  * que não estão no dicionário tinham outro caminho. Agora é este diálogo em
- * todo o lado: na palavra e na "não encontrada" (sem aceções, só o campo).
+ * qualquer sítio: na palavra e na "não encontrada" (sem aceções, só o campo).
  *
- * Abrir com algo já escrito traz esse texto, para o mudar; apagá-lo todo e
+ * Abrir com algo já escrito traz esse texto, para o mudar; apagá-lo por completo e
  * guardar apaga-o.
  */
 @Composable
